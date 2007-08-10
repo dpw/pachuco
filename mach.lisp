@@ -55,10 +55,11 @@
 (defconstant lowest-symbol-representation #b100000000111)
 
 (defconstant simple-representations 
-  `((false . ,false-representation)
-    (true . #b1111)
-    (unspecified . ,unspecified-representation)
-    (() . #b11111)))
+  ;; The quotes here are significant for CL compatibility
+  (list (cons 'false false-representation)
+        (cons 'true #b1111)
+        (cons 'unspecified unspecified-representation)
+        (cons () #b11111)))
 
 ;;; Registers
 
@@ -66,7 +67,8 @@
   (funcall reg value-scale))
 
 (defmarco (define-register name . variants)
-  `(defvar ,name (lambda (scale) (elt ',variants scale))))
+  (quasiquote (define (unquote name)
+                (lambda (scale) (elt (quote (unquote variants)) scale)))))
 
 (define-register %a "%al" "%ax" "%eax" "%rax")
 (define-register %b "%bl" "%bx" "%ebx" "%rbx")
@@ -81,8 +83,6 @@
 ;;; instructions that clobber it implicitly.
 (define %alloc %b)
 
-;;; (first general-registers) is used to hold results and caller arity
-;;; (second general-registers) is used to pass the arg frame to a function.
 (define general-registers (list %a %c %d %si %di))
 (define general-register-count (length general-registers))
 
@@ -118,8 +118,9 @@
 (define usual-size-suffix (elt insn-size-suffix value-scale))
 
 (defmarco (define-insn-2 name insn)
-  `(define (,name out src dest . scale)
-     (emit-insn-2 out ,insn src dest (and scale (car scale)))))
+  (quasiquote
+    (define ((unquote name) out src dest . scale)
+      (emit-insn-2 out (unquote insn) src dest (and scale (car scale))))))
 
 (define (emit-insn-2 out insn src dest scale)
   (unless scale
@@ -174,8 +175,9 @@
   (emit out "set~A ~A" cc (funcall reg 0)))
 
 (defmarco (define-insn-1 name insn)
-  `(define (,name out oper . scale)
-     (emit-insn-1 out ,insn oper (and scale (car scale)))))
+  (quasiquote
+    (define ((unquote name) out oper . scale)
+      (emit-insn-1 out (unquote insn) oper (and scale (car scale))))))
 
 (define (emit-insn-1 insn oper scale)
   (unless scale
@@ -186,9 +188,10 @@
 (define-insn-1 emit-idiv "idiv")
 
 (defmarco (define-insn-0 name insn)
-  `(define (,name out . scale)
-     (emit out "~A~A" ,insn
-           (elt insn-size-suffix (if scale (car scale) value-scale)))))
+  (quasiquote
+    (define ((unquote name) out . scale)
+      (emit out "~A~A" (unquote insn)
+            (elt insn-size-suffix (if scale (car scale) value-scale))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-pushf "pushf")
