@@ -41,6 +41,8 @@
 
 (define internal-keywords '(let call ref make-box box-ref box-set!))
 
+(define all-keywords (append keywords-2 internal-keywords keywords-1))
+
 ;;; Transform a program so that every form begins with a
 ;;; distinguishing keyword:
 ;;;
@@ -91,7 +93,7 @@
 
 (defmarco (define-walker name implicit-vars . domain-lit)
   (let* ((form-name name)
-         (form-2-name (compound-symbol name "-2"))
+         (recurse-name (compound-symbol name "-recurse"))
          (forms-name (compound-symbol name "-forms"))
          (define-name (compound-symbol "define-" name))
          (alist-name (compound-symbol name "-alist")))
@@ -106,7 +108,7 @@
         ((unquote reduce) (form forms)
           ((unquote form-name) form (unquote-splicing implicit-vars))))
 
-      (define ((unquote form-2-name) forms (unquote-splicing implicit-vars))
+      (define ((unquote recurse-name) forms (unquote-splicing implicit-vars))
         ((unquote replace-2) forms ((unquote forms-name) (cddr forms)
                                              (unquote-splicing implicit-vars))))
 
@@ -116,14 +118,13 @@
       (define (unquote alist-name) ())
 
       (define ((unquote form-name) form (unquote-splicing implicit-vars))
-        (let* ((a (assoc (car form) (unquote alist-name))))
-          (unless a
-            (error "could not ~S on ~S" (quote (unquote name)) form))
-          (funcall (cdr a) form (unquote-splicing implicit-vars))))
-
-      (set! (unquote alist-name)
-            (mapfor (kw (append keywords-2 internal-keywords keywords-1))
-                    (cons kw (function (unquote form-2-name)))))
+        (let* ((kw (car form))
+               (a (assoc kw (unquote alist-name))))
+          (if a
+              (funcall (cdr a) form (unquote-splicing implicit-vars))
+              (if (member? kw all-keywords)
+                  ((unquote recurse-name) form (unquote-splicing implicit-vars))
+                  (error "unknown form ~S" form)))))
 
       (defmarco ((unquote define-name) template . body)
         (quasiquote
@@ -277,10 +278,10 @@
 
 (define-normalize-lambdas (lambda params . body)
   (rplaca (cdr form) (acons 'name false (normalize-lambda-params params)))
-  (normalize-lambdas-2 form))
+  (normalize-lambdas-recurse form))
 
 (define-normalize-lambdas (define var . val)
-  (normalize-lambdas-2 form)
+  (normalize-lambdas-recurse form)
   (when (and val (eq (caar val) 'lambda))
     ;; propogate variable name into the lambda, as a hint for readable
     ;; code generation
@@ -305,7 +306,7 @@
 
 (define-collect-defines-aux (define var . val)
   (rplaca cell (cons (list var) (car cell)))
-  (collect-defines-aux-2 form cell))
+  (collect-defines-aux-recurse form cell))
 
 (define-collect-defines-aux (begin attrs . body)
   (let* ((cell (cons () body)))
@@ -316,7 +317,7 @@
 
 (define-collect-defines-aux (lambda attrs . body)
   (let* ((cell (cons () body)))
-    (collect-defines-aux-2 form cell)
+    (collect-defines-aux-recurse form cell)
     (unless (null? (car cell))
       (rplacd (cdr form) (list (cons 'let cell))))))
 
@@ -340,13 +341,13 @@
 
 (define-resolve-variables-aux (define var . val)
   (rplaca (cdr form) (lassoc var frames))
-  (resolve-variables-aux-2 form frames))
+  (resolve-variables-aux-recurse form frames))
 
 (define-resolve-variables-aux (let varrecs . body)
-  (resolve-variables-aux-2 form (cons varrecs frames)))
+  (resolve-variables-aux-recurse form (cons varrecs frames)))
 
 (define-resolve-variables-aux (lambda attrs . body)
-  (resolve-variables-aux-2 form (cons (attr-ref attrs 'params) frames)))
+  (resolve-variables-aux-recurse form (cons (attr-ref attrs 'params) frames)))
 
 (define (resolve-variables form)
   (resolve-variables-aux form ()))
@@ -369,13 +370,13 @@
   (mark-variable varrec 0))
 
 (define-classify-variables (define varrec . val)
-  (classify-variables-2 form)
+  (classify-variables-recurse form)
   (mark-variable varrec 2))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'state init))
-  (classify-variables-2 form)
+  (classify-variables-recurse form)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'written
                       (= 2 (varrec-attr-remove varrec 'state)))))
@@ -402,7 +403,7 @@
         ;; can be eliminated
         (overwrite-form form (quoted-unspecified))
         (rplacd (cdr form) (quoted-unspecified))))
-  (eliminate-defines-2 form))
+  (eliminate-defines-recurse form))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
@@ -441,7 +442,7 @@
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'boxed false)
     (varrec-attr-set! varrec 'closure-stack (acons depth varrec ())))
-  (collect-closures-aux-2 form depth closure-cell)
+  (collect-closures-aux-recurse form depth closure-cell)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'origin false)
     (varrec-attr-remove varrec 'closure-stack)))
@@ -504,7 +505,7 @@
             (quoted-unspecified))))
 
 (define-introduce-boxes (let varrecs . body)
-  (introduce-boxes-2 form)
+  (introduce-boxes-recurse form)
   (dolist (varrec varrecs)
     (when (varrec-written? varrec)
       (rplacd (cdr form) (cons (initialize-var-form varrec) (cddr form))))))
@@ -513,7 +514,7 @@
   (quasiquote (set! (unquote varrec) (make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs . body)
-  (introduce-boxes-2 form)
+  (introduce-boxes-recurse form)
   (let* ((let-form false))
     (nmapfor (varrec (attr-ref attrs 'params))
       (if (varrec-boxed? varrec)
@@ -555,12 +556,13 @@
 (define-walker assign-offsets-aux (offset) ignore-domain)
 
 (define-assign-offsets-aux (let varrecs . body)
-  (assign-offsets-aux-2 form (assign-varrec-offsets varrecs 'local offset)))
+  (assign-offsets-aux-recurse form
+                               (assign-varrec-offsets varrecs 'local offset)))
 
 (define-assign-offsets-aux (lambda attrs . body)
   (assign-varrec-offsets (attr-ref attrs 'closure) 'closure 0)
   (assign-varrec-offsets (form-attr form 'params) 'param 0)
-  (assign-offsets-aux-2 form 0))
+  (assign-offsets-aux-recurse form 0))
 
 (define (assign-offsets form)
   (assign-offsets-aux form 0))
@@ -570,7 +572,7 @@
 
 (define (comment-form-forms forms)
     (mapfor (form forms) (comment-form form)))
-(define (comment-form-2 form)
+(define (comment-form-recurse form)
     (list* (car form) (cadr form) (comment-form-forms (cddr form))))
 (define-walker comment-form ())
 
@@ -652,20 +654,20 @@
     (find-max-subform-ru 0 body)))
 
 (define-codegen (begin attrs . body)
-  (labels ((codegen-subforms (forms)
+  (labels ((codegen-recurse (forms)
              (emit-comment-form out (car forms))
              (if (null? (cdr forms))
                  (codegen (car forms) dest regs frame-base out)
                  (begin (codegen (car forms) dest-discard regs frame-base out)
-                        (codegen-subforms (cdr forms))))))
-    (codegen-subforms body)))
+                        (codegen-recurse (cdr forms))))))
+    (codegen-recurse body)))
 
 ;;; If
 
 (define-simplify (if attrs test then . else)
   (when (null? else)
     (rplacd (cdddr form) (list (quoted-unspecified))))
-  (simplify-2 form))
+  (simplify-recurse form))
 
 (define-reg-use (if attrs test then else)
   (max (reg-use test dest-type-conditional)
