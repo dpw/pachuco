@@ -62,10 +62,10 @@
 
 ;;; Registers
 
-(defun usual-register (reg)
+(define (usual-register reg)
   (funcall reg value-scale))
 
-(defmacro define-register (name &rest variants)
+(defmarco (define-register name . variants)
   `(defvar ,name (lambda (scale) (elt ',variants scale))))
 
 (define-register %a "%al" "%ax" "%eax" "%rax")
@@ -79,30 +79,30 @@
 
 ;;; Use RBX as the allocation pointer, since there are no relevant
 ;;; instructions that clobber it implicitly.
-(defvar %alloc %b)
+(define %alloc %b)
 
 ;;; (first general-registers) is used to hold results and caller arity
 ;;; (second general-registers) is used to pass the arg frame to a function.
-(defvar general-registers (list %a %c %d %si %di))
-(defvar general-register-count (length general-registers))
+(define general-registers (list %a %c %d %si %di))
+(define general-register-count (length general-registers))
 
-(defvar %func %bp)
-(defvar %nargs %di)
-(defvar %funcres %a)
+(define %func %bp)
+(define %nargs %di)
+(define %funcres %a)
 
 ;;; Address modes
 
-(defun immediate (x)
+(define (immediate x)
   (lambda (scale) (format nil "$~A" x)))
 
-(defun dispmem (correction offset reg &rest reg2)
+(define (dispmem correction offset reg . reg2)
   (lambda (scale)
     (if (null reg2)
         (format nil "~A(~A)" (- offset correction) (usual-register reg))
         (format nil "~A(~A,~A)" (- offset correction) (usual-register reg)
                 (usual-register (first reg2))))))
 
-(defun mem (reg)
+(define (mem reg)
   (lambda (scale) (format nil "(~A)" (usual-register reg))))
 
 ;;; Condition codes
@@ -115,13 +115,13 @@
 ;;; Instructions
 
 (defconstant insn-size-suffix '("b" "w" "l" "q"))
-(defvar usual-size-suffix (elt insn-size-suffix value-scale))
+(define usual-size-suffix (elt insn-size-suffix value-scale))
 
-(defmacro define-insn-2 (name insn)
-  `(defun ,name (out src dest &rest scale)
+(defmarco (define-insn-2 name insn)
+  `(define (,name out src dest . scale)
      (emit-insn-2 out ,insn src dest (and scale (car scale)))))
 
-(defun emit-insn-2 (out insn src dest scale)
+(define (emit-insn-2 out insn src dest scale)
   (unless scale
     (setq scale value-scale))
   (emit out "~A~A ~A, ~A" insn (elt insn-size-suffix scale)
@@ -139,7 +139,7 @@
 (define-insn-2 emit-shl "shl")
 (define-insn-2 emit-sar "sar")
 
-(defun emit-movzx (out src dest src-scale &rest dest-scale)
+(define (emit-movzx out src dest src-scale . dest-scale)
   (setq dest-scale (if (null dest-scale) value-scale (car dest-scale)))
   (labels ((movzx (src-scale dest-scale)
              (emit out "mov~A ~A,~A"
@@ -154,7 +154,7 @@
             (movzx src-scale 2))
         (movzx src-scale dest-scale))))
 
-(defun emit-clear (out reg)
+(define (emit-clear out reg)
   (emit-xor out reg reg 2))
 
 (define (emit-push out reg)
@@ -166,18 +166,18 @@
 (define (emit-jump out label)
   (emit out "jmp ~A" label))
 
-(defun emit-branch (out cc conddest)
+(define (emit-branch out cc conddest)
   (emit out "j~A ~A" (negate-cc cc) (cdr conddest))
   (emit-jump out (car conddest)))
 
-(defun emit-set (out cc reg)
+(define (emit-set out cc reg)
   (emit out "set~A ~A" cc (funcall reg 0)))
 
-(defmacro define-insn-1 (name insn)
-  `(defun ,name (out oper &rest scale)
+(defmarco (define-insn-1 name insn)
+  `(define (,name out oper . scale)
      (emit-insn-1 out ,insn oper (and scale (car scale)))))
 
-(defun emit-insn-1 (insn oper scale)
+(define (emit-insn-1 insn oper scale)
   (unless scale
     (setq scale value-scale))
   (emit out "~A~A ~A" insn (elt insn-size-suffix scale) (funcall oper scale)))
@@ -185,8 +185,8 @@
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-idiv "idiv")
 
-(defmacro define-insn-0 (name insn)
-  `(defun ,name (out &rest scale)
+(defmarco (define-insn-0 name insn)
+  `(define (,name out . scale)
      (emit out "~A~A" ,insn
            (elt insn-size-suffix (if scale (car scale) value-scale)))))
 
