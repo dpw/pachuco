@@ -89,7 +89,7 @@
   (emit-mov out %nargs result))
 
 (define-pure-operator (args-pointer) result ()
-  (emit-lea (param-slot 0 frame-base pointer-tag) result))
+  (emit-lea out (param-slot 0 frame-base pointer-tag) result))
 
 ;;; Comparisons
 
