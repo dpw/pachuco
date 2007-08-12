@@ -11,7 +11,7 @@
   (eliminate-defines program)
   (collect-closures program)
   (introduce-boxes program)
-  (assign-offsets program)
+  (assign-indices program)
   (codegen-sections program (make-asm-output))
   ;(format t "~S~%" program)
   )
@@ -545,28 +545,28 @@
             temprec)
           varrec))))
 
-;;; Calculate offsets for variables
+;;; Calculate indices for variables
 
-(define (assign-varrec-offsets varrecs mode offset)
+(define (assign-varrec-indices varrecs mode index)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'offset offset)
+    (varrec-attr-set! varrec 'index index)
     (varrec-attr-set! varrec 'mode mode)
-    (set! offset (1+ offset)))
-  offset)
+    (set! index (1+ index)))
+  index)
 
-(define-walker assign-offsets-aux (offset) ignore-domain)
+(define-walker assign-indices-aux (index) ignore-domain)
 
-(define-assign-offsets-aux (let varrecs . body)
-  (assign-offsets-aux-recurse form
-                               (assign-varrec-offsets varrecs 'local offset)))
+(define-assign-indices-aux (let varrecs . body)
+  (assign-indices-aux-recurse form
+                              (assign-varrec-indices varrecs 'local index)))
 
-(define-assign-offsets-aux (lambda attrs . body)
-  (assign-varrec-offsets (attr-ref attrs 'closure) 'closure 0)
-  (assign-varrec-offsets (form-attr form 'params) 'param 0)
-  (assign-offsets-aux-recurse form 0))
+(define-assign-indices-aux (lambda attrs . body)
+  (assign-varrec-indices (attr-ref attrs 'closure) 'closure 0)
+  (assign-varrec-indices (form-attr form 'params) 'param 0)
+  (assign-indices-aux-recurse form 0))
 
-(define (assign-offsets form)
-  (assign-offsets-aux form 0))
+(define (assign-indices form)
+  (assign-indices-aux form 0))
 
 
 ;;; Produce a comment form

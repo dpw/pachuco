@@ -281,21 +281,21 @@
       (quote insn)
       (set! (unquote frame-base) (1- (unquote frame-base)))))))
 
-(define (closure-slot offset frame-base)
-  (dispmem 0 (* value-size (1+ offset)) %func))
+(define (closure-slot index frame-base)
+  (dispmem 0 (* value-size (1+ index)) %func))
 
-(define (param-slot offset frame-base fixup)
-  (dispmem 0 (+ fixup (* value-size (+ frame-base 2 offset))) %sp))
+(define (param-slot index frame-base offset)
+  (dispmem 0 (+ offset (* value-size (+ frame-base 2 index))) %sp))
 
-(define (local-slot offset frame-base)
-  (dispmem 0 (* value-size (+ frame-base -1 (- offset))) %sp))
+(define (local-slot index frame-base)
+  (dispmem 0 (* value-size (+ frame-base -1 (- index))) %sp))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
-         (offset (varrec-attr varrec 'offset)))
-    (cond ((eq mode 'closure) (closure-slot offset frame-base))
-          ((eq mode 'param) (param-slot offset frame-base 0))
-          ((eq mode 'local) (local-slot offset frame-base)))))
+         (index (varrec-attr varrec 'index)))
+    (cond ((eq mode 'closure) (closure-slot index frame-base))
+          ((eq mode 'param) (param-slot index frame-base 0))
+          ((eq mode 'local) (local-slot index frame-base)))))
 
 ;;; Functions
 
