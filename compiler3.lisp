@@ -39,7 +39,9 @@
 
 (define keywords-2 '(define lambda set! quote))
 
-(define internal-keywords '(let call ref make-box box-ref box-set!))
+(define internal-keywords '(let ref call
+                            make-box box-ref box-set!
+                            check-arg-count arg-count args-pointer))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 
@@ -327,6 +329,21 @@
     (unless (null? (car cell))
       (error "what do you expect me to do with ~S?" (car cell)))))
 
+;;; This phase is for miscellaneous simplifications
+
+(define-walker simplify () ignore-domain)
+
+;;; Adjust lambdas and lets so that the only take one body form.
+
+(define-simplify (lambda attrs . body)
+  (simplify-forms body)
+  (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
+
+(define-simplify (let varrecs . body)
+  (simplify-forms body)
+  (unless (null? (cdr body))
+    (rplacd (cdr form) (list (list* 'begin () body)))))
+
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec
 
@@ -528,22 +545,6 @@
             temprec)
           varrec))))
 
-;;; This phase is for miscellaneous simplifications
-
-(define-walker simplify () ignore-domain)
-
-;;; Adjust lambdas and lets so that the only take one body form.
-
-(define-simplify (lambda attrs . body)
-  (simplify-forms body)
-  (unless (null? (cdr body))
-    (rplacd (cdr form) (list (list* 'begin () body)))))
-
-(define-simplify (let varrecs . body)
-  (simplify-forms body)
-  (unless (null? (cdr body))
-    (rplacd (cdr form) (list (list* 'begin () body)))))
-
 ;;; Calculate offsets for variables
 
 (define (assign-varrec-offsets varrecs mode offset)
@@ -638,6 +639,21 @@
     (codegen body (dest-value %funcres) general-registers 0 out)
     (emit-function-epilogue out attrs arity-mismatch-label)))
 
+(define (wrap-lambda-body attrs body)
+  (let* ((nparams (length (attr-ref attrs 'params))))
+    (if (attr-ref attrs 'varargs)
+        (list* 'begin ()
+               (quasiquote (call () (ref handle-varargs)
+                                 (quote (unquote nparams))
+                                 (arg-count ())
+                                 (args-pointer ())))
+               body)
+        (quasiquote
+          (if () (check-arg-count () (quote (unquote nparams)))
+              (begin () (unquote-splicing body))
+              (call () (ref arity-mismatch)
+                    (quote (unquote nparams))
+                    (arg-count ())))))))
 
 (define-walker reg-use (dest-type) ignore-domain)
 (define-walker codegen (dest regs frame-base out) ignore-domain)

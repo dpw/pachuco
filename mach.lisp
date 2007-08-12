@@ -43,9 +43,15 @@
 (defconstant string-tag #b101)
 (defconstant atom-tag #b111)
 
+;;; This is used for raw pointers in varargs handling.  We can re-use
+;;; the number tag for this (but nothing should rely on the low-bits
+;;; being clear)
+(defconstant pointer-tag number-tag)
+
 (defconstant char-scale 0)
 
 (defconstant function-size (* 2 value-size))
+(defconstant box-size value-size)
 (defconstant pair-size (* 2 value-size))
 
 (define (fixnum-representation n) (ash n tag-bits))
@@ -87,8 +93,13 @@
 (define general-register-count (length general-registers))
 
 (define %func %bp)
-(define %nargs %di)
-(define %funcres %a)
+(define %funcres (first general-registers))
+
+;;; %nargs is use to pass the number of arguments to functions.  We
+;;; %reuse one of the general-registers for this, which means we have
+;;; %to be really careful about invoking the operators that use it
+;;; %(check-arg-count, arg-count).
+(define %nargs (last-elem general-registers))
 
 ;;; Address modes
 
@@ -270,15 +281,21 @@
       (quote insn)
       (set! (unquote frame-base) (1- (unquote frame-base)))))))
 
+(define (closure-slot offset frame-base)
+  (dispmem 0 (* value-size (1+ offset)) %func))
+
+(define (param-slot offset frame-base fixup)
+  (dispmem 0 (+ fixup (* value-size (+ frame-base 2 offset))) %sp))
+
+(define (local-slot offset frame-base)
+  (dispmem 0 (* value-size (+ frame-base -1 (- offset))) %sp))
+
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
          (offset (varrec-attr varrec 'offset)))
-    (cond ((eq mode 'closure)
-           (dispmem 0 (* (1+ offset) value-size) %func))
-          ((eq mode 'param)
-           (dispmem 0 (* (+ frame-base 2 offset) value-size) %sp))
-          ((eq mode 'local)
-           (dispmem 0 (* (+ frame-base -1 (- offset)) value-size) %sp)))))
+    (cond ((eq mode 'closure) (closure-slot offset frame-base))
+          ((eq mode 'param) (param-slot offset frame-base 0))
+          ((eq mode 'local) (local-slot offset frame-base)))))
 
 ;;; Functions
 
@@ -290,7 +307,7 @@
   (emit out "ret"))
 
 (define (emit-call out frame-base arg-count)
-  (emit-mov out (immediate arg-count) %nargs)
+  (emit-mov out (immediate (fixnum-representation arg-count)) %nargs)
   (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
   ;; Restore %proc
   (emit-mov out (dispmem (* frame-base value-size) 0 %sp) %func))

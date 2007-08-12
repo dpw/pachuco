@@ -80,6 +80,17 @@
 
 ;;; Operator definitions
 
+;;; Function-related internals
+
+(define-cc-operator (check-arg-count nparams) "e" ()
+  (emit-cmp out nparams %nargs))
+
+(define-pure-operator (arg-count) result ()
+  (emit-mov out %nargs result))
+
+(define-pure-operator (args-pointer) result ()
+  (emit-lea (param-slot 0 frame-base pointer-tag) result))
+
 ;;; Comparisons
 
 (defmarco (define-cmp-operator name cc)
