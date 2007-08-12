@@ -619,7 +619,8 @@
 (define-walker codegen-sections (out) ignore-domain)
 
 (define-codegen-sections (quote quoted)
-  (rplaca (cdr form) (codegen-quoted quoted out)))
+  (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted out))
+                           (cons 'quoted quoted))))
 
 (define-codegen-sections (lambda attrs body)
   (codegen-sections body out)

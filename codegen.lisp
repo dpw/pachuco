@@ -50,12 +50,12 @@
 
 ;;; Quote
 
-(define-reg-use (quote lit) (convert-value-reg-use dest-type))
+(define-reg-use (quote attrs) (convert-value-reg-use dest-type))
 
-(define-codegen (quote lit)
+(define-codegen (quote attrs)
   (unless (dest-discard? dest)
     (let* ((reg (destination-reg dest regs)))
-    (emit-mov out (immediate lit) reg)
+    (emit-mov out (immediate (attr-ref attrs 'value)) reg)
     (emit-convert-value out reg dest))))
 
 ;;; Variables
@@ -145,3 +145,16 @@
 
 ;(define-pure-operator (+ a b) a ()
 ;  (emit-add out b a))
+
+;;; Misc. runtime
+
+(define-reg-use (error-halt attrs message args) 0)
+(define-codegen (error-halt attrs message args)
+  (let* ((l (gen-label)))
+    (emit-label out l)
+    (emit-comment out "error-halt: ~S"
+                  (if (eq? 'quote (first message)) 
+                      (form-attr message 'quoted)
+                      "unknown"))
+    (emit out "hlt")
+    (emit-jump out l)))
