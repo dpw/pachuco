@@ -360,10 +360,10 @@
   (rplaca (cdr form) (lassoc var frames))
   (resolve-variables-aux-recurse form frames))
 
-(define-resolve-variables-aux (let varrecs . body)
+(define-resolve-variables-aux (let varrecs body)
   (resolve-variables-aux-recurse form (cons varrecs frames)))
 
-(define-resolve-variables-aux (lambda attrs . body)
+(define-resolve-variables-aux (lambda attrs body)
   (resolve-variables-aux-recurse form (cons (attr-ref attrs 'params) frames)))
 
 (define (resolve-variables form)
@@ -398,10 +398,10 @@
     (varrec-attr-set! varrec 'written
                       (= 2 (varrec-attr-remove varrec 'state)))))
 
-(define-classify-variables (let varrecs . body)
+(define-classify-variables (let varrecs body)
   (classify-block-variables varrecs 1 form))
 
-(define-classify-variables (lambda attrs . body)
+(define-classify-variables (lambda attrs body)
   (classify-block-variables (attr-ref attrs 'params) 0 form))
  
 ;;; Now definition information is captured in the lets, replace
@@ -464,10 +464,10 @@
     (varrec-attr-set! varrec 'origin false)
     (varrec-attr-remove varrec 'closure-stack)))
 
-(define-collect-closures-aux (let varrecs . body)
+(define-collect-closures-aux (let varrecs body)
   (collect-closures-body form varrecs depth closure-cell))
 
-(define-collect-closures-aux (lambda attrs . body)
+(define-collect-closures-aux (lambda attrs body)
   (let* ((local-closure-cell (cons () ())))
     (collect-closures-body form (attr-ref attrs 'params)
                            (1+ depth) local-closure-cell)
@@ -521,29 +521,37 @@
             (list 'make-box () (quoted-unspecified))
             (quoted-unspecified))))
 
-(define-introduce-boxes (let varrecs . body)
+(define-introduce-boxes (let varrecs body)
   (introduce-boxes-recurse form)
-  (dolist (varrec varrecs)
-    (when (varrec-written? varrec)
-      (rplacd (cdr form) (cons (initialize-var-form varrec) (cddr form))))))
+  (let* ((written-varrecs (filterfor (varrec varrecs) 
+                            (varrec-written? varrec))))
+    (unless (null? written-varrecs)
+      (rplaca (cddr form) (nconc (list 'begin ())
+                                 (nmapfor (varrec written-varrecs)
+                                   (initialize-var-form varrec))
+                                 (list body))))))
 
 (define (init-boxed-param-form varrec temprec)
   (quasiquote (set! (unquote varrec) (make-box () (ref (unquote temprec))))))
 
-(define-introduce-boxes (lambda attrs . body)
+(define-introduce-boxes (lambda attrs body)
   (introduce-boxes-recurse form)
-  (let* ((let-form false))
+  (let* ((box-varrecs ())
+         (box-init-forms ()))
     (nmapfor (varrec (attr-ref attrs 'params))
       (if (varrec-boxed? varrec)
           (let* ((temprec (list (gensym))))
-            (unless let-form
-              (set! let-form (cons () body))
-              (rplacd (cdr form) (list (cons 'let let-form))))
-            (rplaca let-form (cons varrec (car let-form)))
-            (rplacd let-form (cons (init-boxed-param-form varrec temprec)
-                                   (cdr let-form)))
+            (set! box-varrecs (cons varrec box-varrecs))
+            (set! box-init-forms (cons (init-boxed-param-form varrec temprec)
+                                       box-init-forms))
             temprec)
-          varrec))))
+          varrec))
+    (unless (null? box-varrecs)
+      (rplaca (cddr form)
+              (quasiquote (let (unquote box-varrecs)
+                               (begin ()
+                                 (unquote-splicing box-init-forms)
+                                 (unquote body))))))))
 
 ;;; Calculate indices for variables
 
@@ -556,11 +564,11 @@
 
 (define-walker assign-indices-aux (index) ignore-domain)
 
-(define-assign-indices-aux (let varrecs . body)
+(define-assign-indices-aux (let varrecs body)
   (assign-indices-aux-recurse form
                               (assign-varrec-indices varrecs 'local index)))
 
-(define-assign-indices-aux (lambda attrs . body)
+(define-assign-indices-aux (lambda attrs body)
   (assign-varrec-indices (attr-ref attrs 'closure) 'closure 0)
   (assign-varrec-indices (form-attr form 'params) 'param 0)
   (assign-indices-aux-recurse form 0))
