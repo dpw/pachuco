@@ -46,7 +46,7 @@
 (define (quasiquote-transform innermost form)
   (cond ((pair? form)
          (define keyword (car form))
-         (cond ((eq? 'unquote keyword) (cadr form)
+         (cond ((eq? 'unquote keyword)
                 (if innermost (cadr form)
                     (list 'list '(quote quote) (cadr form))))
                ((eq? 'quasiquote keyword)

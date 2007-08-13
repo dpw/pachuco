@@ -125,7 +125,8 @@
                   (if innermost (cadr form)
                       (list 'list '(quote quote) (cadr form))))
                  ((eq? 'quasiquote keyword)
-                  (quasiquote-transform false (quasiquote-transform true (cadr form))))
+                  (quasiquote-transform false
+                                      (quasiquote-transform true (cadr form))))
                  ((and (pair? keyword) (eq? 'unquote-splicing (car keyword)))
                   (list 'append (cadr keyword)
                         (quasiquote-transform innermost (cdr form))))
