@@ -193,7 +193,7 @@
     (define ((unquote name) out oper . scale)
       (emit-insn-1 out (unquote insn) oper (and scale (car scale))))))
 
-(define (emit-insn-1 insn oper scale)
+(define (emit-insn-1 out insn oper scale)
   (unless scale
     (setq scale value-scale))
   (emit out "~A~A ~A" insn (elt insn-size-suffix scale) (funcall oper scale)))
