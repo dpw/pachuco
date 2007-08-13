@@ -89,6 +89,8 @@
 ;;; instructions that clobber it implicitly.
 (define %alloc %b)
 
+;;; Note that the implementations of rem and truncate depend on this
+;;; definitions of general-registers
 (define general-registers (list %a %c %d %si %di))
 (define general-register-count (length general-registers))
 

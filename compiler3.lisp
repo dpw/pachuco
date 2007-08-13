@@ -41,7 +41,8 @@
 
 (define internal-keywords '(let ref call
                             make-box box-ref box-set!
-                            check-arg-count arg-count args-pointer))
+                            check-arg-count arg-count args-pointer
+                            negate))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 

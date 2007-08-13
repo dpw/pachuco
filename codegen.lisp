@@ -169,8 +169,73 @@
 
 (define-tag-check number? number-tag)
 
-;(define-pure-operator (+ a b) a ()
-;  (emit-add out b a))
+(defmarco (define-simplify-binary-op op identity unary-op)
+  (quasiquote
+    (define-simplify ((unquote op) attrs . args)
+      (simplify-recurse form)
+      (cond ((null? args)
+             (overwrite-form form (list 'quote (unquote identity))))
+            ((null? (cdr args))
+             (overwrite-form form (list* '(unquote unary-op) () args)))
+            (true
+             (overwrite-form form 
+                             (reduce (lambda (a b) (list '(unquote op) () a b))
+                                     args)))))))
+
+(define-simplify-binary-op + 0 begin) 
+(define-pure-operator (+ a b) a ()
+  (emit-add out b a))
+
+(define-simplify-binary-op * 1 begin) 
+(define-pure-operator (* a b) a ()
+  (emit-sar out (immediate tag-bits) a)
+  (emit-imul out b a))
+
+(define-simplify (- attrs a . args)
+  (simplify-recurse form)
+  (if (null? args) (rplaca form 'negate)
+      (overwrite-form form
+                      (reduce (lambda (a b) (list '- () a b)) (cons a args)))))
+
+(define-pure-operator (negate a) a ()
+  (emit-neg out a))
+
+(define-pure-operator (- a b) a ()
+  (emit-sub out b a))
+
+(define (div-operator-reg-use form dest-type)
+  (if (dest-type-discard? dest-type)
+      (operator-args-reg-use-discarding form)
+      (begin
+        (operator-args-reg-use form)
+        general-register-count)))
+
+(define-reg-use (truncate attrs a b)
+  (div-operator-reg-use form dest-type))
+
+(define-codegen (truncate attrs a b)
+  (if (dest-discard? dest)
+      (operator-args-codegen-discarding form general-registers frame-base out)
+      (begin
+        (operator-args-codegen form general-registers frame-base out)
+        (emit-mov out %a %d)
+        (emit-sar out (immediate 63) %d)
+        (emit-idiv out %c)
+        (emit-shl out (immediate tag-bits) %a)
+        (emit-convert-value out %a dest))))
+
+(define-reg-use (rem attrs a b)
+  (div-operator-reg-use form dest-type))
+
+(define-codegen (rem attrs a b)
+  (if (dest-discard? dest)
+      (operator-args-codegen-discarding form general-registers frame-base out)
+      (begin
+        (operator-args-codegen form general-registers frame-base out)
+        (emit-mov out %a %d)
+        (emit-sar out (immediate 63) %d)
+        (emit-idiv out %c)
+        (emit-convert-value out %d dest))))
 
 ;;; Misc. runtime
 
