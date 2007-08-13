@@ -165,6 +165,11 @@
 (define-pure-operator (symbol-name sym) result ()
   (emit-mov out (dispmem atom-tag 0 sym) result))
 
+(define-pure-operator (primitive-make-symbol str) result ()
+  (emit-mov out str (dispmem allocation-alignment 0 %alloc))
+  (emit-lea out (dispmem allocation-alignment atom-tag %alloc) result)
+  (emit-sub out (immediate allocation-alignment) %alloc))
+
 ;;;  Numbers
 
 (define-tag-check number? number-tag)
