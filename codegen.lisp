@@ -162,7 +162,12 @@
     (emit-cmp out (immediate atom-tag) val 0)
     (emit-label out l)))
 
+(define-pure-operator (symbol-name sym) result ()
+  (emit-mov out (dispmem atom-tag 0 sym) result))
+
 ;;;  Numbers
+
+(define-tag-check number? number-tag)
 
 ;(define-pure-operator (+ a b) a ()
 ;  (emit-add out b a))
