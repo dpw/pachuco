@@ -178,8 +178,11 @@
 (define (emit-jump out label)
   (emit out "jmp ~A" label))
 
+(define (emit-jcc out cc label)
+  (emit out "j~A ~A" cc label))
+
 (define (emit-branch out cc conddest)
-  (emit out "j~A ~A" (negate-cc cc) (cdr conddest))
+  (emit-jcc out (negate-cc cc) (cdr conddest))
   (emit-jump out (car conddest)))
 
 (define (emit-set out cc reg)

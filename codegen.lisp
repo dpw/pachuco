@@ -80,6 +80,13 @@
 
 ;;; Operator definitions
 
+(defmarco (define-tag-check name tag)
+  (quasiquote
+    (define-cc-operator ((unquote name) val) "e" ()
+      ;; just check the low-order byte
+      (emit-and out (immediate tag-mask) val 0)
+      (emit-cmp out (immediate (unquote tag)) val 0))))
+
 ;;; Function-related internals
 
 (define-cc-operator (check-arg-count nparams) "e" ()
@@ -106,6 +113,8 @@
 (define-cmp-operator <= "le")
 
 ;;; Conses
+
+(define-tag-check pair? pair-tag)
 
 (define-simplify (null? attrs val)
   (overwrite-form form (list 'eq? attrs val '(quote ()))))
@@ -140,6 +149,16 @@
 
 (define-operator (box-ref box) result ()
   (emit-mov out (dispmem box-tag 0 box) result))
+
+;;; Symbols
+
+(define-cc-operator (symbol? val) "e" ()
+  (let* ((l (gen-label)))
+    (emit-cmp out (immediate lowest-symbol-representation) val)
+    (emit-jcc out "l" l)
+    (emit-and out (immediate tag-mask) val 0)
+    (emit-cmp out (immediate atom-tag) val 0)
+    (emit-label out l)))
 
 ;;;  Numbers
 
