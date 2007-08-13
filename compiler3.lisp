@@ -754,8 +754,9 @@
                            (rplacd args-ru ())))))))
         (find-trashy-args non-trashy-args-ru)))
     
-    (rplaca (cdr form) (list (cons 'trashy-args-ru trashy-args-ru)
-                             (cons 'non-trashy-args-ru non-trashy-args-ru)))
+    (rplaca (cdr form) (list* (cons 'trashy-args-ru trashy-args-ru)
+                              (cons 'non-trashy-args-ru non-trashy-args-ru)
+                              (cadr form)))
     (if (null? trashy-args-ru) ru general-register-count)))
 
 (define (operator-args-codegen form regs frame-base out)
@@ -766,7 +767,8 @@
       ;; first, the trashy args.  we need to save the results of all
       ;; but one of these on the stack.  but we consider one to be
       ;; non-trashy, since it's result can reside in a register
-      (set! non-trashy-args-ru (nconc non-trashy-args-ru (car trashy-args-ru)))
+      (set! non-trashy-args-ru (nconc non-trashy-args-ru
+                                      (list (car trashy-args-ru))))
       (set! trashy-args-ru (cdr trashy-args-ru))
 
       (dolist (arg-ru trashy-args-ru)
