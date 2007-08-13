@@ -23,7 +23,7 @@
     
     eq? function?
     
-    symbol? gensym symbol-name primitive-make-symbol
+    symbol? symbol-name primitive-make-symbol
     
     pair? null? car cdr cons rplaca rplacd
     
