@@ -136,7 +136,7 @@
 (define-operator (rplaca c a) c ()
   (emit-mov out a (dispmem pair-tag 0 c)))
 
-(define-operator (rplaca c d) c ()
+(define-operator (rplacd c d) c ()
   (emit-mov out d (dispmem pair-tag 0 c)))
 
 ;;; Boxes
