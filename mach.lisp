@@ -265,8 +265,13 @@
 ;;; Functions are called with the closure in %func, arg-count in
 ;;; %nargs.  They return with the result in a %funcres.
 
+(define (emit-allocate-locals out n frame-base)
+  (emit-sub out (immediate (* value-size n)) %sp)
+  (+ frame-base (* value-size n)))
+
 (define (emit-restore-frame-base out new old)
-  (emit-add out (immediate (- new old)) %sp))
+  (unless (= new old)
+    (emit-add out (immediate (* value-size (- new old))) %sp)))
 
 (defmarco (emit-frame-push out frame-base reg)
   (quasiquote (begin

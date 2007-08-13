@@ -687,6 +687,16 @@
                         (codegen-recurse (cdr forms))))))
     (codegen-recurse body)))
 
+;;; Let
+
+(define-reg-use (let varrecs body) (reg-use body dest-type))
+
+(define-codegen (let varrecs body)
+  (let* ((new-frame-base (emit-allocate-locals out (length varrecs)
+                                               frame-base)))
+    (codegen body dest regs new-frame-base out)
+    (emit-restore-frame-base out new-frame-base frame-base)))
+
 ;;; If
 
 (define-simplify (if attrs test then . else)
