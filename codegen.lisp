@@ -87,7 +87,9 @@
       (emit-and out (immediate tag-mask) val 0)
       (emit-cmp out (immediate (unquote tag)) val 0))))
 
-;;; Function-related internals
+(define-tag-check function? function-tag)
+
+;;; Function call-related internals
 
 (define-cc-operator (check-arg-count nparams) "e" ()
   (emit-cmp out nparams %nargs))
