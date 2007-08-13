@@ -809,7 +809,7 @@
           (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
 
 (define (operator-args-codegen-discarding form regs frame-base out)
-  (dolist (arg (cddr form)) (codegen dest-discard regs frame-base out)))
+  (dolist (arg (cddr form)) (codegen arg dest-discard regs frame-base out)))
 
 (defmarco (define-pure-operator template outreg supplemental-regs . body)
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
