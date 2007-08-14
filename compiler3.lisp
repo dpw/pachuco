@@ -350,15 +350,20 @@
 
 (define-walker resolve-variables-aux (frames) ignore-domain)
 
+(define (resolve-variable var frames)
+  (let* ((varrec (lassoc var frames)))
+    (when (null? varrec) (error "unbound variable ~S" var))
+    varrec))
+
 (define-resolve-variables-aux (ref var)
-  (rplaca (cdr form) (lassoc var frames)))
+  (rplaca (cdr form) (resolve-variable var frames)))
 
 (define-resolve-variables-aux (set! var val)
-  (rplaca (cdr form) (lassoc var frames))
+  (rplaca (cdr form) (resolve-variable var frames))
   (resolve-variables-aux val frames))
 
 (define-resolve-variables-aux (define var . val)
-  (rplaca (cdr form) (lassoc var frames))
+  (rplaca (cdr form) (resolve-variable var frames))
   (resolve-variables-aux-recurse form frames))
 
 (define-resolve-variables-aux (let varrecs body)
