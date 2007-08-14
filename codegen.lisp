@@ -242,6 +242,69 @@
         (emit-idiv out %c)
         (emit-convert-value out %d dest))))
 
+;;; Strings and vectors
+
+(define-tag-check string? string-tag)
+(define-tag-check vector? vector-tag)
+
+(define-pure-operator (make-vec len) result (raw-len)
+  (let* ((tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (if (= scale tag-bits)
+      (begin
+        (emit-sub out (immediate value-size) %alloc)
+        (emit-sub out len %alloc)
+        (unless (= allocation-alignment-scale scale)
+          (emit-and out (immediate allocation-alignment-mask) %alloc))
+        (emit-mov out len (dispmem 0 0 %alloc))
+        (emit-lea out (dispmem 0 tag %alloc) result))
+      (begin
+        (emit-mov out len raw-len)
+        (emit-sar out (immediate (- tag-bits scale)) raw-len)
+        (emit-sub out (immediate value-size) %alloc)
+        (emit-sub out raw-len %alloc)
+        (emit-and out (immediate allocation-alignment-mask) %alloc)
+        (emit-mov out len (dispmem 0 0 %alloc))
+        (emit-lea out (dispmem 0 tag %alloc) result)))))
+
+(define-pure-operator (vec-length vec) result ()
+  (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
+
+(define-pure-operator (vec-ref vec index) result ()
+  (let* ((tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (unless (= scale tag-bits)
+      (emit-sar out (immediate (- tag-bits scale)) index))
+    (emit-movzx out (dispmem tag value-size vec index) result scale)))
+
+(define-operator (vec-set! vec index val) val ()
+  (let* ((tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (unless (= scale tag-bits)
+      (emit-sar out (immediate (- tag-bits scale)) index))
+    (emit-mov out val (dispmem tag value-size vec index) scale)))
+
+(define-reg-use (vec-copy attrs src src-index dst dst-index len)
+  (operator-args-reg-use form)
+  general-register-count)
+
+(define-codegen (vec-copy attrs src src-index dst dst-index len)
+  (let* ((regs (list            %si %a        %di  %d         %c))
+         (tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (operator-args-codegen form regs frame-base out)
+    (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
+    (unless (= scale tag-bits) (emit-sar out (immediate (- tag-bits scale)) %a))
+    (emit-lea out (dispmem tag value-size %si %a) %si)
+    (unless (= scale tag-bits) (emit-sar out (immediate (- tag-bits scale)) %d))
+    (emit-lea out (dispmem tag value-size %di %d) %di)
+    (emit-sar out (immediate tag-bits) %c)
+    (emit-rep-movs out scale)
+    (unless (dest-discard? dest)
+      (let* ((result (destination-reg dest regs)))
+        (emit-mov out (immediate unspecified-representation) result)
+        (emit-convert-value out result dest)))))
+
 ;;; Misc. runtime
 
 (define-reg-use (error-halt attrs message args) 0)

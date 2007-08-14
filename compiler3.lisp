@@ -42,7 +42,8 @@
 (define internal-keywords '(let ref call
                             make-box box-ref box-set!
                             check-arg-count arg-count args-pointer
-                            negate))
+                            negate
+                            make-vec vec-length vec-ref vec-set! vec-copy))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 
@@ -897,3 +898,60 @@
     (emit-restore-frame-base out new-frame-base frame-base)
     (emit-convert-value out %funcres dest)))
 
+(define-reg-use (lambda attrs body) 0)
+(define-codegen (lambda attrs body))
+
+;;; Strings and vectors
+
+(define (genericize-vec-op form name tag scale)
+  (rplaca form name)
+  (rplaca (cdr form) (list (cons 'tag tag) (cons 'scale scale)))
+  (simplify-recurse form))
+
+(define (make-vec-copy-form src src-index dst dst-index len tag scale)
+  (let* ((si-name (gensym))
+         (di-name (gensym))
+         (len-name (gensym)))
+    (quasiquote
+      (let (((unquote si-name)) ((unquote di-name)) ((unquote len-name)))
+        (define (unquote si-name) (unquote src-index))
+        (define (unquote di-name) (unquote dst-index))
+        (define (unquote len-name) (unquote len))
+        (if () (> () (ref (unquote si-name)) (ref (unquote di-name)))
+            (vec-copy ((tag . (unquote tag))
+                       (scale . (unquote scale))
+                       (forward . true))
+                      (unquote (copy-tree src)) (ref (unquote si-name))
+                      (unquote (copy-tree dst)) (ref (unquote di-name))
+                      (ref (unquote len-name)))
+            (vec-copy ((tag . (unquote tag))
+                       (scale . (unquote scale))
+                       (forward . false))
+                      (unquote (copy-tree src))
+                      (+ () (ref (unquote si-name)) (ref (unquote len-name))
+                         (quote -1))
+                      (unquote (copy-tree dst))
+                      (+ () (ref (unquote di-name)) (ref (unquote len-name))
+                         (quote -1))
+                      (ref (unquote len-name))))))))
+
+(defmarco (define-vector-type name tag scale)
+  (quasiquote (definitions
+    (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
+      (genericize-vec-op form 'make-vec (unquote tag) (unquote scale)))
+    (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)
+      (genericize-vec-op form 'vec-length (unquote tag) (unquote scale)))
+    (define-simplify ((unquote (compound-symbol "primitive-" name "-ref"))
+                      attrs vec index)
+      (genericize-vec-op form 'vec-ref (unquote tag) (unquote scale)))
+    (define-simplify ((unquote (compound-symbol "primitive-" name "-set!"))
+                      attrs vec index val)
+      (genericize-vec-op form 'vec-set! (unquote tag) (unquote scale)))
+    (define-simplify ((unquote (compound-symbol "primitive-" name "-copy"))
+                      attrs src src-index dst dst-index len)
+      (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
+                                               (unquote tag) (unquote scale)))
+      (simplify form)))))
+
+(define-vector-type string string-tag char-scale)
+(define-vector-type vector vector-tag value-scale)
