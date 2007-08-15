@@ -126,7 +126,6 @@
   (subject-language-intern str))
 
 (define-interpreter-builtin-boolean-op pair?)
-(define-interpreter-builtin-boolean-op null?)
 (define-interpreter-builtin-op car)
 (define-interpreter-builtin-op cdr)
 (define-interpreter-builtin-op cons)

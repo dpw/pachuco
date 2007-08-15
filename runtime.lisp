@@ -27,6 +27,8 @@
 (defmacro (second x) (list 'car (list 'cdr x)))
 (defmacro (third x) (list 'car (list 'cdr (list 'cdr x))))
 
+(defmacro (null? x) (list 'eq? () x))
+
 (define (reduce initial l op)
   (if (null? l) initial
       (reduce (op initial (car l)) (cdr l) op)))
@@ -361,7 +363,7 @@
   (quasiquote (define ((unquote name) fd str offset len)
                 (check-string-range str offset len)
                 (raw->fixnum (c-call (unquote sysname) (fixnum->raw fd)
-                                     (string-address str offset)
+                                     (raw-string-address str offset)
                                      (fixnum->raw len))))))
 
 (when-compiling
@@ -687,21 +689,23 @@
       (if (null? (cdr args)) (length (car args))
           (1+ (args-length (cdr args)))))
 
-    (define (copy-list-to-vector l vec index)
-      (unless (null? l)
-        (vector-set! vec index (car l))
-        (copy-list-to-vector (cdr l) vec (1+ index))))
+    (define (copy-final-args args args-base index)
+      (unless (null? args)
+        (raw-arg-set! args-base index (car args))
+        (copy-final-args (cdr args) args-base (1+ index))))
       
-    (define (fill-args-vector args vec index)
-      (if (null? (cdr args)) (copy-list-to-vector (car args) vec index)
+    (define (copy-args args args-base index)
+      (if (null? (cdr args)) (copy-final-args (car args) args-base index)
           (begin
-            (vector-set! vec index (car args))
-            (fill-args-vector (cdr args) vec (1+ index)))))
+            (raw-arg-set! args-base index (car args))
+            (copy-args (cdr args) args-base (1+ index)))))
 
     (set! args (cons arg1 args))
-    (define args-vec (make-vector (1+ (args-length args))))
-    (fill-args-vector args args-vec 1)
-    (apply-frame func args-vec)))
+    (define args-len (args-length args))
+    (raw-apply-with-args (1+ args-len)
+      (lambda ()
+        (copy-args args (raw-args-address) 0)
+        (raw-apply-jump func args-len)))))
 
 ;;; CL compatibility
 

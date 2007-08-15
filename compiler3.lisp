@@ -25,25 +25,31 @@
     
     symbol? symbol-name primitive-make-symbol
     
-    pair? null? car cdr cons rplaca rplacd
+    pair? car cdr cons rplaca rplacd
     
     number? < <= > >= = /= + * - rem truncate 
     
-    string? make-string string-length
+    string? make-string string-length raw-string-address
     primitive-string-ref primitive-string-set! primitive-string-copy
     
-    vector? make-vector vector-length
+    vector? make-vector vector-length raw-vector-address
     primitive-vector-ref primitive-vector-set! primitive-vector-copy
 
-    raw->fixnum fixnum->raw c-call string-address apply-frame))
+    fixnum->raw raw->fixnum
 
-(define keywords-2 '(define lambda set! quote))
+    raw-args-address
+    raw-apply-with-args raw-apply-jump
+    raw-arg-set! raw-arg-ref))
+
+(define keywords-2 '(define lambda set! quote
+                     c-call))
 
 (define internal-keywords '(let ref call
                             make-box box-ref box-set!
-                            check-arg-count arg-count args-pointer
+                            check-arg-count arg-count
                             negate
-                            make-vec vec-length vec-ref vec-set! vec-copy))
+                            make-vec vec-length raw-vec-address
+                            vec-ref vec-set! vec-copy))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 
@@ -662,7 +668,7 @@
                (quasiquote (call () (ref handle-varargs)
                                  (quote (unquote nparams))
                                  (arg-count ())
-                                 (args-pointer ())))
+                                 (raw-args-address ())))
                body)
         (quasiquote
           (if () (check-arg-count () (quote (unquote nparams)))
@@ -943,6 +949,9 @@
       (genericize-vec-op form 'make-vec (unquote tag) (unquote scale)))
     (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)
       (genericize-vec-op form 'vec-length (unquote tag) (unquote scale)))
+    (define-simplify ((unquote (compound-symbol "raw-" name "-address"))
+                      attrs vec index)
+      (genericize-vec-op form 'raw-vec-address (unquote tag) (unquote scale)))
     (define-simplify ((unquote (compound-symbol "primitive-" name "-ref"))
                       attrs vec index)
       (genericize-vec-op form 'vec-ref (unquote tag) (unquote scale)))

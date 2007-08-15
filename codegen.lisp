@@ -97,8 +97,8 @@
 (define-pure-operator (arg-count) result ()
   (emit-mov out %nargs result))
 
-(define-pure-operator (args-pointer) result ()
-  (emit-lea out (param-slot 0 frame-base pointer-tag) result))
+(define-pure-operator (raw-args-address) result ()
+  (emit-lea out (param-slot 0 frame-base) result))
 
 ;;; Comparisons
 
@@ -117,9 +117,6 @@
 ;;; Conses
 
 (define-tag-check pair? pair-tag)
-
-(define-simplify (null? attrs val)
-  (overwrite-form form (list 'eq? attrs val '(quote ()))))
 
 (define-pure-operator (cons a d) result ()
   (emit-mov out a (dispmem pair-size 0 %alloc))
@@ -270,6 +267,13 @@
 (define-pure-operator (vec-length vec) result ()
   (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
 
+(define-pure-operator (raw-vec-address vec index) result ()
+  (let* ((tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (unless (= scale tag-bits)
+      (emit-sar out (immediate (- tag-bits scale)) index))
+    (emit-lea out (dispmem tag value-size vec index) result)))
+
 (define-pure-operator (vec-ref vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
@@ -317,3 +321,73 @@
                       "unknown"))
     (emit out "hlt")
     (emit-jump out l)))
+
+(define-pure-operator (fixnum->raw val) val ()
+  (emit-sar out (immediate tag-bits) val))
+
+(define-pure-operator (raw->fixnum val) val ()
+  (emit-shl out (immediate tag-bits) val))
+
+(define (emit-set-ac-flag out enable)
+  (emit-pushf out)
+  (if enable
+      (emit-or out (immediate #x40000) (mem %sp) 2)
+      (emit-and out (immediate #xfffbffff) (mem %sp) 2))
+  (emit-popf out))
+
+(define-reg-use (c-call func . args)
+  (operator-args-reg-use form)
+  general-register-count)
+
+(define-codegen (c-call function-name . args)
+  (let* ((regs (list %di %si %d %c)))
+    (operator-args-codegen form regs frame-base out)
+    (emit out "cld")
+    (emit-set-ac-flag out false)
+    ;;; XXX should align stack to 16 byte bundary
+    (emit out "call ~A" function-name)
+    (emit-set-ac-flag out true)
+    (emit-convert-value out %a dest)))
+
+(define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
+  (reg-use nargs dest-type-value)
+  ;; raw-apply-with-args is only intended for restricted
+  ;; circumstances, so we make this assumption:
+  (unless (< (reg-use bodyfunc dest-type-value) general-register-count)
+    (error "all registers needed for ~S" bodyfunc))
+  general-register-count)
+
+(define-codegen (raw-apply-with-args attrs nargs bodyfunc)
+  (let* ((saved-sp (first general-registers)))
+    (codegen nargs (dest-value %nargs) general-registers frame-base out)
+    (codegen bodyfunc (dest-value %func) (remove %nargs general-registers)
+             frame-base out)
+    (emit-mov out %sp saved-sp)
+    (emit-sub out %nargs %sp)
+    (emit-clear out %nargs)
+    (emit-push out saved-sp)
+    (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
+    (emit-pop out saved-sp)
+    (emit-mov out saved-sp %sp)
+    ;; Restore %func
+    (emit-mov out (dispmem (* frame-base value-size) 0 saved-sp) %func)))
+
+(define-reg-use (raw-apply-jump attrs func nargs)
+  ;; raw-apply-call is only intended for restricted circumstances, so
+  ;; we make this assumption:
+  (unless (< (reg-use func dest-type-value) general-register-count)
+    (error "all registers needed for ~S" func))
+  (reg-use func dest-type-value)
+  general-register-count)
+
+(define-codegen (raw-apply-jump attrs func nargs)
+  (codegen nargs (dest-value %nargs) general-registers frame-base out)
+  (codegen func (dest-value %func) (remove %nargs general-registers)
+           frame-base out)
+  (emit out "jmp *~A" (usual-register (dispmem function-tag 0 %func))))
+
+(define-operator (raw-arg-set! args-base index val) val ()
+  (emit-mov out val (dispmem 0 0 args-base index)))
+
+(define-pure-operator (raw-arg-ref args-base index) result ()
+  (emit-mov out (dispmem 0 0 args-base index) val))

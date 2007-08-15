@@ -43,11 +43,6 @@
 (defconstant string-tag #b101)
 (defconstant atom-tag #b111)
 
-;;; This is used for raw pointers in varargs handling.  We can re-use
-;;; the number tag for this (but nothing should rely on the low-bits
-;;; being clear)
-(defconstant pointer-tag number-tag)
-
 (defconstant char-scale 0)
 
 (defconstant function-size (* 2 value-size))
@@ -255,6 +250,7 @@
 ;;; ...
 ;;; param 1
 ;;; param 0
+;;; Silly slot for the benefit of apply
 ;;; Return address
 ;;; func slot (filled by callee) <--- (+ %sp (* frame-base value-size))
 ;;; Local var 0
@@ -294,17 +290,17 @@
 (define (closure-slot index frame-base)
   (dispmem 0 (* value-size (1+ index)) %func))
 
-(define (param-slot index frame-base offset)
-  (dispmem 0 (+ offset (* value-size (+ frame-base 2 index))) %sp))
+(define (param-slot index frame-base)
+  (dispmem 0 (* value-size (+ frame-base 3 index)) %sp))
 
 (define (local-slot index frame-base)
-  (dispmem 0 (* value-size (+ frame-base -1 (- index))) %sp))
+  (dispmem 0 (* value-size (- frame-base 1 index)) %sp))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
          (index (varrec-attr varrec 'index)))
     (cond ((eq mode 'closure) (closure-slot index frame-base))
-          ((eq mode 'param) (param-slot index frame-base 0))
+          ((eq mode 'param) (param-slot index frame-base))
           ((eq mode 'local) (local-slot index frame-base)))))
 
 ;;; Functions
@@ -317,6 +313,8 @@
   (emit out "ret"))
 
 (define (emit-call out frame-base)
+  (emit-push out %nargs)
   (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
-  ;; Restore %proc
-  (emit-mov out (dispmem (* frame-base value-size) 0 %sp) %func))
+  ;; Restore %func
+  (emit-mov out (dispmem (* frame-base value-size) 0 %sp) %func)
+  (emit-pop out %nargs))
