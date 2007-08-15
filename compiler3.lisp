@@ -875,11 +875,19 @@
 
 ;;; Functions
 
+(define-reg-use (lambda attrs body) 0)
+(define-codegen (lambda attrs body))
+
 (define-reg-use (call attrs . args) general-register-count)
 
 (define-codegen (call attrs . forms)
   (let* ((new-frame-base frame-base)
          (args (cdr forms)))
+    ;; functions are called with a spare arg slot on the stack, in
+    ;; order to support varargs.  The value we save there is not
+    ;; significant.
+    (emit-frame-push out new-frame-base %func)
+
     (dolist (arg (reverse args))
       (reg-use arg dest-type-value)
       (codegen arg (dest-value (first general-registers))
@@ -887,19 +895,13 @@
       (emit-frame-push out new-frame-base (first general-registers)))
     
     (reg-use (first forms) dest-type-value)
-    (codegen (first forms) %func general-registers new-frame-base out)
+    (codegen (first forms) (dest-value %func)
+             general-registers new-frame-base out)
 
-    (when (null? args)
-      ;; functions must always be called with at least one arg slot on
-      ;; the stack, in order to support varargs
-      (emit-frame-push out new-frame-base (first general-registers)))
-
-    (emit-call out new-frame-base (length args))
+    (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
+    (emit-call out new-frame-base)
     (emit-restore-frame-base out new-frame-base frame-base)
     (emit-convert-value out %funcres dest)))
-
-(define-reg-use (lambda attrs body) 0)
-(define-codegen (lambda attrs body))
 
 ;;; Strings and vectors
 

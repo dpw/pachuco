@@ -316,8 +316,7 @@
   (emit-add out (immediate value-size) %sp)
   (emit out "ret"))
 
-(define (emit-call out frame-base arg-count)
-  (emit-mov out (immediate (fixnum-representation arg-count)) %nargs)
+(define (emit-call out frame-base)
   (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
   ;; Restore %proc
   (emit-mov out (dispmem (* frame-base value-size) 0 %sp) %func))
