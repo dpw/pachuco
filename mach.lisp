@@ -270,7 +270,7 @@
 
 (define (emit-allocate-locals out n frame-base)
   (emit-sub out (immediate (* value-size n)) %sp)
-  (+ frame-base (* value-size n)))
+  (+ frame-base n))
 
 (define (emit-restore-frame-base out new old)
   (unless (= new old)
