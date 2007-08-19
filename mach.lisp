@@ -318,5 +318,5 @@
   (emit-push out %nargs)
   (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
   ;; Restore %func
-  (emit-mov out (dispmem (* frame-base value-size) 0 %sp) %func)
+  (emit-mov out (dispmem 0 (* frame-base value-size) %sp) %func)
   (emit-pop out %nargs))
