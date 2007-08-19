@@ -223,7 +223,7 @@
          (unless (eq? reg dest) (emit-mov out reg dest)))
         ((dest-conditional? dest)
          (emit-cmp out (immediate false-representation) reg)
-         (emit-branch out "e" dest))))
+         (emit-branch out "ne" dest))))
 
 (define (convert-cc-reg-use dest-type)
   (if (dest-type-value? dest-type) 1 0))
