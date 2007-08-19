@@ -391,4 +391,4 @@
   (emit-mov out val (dispmem 0 0 args-base index)))
 
 (define-pure-operator (raw-arg-ref args-base index) result ()
-  (emit-mov out (dispmem 0 0 args-base index) val))
+  (emit-mov out (dispmem 0 0 args-base index) result))
