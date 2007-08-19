@@ -12,7 +12,7 @@
   (collect-closures program)
   (introduce-boxes program)
   (assign-indices program)
-  (codegen-sections program (make-asm-output))
+  (codegen-program program)
   ;(format t "~S~%" program)
   )
 
@@ -636,6 +636,14 @@
 (define (dest-conditional? dest) (pair? dest))
 
 ;;; Top-level sections:  Lambdas and quoted forms
+
+(define (codegen-program program)
+  (let* ((out (make-asm-output)))
+    (codegen-sections program out)
+    (emit-program-prologue out)
+    (reg-use program dest-type-discard)
+    (codegen program dest-discard general-registers 0 out)
+    (emit-program-epilogue out)))
 
 (define-walker codegen-sections (out) ignore-domain)
 
