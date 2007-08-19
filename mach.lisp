@@ -7,8 +7,10 @@
                       (unquote-splicing args))))
 
 (defmarco (emit-comment out template . args)
-  (quasiquote (format t (unquote (string-concat "# " template "~%"))
-                      (unquote-splicing args))))
+  (quasiquote
+    (let* ((*print-pretty* false))
+      (format t (unquote (string-concat "# " template "~%"))
+              (unquote-splicing args)))))
 
 (define (emit-literal out lit)
   (emit ouy ".quad ~A" lit))

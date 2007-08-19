@@ -1,3 +1,6 @@
 BLOGS
 COMPILER
 *~
+*.o
+*.s
+a.out

@@ -335,17 +335,18 @@
       (emit-and out (immediate #xfffbffff) (mem %sp) 2))
   (emit-popf out))
 
-(define-reg-use (c-call func . args)
+(define-reg-use (c-call c-function-name . args)
+  (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
   (operator-args-reg-use form)
   general-register-count)
 
-(define-codegen (c-call function-name . args)
+(define-codegen (c-call attrs . args)
   (let* ((regs (list %di %si %d %c)))
     (operator-args-codegen form regs frame-base out)
     (emit out "cld")
     (emit-set-ac-flag out false)
     ;;; XXX should align stack to 16 byte bundary
-    (emit out "call ~A" function-name)
+    (emit out "call ~A" (attr-ref attrs 'c-function-name))
     (emit-set-ac-flag out true)
     (emit-convert-value out %a dest)))
 

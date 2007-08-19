@@ -11,7 +11,7 @@ interp:
 	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-interpret-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))"
 
 lisp.s: $(COMPILER_SOURCES) $(SOURCES)
-	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-compile-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))" >$@
+	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-compile3-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))" >$@
 
 compile3:
 	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-compile3-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))"
