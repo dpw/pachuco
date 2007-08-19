@@ -599,7 +599,7 @@
 (define-walker comment-form ())
 
 (define-comment-form (begin . rest) '(begin etc.))
-(define-comment-form (lambda . rest) '(lambda etc.))
+(define-comment-form (lambda attrs body) (list 'lambda attrs 'etc.))
 (define-comment-form (let . rest) '(let etc.))
 (define-comment-form (if attrs test then else)
   (list 'if (comment-form test) 'etc.))
@@ -659,7 +659,8 @@
     ;; need to do reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
     (codegen body (dest-value %funcres) general-registers 0 out)
-    (emit-function-epilogue out attrs arity-mismatch-label)))
+    (emit-function-epilogue out attrs arity-mismatch-label)
+    label))
 
 (define (wrap-lambda-body attrs body)
   (let* ((nparams (length (attr-ref attrs 'params))))
@@ -881,8 +882,22 @@
 
 ;;; Functions
 
-(define-reg-use (lambda attrs body) 0)
-(define-codegen (lambda attrs body))
+(define-reg-use (lambda attrs body)
+  (let* ((closure (attr-ref attrs 'closure)))
+    (nmapfor (varrec closure)
+      (cons varrec (list 'ref (varrec-attr varrec 'source))))
+    (1+ (reduce (function max)
+                (mapfor (varrec-ref closure)
+                        (reg-use (cdr varrec-ref) dest-type-value))))))
+
+(define-codegen (lambda attrs body)
+  (let* ((closure (attr-ref attrs 'closure)))
+    (emit-alloc-function out (car regs) (attr-ref attrs 'label)
+                         (length closure))
+    (dolist (varrec-ref (attr-ref attrs 'closure))
+      (codegen (cdr varrec-ref)
+               (dest-value (cadr regs)) (cdr regs) frame-base out)
+      (emit-closure-slot-set out (car regs) (car varrec-ref) (cadr regs)))))
 
 (define-reg-use (call attrs . args) general-register-count)
 

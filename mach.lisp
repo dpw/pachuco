@@ -289,8 +289,8 @@
       (quote insn)
       (set! (unquote frame-base) (1- (unquote frame-base)))))))
 
-(define (closure-slot index frame-base)
-  (dispmem 0 (* value-size (1+ index)) %func))
+(define (closure-slot func index)
+  (dispmem function-tag (* value-size (1+ index)) func))
 
 (define (param-slot index frame-base)
   (dispmem 0 (* value-size (+ frame-base 3 index)) %sp))
@@ -301,7 +301,7 @@
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
          (index (varrec-attr varrec 'index)))
-    (cond ((eq mode 'closure) (closure-slot index frame-base))
+    (cond ((eq mode 'closure) (closure-slot %func index))
           ((eq mode 'param) (param-slot index frame-base))
           ((eq mode 'local) (local-slot index frame-base)))))
 
@@ -320,3 +320,11 @@
   ;; Restore %func
   (emit-mov out (dispmem 0 (* frame-base value-size) %sp) %func)
   (emit-pop out %nargs))
+
+(define (emit-alloc-function out result-reg label slot-count)
+  (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
+  (emit-mov out (immediate label) (dispmem 0 0 %alloc))
+  (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
+
+(define (emit-closure-slot-set out func-reg varrec val-reg)
+  (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
