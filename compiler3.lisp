@@ -692,13 +692,13 @@
     (find-max-subform-ru 0 body)))
 
 (define-codegen (begin attrs . body)
-  (labels ((codegen-recurse (forms)
+  (labels ((codegen-body-forms (forms)
              (emit-comment-form out (car forms))
              (if (null? (cdr forms))
                  (codegen (car forms) dest regs frame-base out)
                  (begin (codegen (car forms) dest-discard regs frame-base out)
-                        (codegen-recurse (cdr forms))))))
-    (codegen-recurse body)))
+                        (codegen-body-forms (cdr forms))))))
+    (codegen-body-forms body)))
 
 ;;; Let
 
