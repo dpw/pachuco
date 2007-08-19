@@ -665,10 +665,10 @@
   (let* ((nparams (length (attr-ref attrs 'params))))
     (if (attr-ref attrs 'varargs)
         (list* 'begin ()
-               (quasiquote (call () (ref handle-varargs)
-                                 (quote (unquote nparams))
-                                 (arg-count ())
-                                 (raw-args-address ())))
+               (quasiquote
+                 (set! (unquote (car (last-elem (attr-ref attrs 'params))))
+                       (call () (ref handle-varargs) (quote (unquote nparams))
+                             (arg-count ()) (raw-args-address ()))))
                body)
         (quasiquote
           (if () (check-arg-count () (quote (unquote nparams)))

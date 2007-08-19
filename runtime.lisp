@@ -658,31 +658,20 @@
   (error-halt message args))
 
 (when-compiling
-  (set! (arity-mismatch arg-frame param-frame-length)
-    (error "expected ~S arguments, got ~S" (1- param-frame-length)
-           (1- (vector-length arg-frame))))
+  (set! (arity-mismatch nparams nargs)
+    (error "expected ~S arguments, got ~S" nparams nargs))
 
-  (set! (handle-varargs arg-frame param-frame-length)
-    (define arg-frame-length (vector-length arg-frame))
-    (if (< arg-frame-length param-frame-length)
-        (begin
-          (when (/= (1- param-frame-length) arg-frame-length)
-            (error "expected ~S arguments or more, got ~S"
-                   (- param-frame-length 2) (1- arg-frame-length)))
-        
-          ;; the nil varargs list case
-          (define new-arg-frame (make-vector param-frame-length))
-          (vector-copy arg-frame 0 new-arg-frame 0 arg-frame-length)
-          (vector-set! new-arg-frame arg-frame-length ())
-          new-arg-frame)
-        (begin
-         (define (cons-varargs pos)
-           (if (>= pos (vector-length arg-frame)) ()
-               (cons (vector-ref arg-frame pos)
-                     (cons-varargs (1+ pos)))))
-         (define last-param-slot (1- param-frame-length))
-         (vector-set! arg-frame last-param-slot (cons-varargs last-param-slot))
-         arg-frame)))
+  (set! (handle-varargs nparams nargs args-base)
+    ;; the number of non-varargs params is nparams-1
+    (set! nparams (1- nparams))
+
+    (define (make-varargs-list nargs l)
+      (if (/= nargs nparams)
+          (make-varargs-list (1- nargs)
+                             (cons (raw-arg-ref args-base (1- nargs)) l))
+          l))
+
+    (make-varargs-list nargs ()))
 
   (define (apply func arg1 . args)
     (define (args-length args)
