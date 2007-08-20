@@ -874,19 +874,34 @@
       (define-reg-use (unquote attr-template)
         (if (dest-type-discard? dest-type)
             (operator-args-reg-use-discarding form)
-            (max (+ (convert-cc-reg-use dest-type) (unquote body-ru))
+            (max (+ (if (dest-type-conditional? dest-type) 0 1)
+                    (unquote body-ru))
                  (operator-args-reg-use form))))
 
       (define-codegen (unquote attr-template)
-        (if (dest-discard? dest)
-            (operator-args-codegen-discarding form regs frame-base out)
-            (begin
-              (operator-args-codegen form regs frame-base out)
-              (let ((bregs (emit-prepare-convert-cc out dest regs)))
-                (bind ((unquote-splicing (cdr template))
-                       (unquote-splicing supplemental-regs) . others) bregs
-                (unquote-splicing body)
-                (emit-convert-cc out (unquote cc) dest regs))))))))))
+        (cond ((dest-discard? dest)
+               (operator-args-codegen-discarding form regs frame-base out))
+              ((dest-conditional? dest)
+               (operator-args-codegen form regs frame-base out)
+               (bind ((unquote-splicing (cdr template))
+                      (unquote-splicing supplemental-regs) . others)
+                     regs
+                 (unquote-splicing body)
+                 (emit-branch out (unquote cc) dest)))
+              (true
+               (let* ((args-count (length (cddr form)))
+                      (args-regs (append (subseq (cdr regs) 0 args-count)
+                                         (list (car regs))
+                                         (subseq (cdr regs) args-count)))
+                      (op-regs (cdr regs)))
+                 (operator-args-codegen form args-regs frame-base out)
+                 (emit-prepare-convert-cc-value out (car regs))
+                 (bind ((unquote-splicing (cdr template))
+                        (unquote-splicing supplemental-regs) . others)
+                       op-regs
+                   (unquote-splicing body)
+                   (emit-convert-cc-value out (unquote cc) (car regs))
+                   (emit-convert-value out (car regs) dest))))))))))
 
 ;;; Functions
 
