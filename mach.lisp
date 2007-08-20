@@ -284,9 +284,9 @@
 (defmarco (emit-frame-pop out frame-base . reg)
   (let* ((insn (if (null? reg)
                    (quasiquote (emit-add out (immediate value-size) %sp))
-                   (quasiquote (emit-pop out (quote (car reg)))))))
+                   (quasiquote (emit-pop out (unquote (car reg)))))))
     (quasiquote (begin
-      (quote insn)
+      (unquote insn)
       (set! (unquote frame-base) (1- (unquote frame-base)))))))
 
 (define (closure-slot func index)
