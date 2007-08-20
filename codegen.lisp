@@ -134,7 +134,7 @@
   (emit-mov out a (dispmem pair-tag 0 c)))
 
 (define-operator (rplacd c d) c ()
-  (emit-mov out d (dispmem pair-tag 0 c)))
+  (emit-mov out d (dispmem pair-tag value-size c)))
 
 ;;; Boxes
 
