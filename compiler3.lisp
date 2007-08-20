@@ -915,12 +915,13 @@
 
 (define-codegen (lambda attrs body)
   (let* ((closure (attr-ref attrs 'closure)))
-    (emit-alloc-function out (car regs) (attr-ref attrs 'label)
+    (emit-alloc-function out (first regs) (attr-ref attrs 'label)
                          (length closure))
     (dolist (varrec-ref (attr-ref attrs 'closure))
       (codegen (cdr varrec-ref)
-               (dest-value (cadr regs)) (cdr regs) frame-base out)
-      (emit-closure-slot-set out (car regs) (car varrec-ref) (cadr regs)))))
+               (dest-value (second regs)) (cdr regs) frame-base out)
+      (emit-closure-slot-set out (first regs) (car varrec-ref) (second regs)))
+    (emit-convert-value out (first regs) dest)))
 
 (define-reg-use (call attrs . args) general-register-count)
 
