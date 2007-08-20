@@ -785,9 +785,9 @@
          (non-trashy-args-ru (form-attr form 'non-trashy-args-ru))
          (args (cddr form)))
     (unless (null? trashy-args-ru)
-      ;; first, the trashy args.  we need to save the results of all
-      ;; but one of these on the stack.  but we consider one to be
-      ;; non-trashy, since it's result can reside in a register
+      ;; first, the trashy args.  we need to save the results of these
+      ;; on the stack.  but we consider one to be non-trashy, since
+      ;; its result can reside in a register
       (set! non-trashy-args-ru (nconc non-trashy-args-ru
                                       (list (car trashy-args-ru))))
       (set! trashy-args-ru (cdr trashy-args-ru))
@@ -798,7 +798,7 @@
         (emit-frame-push out frame-base (first regs))))
     
     (let* ((non-trashy-regs (copy-list regs))
-            (result-regs ()))
+           (result-regs ()))
       ;; work out the register list for the non-trashy args.  this is
       ;; derived from the target registers of each arg.  Note that
       ;; operator-args-reg-use left the non-trashy-arg list in reverse
