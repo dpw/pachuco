@@ -385,6 +385,7 @@
   (codegen nargs (dest-value %nargs) general-registers frame-base out)
   (codegen func (dest-value %func) (remove %nargs general-registers)
            frame-base out)
+  (emit-add out (immediate value-size) %sp)
   (emit out "jmp *~A" (usual-register (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
