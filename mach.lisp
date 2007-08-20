@@ -318,7 +318,7 @@
   (emit-push out %nargs)
   (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
   ;; Restore %func
-  (emit-mov out (dispmem 0 (* frame-base value-size) %sp) %func)
+  (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func)
   (emit-pop out %nargs))
 
 (define (emit-alloc-function out result-reg label slot-count)
