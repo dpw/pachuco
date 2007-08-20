@@ -359,7 +359,8 @@
   general-register-count)
 
 (define-codegen (raw-apply-with-args attrs nargs bodyfunc)
-  (let* ((saved-sp (first general-registers)))
+  (let* ((result (destination-reg dest general-registers))
+         (saved-sp (first (remove result general-registers))))
     (codegen nargs (dest-value %nargs) general-registers frame-base out)
     (codegen bodyfunc (dest-value %func) (remove %nargs general-registers)
              frame-base out)
@@ -371,7 +372,8 @@
     (emit-pop out saved-sp)
     (emit-mov out saved-sp %sp)
     ;; Restore %func
-    (emit-mov out (dispmem (* frame-base value-size) 0 saved-sp) %func)))
+    (emit-mov out (dispmem (* frame-base value-size) 0 saved-sp) %func)
+    (emit-convert-value out result dest)))
 
 (define-reg-use (raw-apply-jump attrs func nargs)
   ;; raw-apply-call is only intended for restricted circumstances, so
