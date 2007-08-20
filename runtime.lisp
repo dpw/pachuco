@@ -665,6 +665,9 @@
     ;; the number of non-varargs params is nparams-1
     (set! nparams (1- nparams))
 
+    (when (< nargs nparams)
+        (error "expected at least ~S arguments, got ~S" nparams nargs))
+
     (define (make-varargs-list nargs l)
       (if (/= nargs nparams)
           (make-varargs-list (1- nargs)
