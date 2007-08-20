@@ -225,24 +225,13 @@
          (emit-cmp out (immediate false-representation) reg)
          (emit-branch out "ne" dest))))
 
-(define (convert-cc-reg-use dest-type)
-  (if (dest-type-value? dest-type) 1 0))
+(define (emit-prepare-convert-cc-value out reg)
+  (emit-clear out reg))
 
-(define (emit-prepare-convert-cc out dest regs)
-  (if (dest-value? dest)
-      (begin
-        (emit-clear out (car regs))
-        (cdr regs))
-      regs))
-
-(define (emit-convert-cc out cc dest regs)
-  (cond ((dest-value? dest)
-         (let* ((reg (car regs)))
-           (emit-set out cc reg)
-           (emit-shl out (immediate tag-bits) reg 0)
-           (emit-add out (immediate atom-tag) reg 0)))
-        ((dest-conditional? dest)
-         (emit-branch out cc dest))))
+(define (emit-convert-cc-value out cc reg)
+  (emit-set out cc reg)
+  (emit-shl out (immediate tag-bits) reg 0)
+  (emit-or out (immediate atom-tag) reg 0))
 
 ;;; Stack handling
 
