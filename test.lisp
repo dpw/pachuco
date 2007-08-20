@@ -13,21 +13,6 @@
   (assert-result (function? ()) false)
   (assert-result (function? (lambda ())) true)
 
-  (begin
-    (define x '(1 2))
-    
-    (assert-result (quasiquote (a b c)) '(a b c))
-    (assert-result (quasiquote ((unquote x) b c)) '((1 2) b c))
-    (assert-result (quasiquote (a (unquote x) c)) '(a (1 2) c))
-    (assert-result (quasiquote (a b (unquote x))) '(a b (1 2)))
-
-    (assert-result (quasiquote ((unquote-splicing x) b c)) '(1 2 b c))
-    (assert-result (quasiquote (a (unquote-splicing x) c)) '(a 1 2 c))
-    (assert-result (quasiquote (a b (unquote-splicing x))) '(a b 1 2)))
-
-  (assert-result (length '(1 2 3)) 3)
-  (assert-result (list 1 2 3) '(1 2 3))
-
   (assert-result (and) true)
   (assert-result (and true) true)
   (assert-result (and false) false)
@@ -38,6 +23,16 @@
   (assert-result (or) false)
   (assert-result (or true) true)
   (assert-result (or false) false)
+
+  (assert-result (length '(1 2 3)) 3)
+
+  (begin
+    (define x (cons 1 2))
+    (assert-result (rplaca x 3) '(3 . 2))
+    (assert-result (rplacd x 4) '(3 . 4)))
+
+  (assert-result (list 1 2 3) '(1 2 3))
+  (assert-result (append '(1 2) '(3 4)) '(1 2 3 4))
 
   (assert-result (eq? (intern "foo") 'foo) true)
   (assert-result (symbol-name (intern "bar")) "bar")
@@ -52,6 +47,18 @@
   (assert-result (findfor (x '(1 2 3)) (> x 1)) 2)
   (assert-result (findfor (x ()) (error "Whoa!")) false)
   (assert-result (findfor (x '(1)) (> x 1)) false)
+
+  (begin
+    (define x '(1 2))
+    
+    (assert-result (quasiquote (a b c)) '(a b c))
+    (assert-result (quasiquote ((unquote x) b c)) '((1 2) b c))
+    (assert-result (quasiquote (a (unquote x) c)) '(a (1 2) c))
+    (assert-result (quasiquote (a b (unquote x))) '(a b (1 2)))
+
+    (assert-result (quasiquote ((unquote-splicing x) b c)) '(1 2 b c))
+    (assert-result (quasiquote (a (unquote-splicing x) c)) '(a 1 2 c))
+    (assert-result (quasiquote (a b (unquote-splicing x))) '(a b 1 2)))
 
   (begin
     (defmacro (assert-applied-result expr expect)
