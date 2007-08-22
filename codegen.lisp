@@ -93,8 +93,9 @@
 
 ;;; Function call-related internals
 
-(define-cc-operator (check-arg-count nparams) "e" ()
-  (emit-cmp out nparams %nargs))
+(define-cc-operator (check-arg-count) "e" ()
+  (emit-cmp out (immediate (fixnum-representation (attr-ref attrs 'nparams)))
+            %nargs))
 
 (define-pure-operator (arg-count) result ()
   (emit-mov out %nargs result))

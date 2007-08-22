@@ -680,7 +680,7 @@
                              (arg-count ()) (raw-args-address ()))))
                body)
         (quasiquote
-          (if () (check-arg-count () (quote (unquote nparams)))
+          (if () (check-arg-count ((nparams . (unquote nparams))))
               (begin () (unquote-splicing body))
               (call () (ref arity-mismatch)
                     (quote (unquote nparams))
