@@ -406,7 +406,6 @@
 ;;; Strings
 
 (define (substring str offset len)
-  (check-string-range str offset len)
   (define newstr (make-string len))
   (string-copy str offset newstr 0 len)
   newstr)
