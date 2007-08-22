@@ -6,7 +6,7 @@
       (define res (unquote expr))
       (define expected (unquote expect))
       (unless (equal? res expected)
-        (error (unquote (format "Evaluation of ~S gave ~~S, expected ~~S" expr))
+        (error "Evaluation of ~S gave ~S, expected ~S" (quote (unquote expr))
                res expected)))))
 
 (define (main)
