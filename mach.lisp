@@ -218,12 +218,17 @@
 (define (destination-reg dest regs)
   (if (dest-value? dest) dest (first regs)))
 
-(define (emit-convert-value out reg dest)
+(define (emit-convert-value out reg dest in-frame-base out-frame-base)
+  (emit-adjust-frame-base out in-frame-base out-frame-base)
   (cond ((dest-value? dest)
          (unless (eq? reg dest) (emit-mov out reg dest)))
         ((dest-conditional? dest)
          (emit-cmp out (immediate false-representation) reg)
-         (emit-branch out "ne" dest))))
+         (emit-branch out "ne" dest))
+        ((dest-discard? dest))
+        (true
+         (error "can't handle dest ~S" dest))))
+         
 
 (define (emit-prepare-convert-cc-value out reg)
   (emit-clear out reg))
@@ -261,22 +266,20 @@
   (emit-sub out (immediate (* value-size n)) %sp)
   (+ frame-base n))
 
-(define (emit-restore-frame-base out new old)
-  (unless (= new old)
-    (emit-add out (immediate (* value-size (- new old))) %sp)))
+(define (emit-adjust-frame-base out in-frame-base out-frame-base)
+  (unless (= in-frame-base out-frame-base)
+    (emit-add out (immediate (* value-size (- in-frame-base out-frame-base)))
+              %sp)))
 
 (defmarco (emit-frame-push out frame-base reg)
   (quasiquote (begin
     (emit-push (unquote out) (unquote reg))
     (set! (unquote frame-base) (1+ (unquote frame-base))))))
 
-(defmarco (emit-frame-pop out frame-base . reg)
-  (let* ((insn (if (null? reg)
-                   (quasiquote (emit-add out (immediate value-size) %sp))
-                   (quasiquote (emit-pop out (unquote (car reg)))))))
-    (quasiquote (begin
-      (unquote insn)
-      (set! (unquote frame-base) (1- (unquote frame-base)))))))
+(defmarco (emit-frame-pop out frame-base reg)
+  (quasiquote (begin
+    (emit-pop (unquote out) (unquote reg))
+    (set! (unquote frame-base) (1- (unquote frame-base))))))
 
 (define (closure-slot func index)
   (dispmem function-tag (* value-size (1+ index)) func))
@@ -300,7 +303,6 @@
   (emit-push out %func))
 
 (define (emit-function-epilogue out attrs arity-mismatch-label)
-  (emit-add out (immediate value-size) %sp)
   (emit out "ret"))
 
 (define (emit-call out frame-base)

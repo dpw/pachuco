@@ -53,10 +53,11 @@
 (define-reg-use (quote attrs) (convert-value-reg-use dest-type))
 
 (define-codegen (quote attrs)
-  (unless (dest-discard? dest)
-    (let* ((reg (destination-reg dest regs)))
-    (emit-mov out (immediate (attr-ref attrs 'value)) reg)
-    (emit-convert-value out reg dest))))
+  (if (dest-discard? dest)
+      (emit-adjust-frame-base out in-frame-base out-frame-base)
+      (let* ((reg (destination-reg dest regs)))
+        (emit-mov out (immediate (attr-ref attrs 'value)) reg)
+        (emit-convert-value out reg dest in-frame-base out-frame-base))))
 
 ;;; Variables
 
@@ -66,17 +67,18 @@
 
 (define-codegen (set! varrec val)
   (let* ((reg (destination-reg dest regs)))
-    (codegen val reg regs frame-base out)
-    (emit-mov out reg (varrec-operand varrec frame-base))
-    (emit-convert-value out reg dest)))
+    (codegen val reg in-frame-base in-frame-base regs out)
+    (emit-mov out reg (varrec-operand varrec in-frame-base))
+    (emit-convert-value out reg dest in-frame-base out-frame-base)))
 
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 
 (define-codegen (ref varrec)
-  (unless (dest-discard? dest)
-    (let* ((reg (destination-reg dest regs)))
-      (emit-mov out (varrec-operand varrec frame-base) reg)
-      (emit-convert-value out reg dest))))
+  (if (dest-discard? dest)
+      (emit-adjust-frame-base out in-frame-base out-frame-base)
+      (let* ((reg (destination-reg dest regs)))
+        (emit-mov out (varrec-operand varrec in-frame-base) reg)
+        (emit-convert-value out reg dest in-frame-base out-frame-base))))
 
 ;;; Operator definitions
 
@@ -98,7 +100,7 @@
   (emit-mov out %nargs result))
 
 (define-pure-operator (raw-args-address) result ()
-  (emit-lea out (param-slot 0 frame-base) result))
+  (emit-lea out (param-slot 0 in-frame-base) result))
 
 ;;; Comparisons
 
@@ -217,27 +219,29 @@
 
 (define-codegen (truncate attrs a b)
   (if (dest-discard? dest)
-      (operator-args-codegen-discarding form general-registers frame-base out)
+      (operator-args-codegen-discarding form in-frame-base out-frame-base
+                                        general-registers out)
       (begin
-        (operator-args-codegen form general-registers frame-base out)
+        (operator-args-codegen form in-frame-base general-registers out)
         (emit-mov out %a %d)
         (emit-sar out (immediate 63) %d)
         (emit-idiv out %c)
         (emit-shl out (immediate tag-bits) %a)
-        (emit-convert-value out %a dest))))
+        (emit-convert-value out %a dest in-frame-base out-frame-base))))
 
 (define-reg-use (rem attrs a b)
   (div-operator-reg-use form dest-type))
 
 (define-codegen (rem attrs a b)
   (if (dest-discard? dest)
-      (operator-args-codegen-discarding form general-registers frame-base out)
+      (operator-args-codegen-discarding form in-frame-base out-frame-base 
+                                        general-registers out)
       (begin
-        (operator-args-codegen form general-registers frame-base out)
+        (operator-args-codegen form in-frame-base general-registers out)
         (emit-mov out %a %d)
         (emit-sar out (immediate 63) %d)
         (emit-idiv out %c)
-        (emit-convert-value out %d dest))))
+        (emit-convert-value out %d dest in-frame-base out-frame-base))))
 
 ;;; Strings and vectors
 
@@ -296,7 +300,7 @@
   (let* ((regs (list            %si %a        %di  %d         %c))
          (tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form regs frame-base out)
+    (operator-args-codegen form in-frame-base regs out)
     (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
     (unless (= scale tag-bits) (emit-sar out (immediate (- tag-bits scale)) %a))
     (emit-lea out (dispmem tag value-size %si %a) %si)
@@ -304,10 +308,11 @@
     (emit-lea out (dispmem tag value-size %di %d) %di)
     (emit-sar out (immediate tag-bits) %c)
     (emit-rep-movs out scale)
-    (unless (dest-discard? dest)
-      (let* ((result (destination-reg dest regs)))
-        (emit-mov out (immediate unspecified-representation) result)
-        (emit-convert-value out result dest)))))
+    (if (dest-discard? dest)
+        (emit-adjust-frame-base out in-frame-base out-frame-base)
+        (let* ((result (destination-reg dest regs)))
+          (emit-mov out (immediate unspecified-representation) result)
+          (emit-convert-value out result dest in-frame-base out-frame-base)))))
 
 ;;; Misc. runtime
 
@@ -342,13 +347,13 @@
 
 (define-codegen (c-call attrs . args)
   (let* ((regs (list %di %si %d %c)))
-    (operator-args-codegen form regs frame-base out)
+    (operator-args-codegen form in-frame-base regs out)
     (emit out "cld")
     (emit-set-ac-flag out false)
     ;;; XXX should align stack to 16 byte bundary
     (emit out "call ~A" (attr-ref attrs 'c-function-name))
     (emit-set-ac-flag out true)
-    (emit-convert-value out %a dest)))
+    (emit-convert-value out %a dest in-frame-base out-frame-base)))
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
   (reg-use nargs dest-type-value)
@@ -361,9 +366,10 @@
 (define-codegen (raw-apply-with-args attrs nargs bodyfunc)
   (let* ((result (destination-reg dest general-registers))
          (saved-sp (first (remove result general-registers))))
-    (codegen nargs (dest-value %nargs) general-registers frame-base out)
-    (codegen bodyfunc (dest-value %func) (remove %nargs general-registers)
-             frame-base out)
+    (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
+             general-registers out)
+    (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
+             (remove %nargs general-registers) out)
     (emit-mov out %sp saved-sp)
     (emit-sub out %nargs %sp)
     (emit-clear out %nargs)
@@ -372,8 +378,8 @@
     (emit-pop out saved-sp)
     (emit-mov out saved-sp %sp)
     ;; Restore %func
-    (emit-mov out (dispmem (* frame-base value-size) 0 saved-sp) %func)
-    (emit-convert-value out result dest)))
+    (emit-mov out (dispmem (* in-frame-base value-size) 0 saved-sp) %func)
+    (emit-convert-value out result dest in-frame-base out-frame-base)))
 
 (define-reg-use (raw-apply-jump attrs func nargs)
   ;; raw-apply-call is only intended for restricted circumstances, so
@@ -384,10 +390,11 @@
   general-register-count)
 
 (define-codegen (raw-apply-jump attrs func nargs)
-  (codegen nargs (dest-value %nargs) general-registers frame-base out)
-  (codegen func (dest-value %func) (remove %nargs general-registers)
-           frame-base out)
-  (emit-add out (immediate value-size) %sp)
+  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
+           general-registers out)
+  (codegen func (dest-value %func) in-frame-base in-frame-base
+           (remove %nargs general-registers) out)
+  (emit-adjust-frame-base out in-frame-base -1)
   (emit out "jmp *~A" (usual-register (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
