@@ -9,7 +9,7 @@
         (error "Evaluation of ~S gave ~S, expected ~S" (quote (unquote expr))
                res expected)))))
 
-(define (main)
+(define (tests)
   (assert-result (function? ()) false)
   (assert-result (function? (lambda ())) true)
 
@@ -122,8 +122,20 @@
                                "(Hello there)"))
 
   (assert-result (apply append '((1 2) (3 4)) '((5 6) (7 8)))
-                 '((1 2) (3 4) 5 6 7 8))
-  )
+                 '((1 2) (3 4) 5 6 7 8)))
+
+(define (main)
+  (define count 0)
+  (define min 0)
+  (while (< count 100)
+    (define start-t (raw-rdtsc))
+    (tests)
+    (define end-t (raw-rdtsc))
+    (define delta (- (car end-t) (car start-t)))
+    (set! min (if (or (= 0 min) (< delta min)) delta min))
+    (set! count (1+ count)))
+
+  (formout stdout "Cycles: ~S~%" min))
 
 (define (foo)
   (define dual-env (cons (make-initial-macro-env) (make-initial-interpreter-env)))

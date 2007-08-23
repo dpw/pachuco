@@ -403,3 +403,19 @@
 
 (define-pure-operator (raw-arg-ref args-base index) result ()
   (emit-mov out (dispmem 0 0 args-base index) result))
+
+(define-reg-use (raw-rdtsc attrs)
+  (if (dest-type-discard? dest-type) 0 general-register-count))
+
+(define-codegen (raw-rdtsc attrs)
+  (unless (dest-discard? dest)
+    (let* ((result (destination-reg dest general-registers)))
+      (emit out "rdtsc")
+      (emit out "shldq $~A, %rax, %rdx" (* 2 tag-bits))
+      (emit out "shlq $~A, %rax" tag-bits)
+      (emit-and out (immediate tag-mask) %d)
+      (emit-mov out %a (dispmem pair-size 0 %alloc))
+      (emit-mov out %d (dispmem pair-size value-size %alloc))
+      (emit-lea out (dispmem pair-size pair-tag %alloc) result)
+      (emit-sub out (immediate pair-size) %alloc)
+      (emit-convert-value out result dest in-frame-base out-frame-base))))

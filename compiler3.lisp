@@ -39,7 +39,8 @@
 
     raw-args-address
     raw-apply-with-args raw-apply-jump
-    raw-arg-set! raw-arg-ref))
+    raw-arg-set! raw-arg-ref
+    raw-rdtsc))
 
 (define keywords-2 '(define lambda set! quote
                      c-call))
