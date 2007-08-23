@@ -513,6 +513,7 @@
 ;;; lambda body with a let form.
 
 (define (varrec-boxed? varrec)
+  ;; Always look to the origin varrec for the boxed attribute
   (varrec-attr (or (varrec-attr varrec 'origin) varrec) 'boxed))
 
 (define-walker introduce-boxes () ignore-domain)
