@@ -181,8 +181,8 @@
   (emit out "j~A ~A" cc label))
 
 (define (emit-branch out cc conddest)
-  (emit-jcc out (negate-cc cc) (cdr conddest))
-  (emit-jump out (car conddest)))
+  (emit-jcc out (negate-cc cc) (dest-conditional-flabel conddest))
+  (emit-jump out (dest-conditional-tlabel conddest)))
 
 (define (emit-set out cc reg)
   (emit out "set~A ~A" cc (funcall reg 0)))
@@ -216,12 +216,13 @@
   (if (dest-type-conditional? dest-type) 1 0))
 
 (define (destination-reg dest regs)
-  (if (dest-value? dest) dest (first regs)))
+  (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
 (define (emit-convert-value out reg dest in-frame-base out-frame-base)
   (emit-adjust-frame-base out in-frame-base out-frame-base)
   (cond ((dest-value? dest)
-         (unless (eq? reg dest) (emit-mov out reg dest)))
+         (let* ((dr (dest-value-reg dest)))
+           (unless (eq? reg dr) (emit-mov out reg dr))))
         ((dest-conditional? dest)
          (emit-cmp out (immediate false-representation) reg)
          (emit-branch out "ne" dest))

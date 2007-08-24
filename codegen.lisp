@@ -67,7 +67,7 @@
 
 (define-codegen (set! varrec val)
   (let* ((reg (destination-reg dest regs)))
-    (codegen val reg in-frame-base in-frame-base regs out)
+    (codegen val (dest-value reg) in-frame-base in-frame-base regs out)
     (emit-mov out reg (varrec-operand varrec in-frame-base))
     (emit-convert-value out reg dest in-frame-base out-frame-base)))
 

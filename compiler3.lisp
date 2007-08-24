@@ -630,12 +630,17 @@
 
 
 (defconstant dest-discard false)
-(define (dest-value reg) reg)
-(define (dest-conditional tlabel flabel) (cons tlabel flabel))
+
+(define (dest-value reg) (cons 'dest-value reg))
+(define (dest-value-reg dest) (cdr dest))
+
+(define (dest-conditional tlabel flabel) (list 'dest-conditional tlabel flabel))
+(define (dest-conditional-tlabel dest) (second dest))
+(define (dest-conditional-flabel dest) (third dest))
 
 (define (dest-discard? dest) (not dest))
-(define (dest-value? dest) (function? dest))
-(define (dest-conditional? dest) (pair? dest))
+(define (dest-value? dest) (and dest (eq (car dest) 'dest-value)))
+(define (dest-conditional? dest) (and dest (eq (car dest) 'dest-conditional)))
 
 ;;; Top-level sections:  Lambdas and quoted forms
 
