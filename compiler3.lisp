@@ -11,7 +11,6 @@
   (eliminate-defines program)
   (collect-closures program)
   (introduce-boxes program)
-  (assign-indices program)
   (codegen-program program)
   ;(format t "~S~%" program)
   )
@@ -546,30 +545,6 @@
                                  (unquote-splicing box-init-forms)
                                  (unquote body)))))))
 
-;;; Calculate indices for variables
-
-(define (assign-varrec-indices varrecs mode index)
-  (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'index index)
-    (varrec-attr-set! varrec 'mode mode)
-    (set! index (1+ index)))
-  index)
-
-(define-walker assign-indices-aux (index) ignore-domain)
-
-(define-assign-indices-aux (begin varrecs . body)
-  (assign-indices-aux-recurse form
-                              (assign-varrec-indices varrecs 'local index)))
-
-(define-assign-indices-aux (lambda attrs body)
-  (assign-varrec-indices (attr-ref attrs 'closure) 'closure 0)
-  (assign-varrec-indices (form-attr form 'params) 'param 0)
-  (assign-indices-aux-recurse form 0))
-
-(define (assign-indices form)
-  (assign-indices-aux form 0))
-
-
 ;;; Produce a comment form
 
 (define (comment-form-forms forms)
@@ -647,6 +622,15 @@
   (codegen-sections body out)
   (form-attr-set! form 'label (codegen-lambda-section attrs body out)))
 
+;;; Calculate indices for variables
+
+(define (assign-varrec-indices varrecs mode)
+  (let* ((index 0))
+    (dolist (varrec varrecs)
+      (varrec-attr-set! varrec 'index index)
+      (varrec-attr-set! varrec 'mode mode)
+      (set! index (1+ index)))))
+
 (define (codegen-lambda-section attrs body out)
   (let* ((label (gen-label)))
     (emit out ".text")
@@ -655,9 +639,14 @@
     (emit-label out label)
     (emit-function-prologue out)
     (emit-comment-form out body)
+
+    (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
+    (assign-varrec-indices (attr-ref attrs 'params) 'param)
+
     ;; need to do reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
     (codegen body (dest-value %funcres) 0 -1 general-registers out)
+
     (emit-function-epilogue out)
     label))
 
@@ -685,7 +674,10 @@
 
 (define (registerize-varrecs varrecs ru)
   (if (or (null? varrecs) (>= ru general-register-count))
-      ru
+      (begin
+        (dolist (varrec varrecs)
+          (varrec-attr-set! varrec 'mode 'local))
+        ru)
       (begin
         (varrec-attr-set! (car varrecs) 'mode 'register)
         (varrec-attr-set! (car varrecs) 'index ru)
@@ -701,12 +693,18 @@
     (registerize-varrecs varrecs (find-max-subform-ru 0 body))))
 
 (define-codegen (begin varrecs . body)
-  (dolist (varrec varrecs)
-    (when (eq? 'register (varrec-attr varrec 'mode))
-      (varrec-attr-set! varrec 'index (elt regs (varrec-attr varrec 'index)))))
+  (let* ((new-frame-base in-frame-base))
+    (dolist (varrec varrecs)
+      (if (eq? 'register (varrec-attr varrec 'mode))
+          (varrec-attr-set! varrec 'index
+                            (elt regs (varrec-attr varrec 'index)))
+          (begin
+            (varrec-attr-set! varrec 'index new-frame-base)
+            (set! new-frame-base (1+ new-frame-base)))))
+    
+    (unless (= new-frame-base in-frame-base)
+      (emit-allocate-locals out (- new-frame-base in-frame-base)))
 
-  (let* ((new-frame-base 
-          (emit-allocate-locals out (length varrecs) in-frame-base)))
     (labels ((codegen-body-forms (forms)
                (emit-comment-form out (car forms))
                (if (null? (cdr forms))

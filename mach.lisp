@@ -328,10 +328,8 @@
 ;;; Functions are called with the closure in %func, arg-count in
 ;;; %nargs.  They return with the result in a %funcres.
 
-(define (emit-allocate-locals out n frame-base)
-  (when (> n 0)
-    (emit-sub out (immediate (* value-size n)) %sp))
-  (+ frame-base n))
+(define (emit-allocate-locals out n)
+  (emit-sub out (immediate (* value-size n)) %sp))
 
 (define (emit-adjust-frame-base out in-frame-base out-frame-base)
   (unless (= in-frame-base out-frame-base)
