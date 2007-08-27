@@ -342,7 +342,7 @@
 
 (define-walker simplify () ignore-domain)
 
-;;; Adjust lambdas and lets so that the only take one body form.
+;;; Adjust lambdas and lets so that they only take one body form.
 
 (define-simplify (lambda attrs . body)
   (simplify-forms body)
