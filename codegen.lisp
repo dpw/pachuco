@@ -74,10 +74,16 @@
        (convert-value-reg-use dest-type)))
 
 (define-codegen (set! varrec val)
-  (let* ((reg (destination-reg dest regs)))
-    (codegen val (dest-value reg) in-frame-base in-frame-base regs out)
-    (emit-mov out reg (varrec-operand varrec in-frame-base))
-    (emit-convert-value out reg dest in-frame-base out-frame-base)))
+  (if (and (dest-discard? dest) 
+           (eq? 'register (varrec-attr varrec 'mode)))
+      (begin
+        (codegen val (dest-value (varrec-attr varrec 'index))
+                 in-frame-base in-frame-base regs out)
+        (emit-adjust-frame-base out in-frame-base out-frame-base))
+      (let* ((reg (destination-reg dest regs)))
+        (codegen val (dest-value reg) in-frame-base in-frame-base regs out)
+        (emit-mov out reg (varrec-operand varrec in-frame-base))
+        (emit-convert-value out reg dest in-frame-base out-frame-base))))
 
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 
