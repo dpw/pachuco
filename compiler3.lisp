@@ -648,18 +648,17 @@
   (form-attr-set! form 'label (codegen-lambda-section attrs body out)))
 
 (define (codegen-lambda-section attrs body out)
-  (let* ((label (gen-label))
-         (arity-mismatch-label (gen-label)))
+  (let* ((label (gen-label)))
     (emit out ".text")
     (let* ((name (attr-ref attrs 'name)))
       (when name (emit-comment out "~S" name)))
     (emit-label out label)
-    (emit-function-prologue out attrs arity-mismatch-label)
+    (emit-function-prologue out)
     (emit-comment-form out body)
     ;; need to do reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
     (codegen body (dest-value %funcres) 0 -1 general-registers out)
-    (emit-function-epilogue out attrs arity-mismatch-label)
+    (emit-function-epilogue out)
     label))
 
 (define (wrap-lambda-body attrs body)

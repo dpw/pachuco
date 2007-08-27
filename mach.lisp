@@ -368,10 +368,10 @@
 
 ;;; Functions
 
-(define (emit-function-prologue out attrs arity-mismatch-label)
+(define (emit-function-prologue out)
   (emit-push out %func))
 
-(define (emit-function-epilogue out attrs arity-mismatch-label)
+(define (emit-function-epilogue out)
   (emit out "ret"))
 
 (define (emit-call out frame-base)
