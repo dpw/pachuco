@@ -1,5 +1,5 @@
 (define (compile3-program program)
-  (set! program (list* 'begin (normalize-forms program)))
+  (set! program (list* 'begin () (normalize-forms program)))
   (set! program (gather-symbols program))
   (set! program (car (eliminate-definitions program)))
   (replace-empty-bodies program)
@@ -45,7 +45,7 @@
 (define keywords-2 '(define lambda set! quote
                      c-call))
 
-(define internal-keywords '(let ref call
+(define internal-keywords '(ref call
                             make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
@@ -65,8 +65,6 @@
 ;;; call: a function call
 ;;;
 ;;; ref: a variable reference
-;;;
-;;; let: variable declarations, derived from defines
 ;;;
 ;;; All literals are also quoted during this transformation
 
@@ -298,20 +296,12 @@
     ;; code generation
     (form-attr-set! (car val) 'name var)))
 
-;;; Collect definitions to introduce let forms.  The second element of
-;;; a let form is a list of varrecs.
-;;;
-;;; For a begin enclosing defines, we simply convert the begin to a
-;;; let, e.g.:
-;;;
-;;; (begin ... (define x ...) ...)
-;;; => (let ((x)) ...)
-;;;
-;;; For a lambda enclosing defines, we wrap the lambda body in a let,
-;;; e.g:
+;;; Collect definitions in begins.  The second element of a begin form
+;;; holds a list of varrecs.  For a lambda enclosing defines, we wrap
+;;; the lambda body in a begin, e.g:
 ;;;
 ;;; (lambda (...) ... (define x ...) ...)
-;;; => (lambda (...) (let ((x)) ... (define x ...) ...))
+;;; => (lambda (...) (begin ((x)) ... (define x ...) ...))
 
 (define-walker collect-defines-aux (cell) ignore-domain)
 
@@ -320,17 +310,13 @@
   (collect-defines-aux-recurse form cell))
 
 (define-collect-defines-aux (begin attrs . body)
-  (let* ((cell (cons () body)))
-    (collect-defines-aux-forms body cell)
-    (unless (null? (car cell))
-      (rplaca form 'let)
-      (rplacd form cell))))
+  (collect-defines-aux-forms body (cdr form)))
 
 (define-collect-defines-aux (lambda attrs . body)
   (let* ((cell (cons () body)))
     (collect-defines-aux-recurse form cell)
     (unless (null? (car cell))
-      (rplacd (cdr form) (list (cons 'let cell))))))
+      (rplacd (cdr form) (list (cons 'begin cell))))))
 
 (define (collect-defines form)
   (let* ((cell (cons () ())))
@@ -342,16 +328,11 @@
 
 (define-walker simplify () ignore-domain)
 
-;;; Adjust lambdas and lets so that they only take one body form.
+;;; Adjust lambdas so that they only take one body form.
 
 (define-simplify (lambda attrs . body)
   (simplify-forms body)
   (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
-
-(define-simplify (let varrecs . body)
-  (simplify-forms body)
-  (unless (null? (cdr body))
-    (rplacd (cdr form) (list (list* 'begin () body)))))
 
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec
@@ -374,7 +355,7 @@
   (rplaca (cdr form) (resolve-variable var frames))
   (resolve-variables-aux-recurse form frames))
 
-(define-resolve-variables-aux (let varrecs body)
+(define-resolve-variables-aux (begin varrecs . body)
   (resolve-variables-aux-recurse form (cons varrecs frames)))
 
 (define-resolve-variables-aux (lambda attrs body)
@@ -412,13 +393,13 @@
     (varrec-attr-set! varrec 'written
                       (= 2 (varrec-attr-remove varrec 'state)))))
 
-(define-classify-variables (let varrecs body)
+(define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 1 form))
 
 (define-classify-variables (lambda attrs body)
   (classify-block-variables (attr-ref attrs 'params) 0 form))
  
-;;; Now definition information is captured in the lets, replace
+;;; Now definition information is captured in the begins, replace
 ;;; defines with set!s
 
 (define (varrec-written? varrec) (varrec-attr varrec 'written))
@@ -429,9 +410,8 @@
   (rplaca form 'set!)
   (when (null? val)
     (if (varrec-written? (second form))
-        ;; we clear written vars at the start of the let
-        ;; in the introduce-boxes phase, so these defines
-        ;; can be eliminated
+        ;; we clear written vars at the start of the begin in the
+        ;; introduce-boxes phase, so these defines can be eliminated
         (overwrite-form form (quoted-unspecified))
         (rplacd (cdr form) (quoted-unspecified))))
   (eliminate-defines-recurse form))
@@ -478,7 +458,7 @@
     (varrec-attr-set! varrec 'origin false)
     (varrec-attr-remove varrec 'closure-stack)))
 
-(define-collect-closures-aux (let varrecs body)
+(define-collect-closures-aux (begin varrecs . body)
   (collect-closures-body form varrecs depth closure-cell))
 
 (define-collect-closures-aux (lambda attrs body)
@@ -503,7 +483,7 @@
 ;;; in closures).  So we rewrite all set!s and refs for such variables
 ;;; to go via the storage boxes.
 ;;;
-;;; For variables introduced by let, we also need to allocate the
+;;; For variables introduced by begin, we also need to allocate the
 ;;; storage boxes, but these always get initialized to unspecified, so
 ;;; this is straightforward.  We initialize other written vars while
 ;;; we are doing this.
@@ -511,7 +491,7 @@
 ;;; Variables introduced by lambdas are most complicated, since we need
 ;;; to copy the original parameter value into the storage box.  So we
 ;;; have to rename the original parameter.  This involves wrapping the
-;;; lambda body with a let form.
+;;; lambda body with a begin form.
 
 (define (varrec-boxed? varrec)
   ;; Always look to the origin varrec for the boxed attribute
@@ -536,15 +516,14 @@
             (list 'make-box () (quoted-unspecified))
             (quoted-unspecified))))
 
-(define-introduce-boxes (let varrecs body)
+(define-introduce-boxes (begin varrecs . body)
   (introduce-boxes-recurse form)
   (let* ((written-varrecs (filterfor (varrec varrecs) 
                             (varrec-written? varrec))))
     (unless (null? written-varrecs)
-      (rplaca (cddr form) (nconc (list 'begin ())
-                                 (nmapfor (varrec written-varrecs)
-                                   (initialize-var-form varrec))
-                                 (list body))))))
+      (rplacd (cdr form) (nconc (nmapfor (varrec written-varrecs)
+                                  (initialize-var-form varrec))
+                                body)))))
 
 (define (init-boxed-param-form varrec temprec)
   (quasiquote (set! (unquote varrec) (make-box () (ref (unquote temprec))))))
@@ -563,10 +542,9 @@
           varrec))
     (unless (null? box-varrecs)
       (rplaca (cddr form)
-              (quasiquote (let (unquote box-varrecs)
-                               (begin ()
+              (quasiquote (begin (unquote box-varrecs)
                                  (unquote-splicing box-init-forms)
-                                 (unquote body))))))))
+                                 (unquote body)))))))
 
 ;;; Calculate indices for variables
 
@@ -579,7 +557,7 @@
 
 (define-walker assign-indices-aux (index) ignore-domain)
 
-(define-assign-indices-aux (let varrecs body)
+(define-assign-indices-aux (begin varrecs . body)
   (assign-indices-aux-recurse form
                               (assign-varrec-indices varrecs 'local index)))
 
@@ -604,7 +582,6 @@
   (list 'lambda (attr-ref attrs 'label) 'etc.))
 
 (define-comment-form (begin . rest) '(begin etc.))
-(define-comment-form (let . rest) '(let etc.))
 (define-comment-form (if attrs test then else)
   (list 'if (comment-form test) 'etc.))
 
@@ -671,10 +648,10 @@
   (form-attr-set! form 'label (codegen-lambda-section attrs body out)))
 
 (define (codegen-lambda-section attrs body out)
-  (let ((label (gen-label))
-        (arity-mismatch-label (gen-label)))
+  (let* ((label (gen-label))
+         (arity-mismatch-label (gen-label)))
     (emit out ".text")
-    (let ((name (attr-ref attrs 'name)))
+    (let* ((name (attr-ref attrs 'name)))
       (when name (emit-comment out "~S" name)))
     (emit-label out label)
     (emit-function-prologue out attrs arity-mismatch-label)
@@ -707,28 +684,6 @@
 
 ;;; Begin
 
-(define-reg-use (begin attrs . body)
-  (labels ((find-max-subform-ru (max-ru forms)
-             (if (null? (cdr forms))
-                 (max max-ru (reg-use (car forms) dest-type))
-                 (find-max-subform-ru (max max-ru (reg-use (car forms)
-                                                           dest-type-discard))
-                                      (cdr forms)))))
-    (find-max-subform-ru 0 body)))
-
-(define-codegen (begin attrs . body)
-  (labels ((codegen-body-forms (forms)
-             (emit-comment-form out (car forms))
-             (if (null? (cdr forms))
-                 (codegen (car forms) dest in-frame-base out-frame-base regs
-                          out)
-                 (begin (codegen (car forms) dest-discard 
-                                 in-frame-base in-frame-base regs out)
-                        (codegen-body-forms (cdr forms))))))
-    (codegen-body-forms body)))
-
-;;; Let
-
 (define (registerize-varrecs varrecs ru)
   (if (or (null? varrecs) (>= ru general-register-count))
       ru
@@ -737,15 +692,31 @@
         (varrec-attr-set! (car varrecs) 'index ru)
         (registerize-varrecs (cdr varrecs) (1+ ru)))))
 
-(define-reg-use (let varrecs body)
-  (registerize-varrecs varrecs (reg-use body dest-type)))
+(define-reg-use (begin varrecs . body)
+  (labels ((find-max-subform-ru (max-ru forms)
+             (if (null? (cdr forms))
+                 (max max-ru (reg-use (car forms) dest-type))
+                 (find-max-subform-ru (max max-ru (reg-use (car forms)
+                                                           dest-type-discard))
+                                      (cdr forms)))))
+    (registerize-varrecs varrecs (find-max-subform-ru 0 body))))
 
-(define-codegen (let varrecs body)
+(define-codegen (begin varrecs . body)
   (dolist (varrec varrecs)
     (when (eq? 'register (varrec-attr varrec 'mode))
       (varrec-attr-set! varrec 'index (elt regs (varrec-attr varrec 'index)))))
-  (codegen body dest (emit-allocate-locals out (length varrecs) in-frame-base)
-           out-frame-base regs out))
+
+  (let* ((new-frame-base 
+          (emit-allocate-locals out (length varrecs) in-frame-base)))
+    (labels ((codegen-body-forms (forms)
+               (emit-comment-form out (car forms))
+               (if (null? (cdr forms))
+                   (codegen (car forms) dest new-frame-base out-frame-base regs
+                            out)
+                   (begin (codegen (car forms) dest-discard 
+                                   new-frame-base new-frame-base regs out)
+                          (codegen-body-forms (cdr forms))))))
+      (codegen-body-forms body))))
 
 ;;; If
 
@@ -779,7 +750,7 @@
 (define (operator-args-reg-use form)
   (let* ((index-count 0)
          (args-ru (mapfor (arg (cddr form))
-                    (let ((index index-count))
+                    (let* ((index index-count))
                       (set! index-count (1+ index-count))
                       (cons (reg-use arg dest-type-value) index))))
          (trashy-args-ru (filterfor (arg-ru args-ru)
@@ -1003,7 +974,7 @@
          (di-name (gensym))
          (len-name (gensym)))
     (quasiquote
-      (let (((unquote si-name)) ((unquote di-name)) ((unquote len-name)))
+      (begin (((unquote si-name)) ((unquote di-name)) ((unquote len-name)))
         (define (unquote si-name) (unquote src-index))
         (define (unquote di-name) (unquote dst-index))
         (define (unquote len-name) (unquote len))

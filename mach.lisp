@@ -329,7 +329,8 @@
 ;;; %nargs.  They return with the result in a %funcres.
 
 (define (emit-allocate-locals out n frame-base)
-  (emit-sub out (immediate (* value-size n)) %sp)
+  (when (> n 0)
+    (emit-sub out (immediate (* value-size n)) %sp))
   (+ frame-base n))
 
 (define (emit-adjust-frame-base out in-frame-base out-frame-base)
