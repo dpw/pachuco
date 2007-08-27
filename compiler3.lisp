@@ -721,9 +721,21 @@
 
 ;;; Let
 
-(define-reg-use (let varrecs body) (reg-use body dest-type))
+(define (registerize-varrecs varrecs ru)
+  (if (or (null? varrecs) (>= ru general-register-count))
+      ru
+      (begin
+        (varrec-attr-set! (car varrecs) 'mode 'register)
+        (varrec-attr-set! (car varrecs) 'index ru)
+        (registerize-varrecs (cdr varrecs) (1+ ru)))))
+
+(define-reg-use (let varrecs body)
+  (registerize-varrecs varrecs (reg-use body dest-type)))
 
 (define-codegen (let varrecs body)
+  (dolist (varrec varrecs)
+    (when (eq? 'register (varrec-attr varrec 'mode))
+      (varrec-attr-set! varrec 'index (elt regs (varrec-attr varrec 'index)))))
   (codegen body dest (emit-allocate-locals out (length varrecs) in-frame-base)
            out-frame-base regs out))
 

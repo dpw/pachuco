@@ -359,9 +359,11 @@
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
          (index (varrec-attr varrec 'index)))
-    (cond ((eq mode 'closure) (closure-slot %func index))
-          ((eq mode 'param) (param-slot index frame-base))
-          ((eq mode 'local) (local-slot index frame-base)))))
+    (cond ((eq? mode 'closure) (closure-slot %func index))
+          ((eq? mode 'param) (param-slot index frame-base))
+          ((eq? mode 'local) (local-slot index frame-base))
+          ((eq? mode 'register) index)
+          (true (error "strange variable mode ~S" mode)))))
 
 ;;; Functions
 
