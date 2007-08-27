@@ -1,10 +1,13 @@
 ;;; Assembler
 
-(define (make-asm-output))
-
-(defmarco (emit out template . args)
+(defmarco (emit-without-flushing template . args)
   (quasiquote (format t (unquote (string-concat template "~%"))
                       (unquote-splicing args))))
+
+(defmarco (emit out template . args)
+  (quasiquote (begin
+    (flush-asm-output (unquote out))
+    (emit-without-flushing (unquote template) (unquote-splicing args)))))
 
 (defmarco (emit-comment out template . args)
   (quasiquote
@@ -13,15 +16,12 @@
               (unquote-splicing args)))))
 
 (define (emit-literal out lit)
-  (emit ouy ".quad ~A" lit))
+  (emit out ".quad ~A" lit))
 
 (define label-counter 0)
 
 (define (gen-label)
   (format nil ".L~D" (incf label-counter)))
-
-(define (emit-label out l)
-  (emit out "~A:" l))
 
 ;;; Machine definition
 
@@ -174,16 +174,6 @@
 (define (emit-pop out reg)
   (emit out "pop~A ~A" usual-size-suffix (usual-register reg)))
 
-(define (emit-jump out label)
-  (emit out "jmp ~A" label))
-
-(define (emit-jcc out cc label)
-  (emit out "j~A ~A" cc label))
-
-(define (emit-branch out cc conddest)
-  (emit-jcc out (negate-cc cc) (dest-conditional-flabel conddest))
-  (emit-jump out (dest-conditional-tlabel conddest)))
-
 (define (emit-set out cc reg)
   (emit out "set~A ~A" cc (funcall reg 0)))
 
@@ -209,6 +199,81 @@
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-pushf "pushf")
 (define-insn-0 emit-popf "popf")
+
+;;; Branching, jumping, and output handling
+
+(define (make-asm-output) (list false ()))
+
+(define (optimizing-jumps? out) (car out))
+
+(define (merge-pending-labels out to-label)
+  (rplacd (cdr out) (nconc (nmapfor (l (second out)) (cons l to-label))
+                           (cddr out)))
+  (rplaca (cdr out) ()))
+
+(define (scan-merged-labels merged-prev l labels)
+  (let* ((merged (cdr merged-prev)))
+    (if (null? merged) labels
+        (if (eq? l (cdar merged))
+            (begin
+              (rplacd merged-prev (cdr merged))
+              (scan-merged-labels merged-prev l (cons (caar merged) labels)))
+            (scan-merged-labels merged l labels)))))
+
+(define (take-merged-labels out l)
+  (scan-merged-labels (cdr out) l ()))
+
+(define (pend-label out l)
+  (rplaca (cdr out) (nconc (take-merged-labels out l)
+                           (cons l (second out)))))
+
+(define (emit-label out l)
+  (if (optimizing-jumps? out)
+      (pend-label out l)
+      (dolist (ml (cons l (take-merged-labels out l)))
+        (emit-without-flushing "~A:" l))))
+
+(define (emit-jump out label)
+  (if (optimizing-jumps? out)
+      (merge-pending-labels out label)
+      (rplaca out label)))
+
+(define (emit-branch out cc conddest)
+  (flush-asm-output out)
+  (rplaca out (list cc (dest-conditional-tlabel conddest)
+                    (dest-conditional-flabel conddest))))
+
+(define (emit-jcc out cc label)
+  (emit-without-flushing "j~A ~A" cc label))
+
+(define (emit-jmp label)
+  (emit-without-flushing "jmp ~A" label))
+
+(define (flush-asm-output out)
+  (when (optimizing-jumps? out)
+    (let* ((branch (first out))
+           (pending-labels (second out)))
+      (if (pair? branch)
+          (let* ((cc (first branch))
+                 (tlabel (second branch))
+                 (flabel (third branch)))
+            (if (member? tlabel pending-labels)
+                (unless (member? flabel pending-labels)
+                  (emit-jcc out (negate-cc cc) flabel))
+                (begin
+                 (emit-jcc out cc tlabel)
+                 (unless (member? flabel pending-labels)
+                   (emit-jmp flabel)))))
+          (unless (member? branch pending-labels)
+            (emit-jmp branch)))
+
+      (if (null? pending-labels)
+          (emit-comment out "unreachable")
+          (dolist (l pending-labels)
+            (emit-without-flushing "~A:" l)))
+
+      (rplaca out false)
+      (rplaca (cdr out) ()))))
 
 ;;; Dest conversions
 
