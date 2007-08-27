@@ -53,11 +53,19 @@
 (define-reg-use (quote attrs) (convert-value-reg-use dest-type))
 
 (define-codegen (quote attrs)
-  (if (dest-discard? dest)
-      (emit-adjust-frame-base out in-frame-base out-frame-base)
-      (let* ((reg (destination-reg dest regs)))
-        (emit-mov out (immediate (attr-ref attrs 'value)) reg)
-        (emit-convert-value out reg dest in-frame-base out-frame-base))))
+  (cond ((dest-discard? dest)
+         (emit-adjust-frame-base out in-frame-base out-frame-base))
+        ((dest-conditional? dest)
+         (emit-adjust-frame-base out in-frame-base out-frame-base)
+         (emit-jump out (if (= false-representation (attr-ref attrs 'value))
+                            (dest-conditional-flabel dest)
+                            (dest-conditional-tlabel dest))))
+        ((dest-value? dest)
+         (let* ((reg (destination-reg dest regs)))
+           (emit-mov out (immediate (attr-ref attrs 'value)) reg)
+           (emit-convert-value out reg dest in-frame-base out-frame-base)))
+        (true
+         (error "can't handle dest ~S" dest))))
 
 ;;; Variables
 
