@@ -597,14 +597,22 @@
 (define (comment-form-forms forms)
     (mapfor (form forms) (comment-form form)))
 (define (comment-form-recurse form)
-    (list* (car form) (cadr form) (comment-form-forms (cddr form))))
+    (list* (car form) (comment-form-forms (cddr form))))
 (define-walker comment-form ())
 
+(define-comment-form (lambda attrs body)
+  (list 'lambda (attr-ref attrs 'label) 'etc.))
+
 (define-comment-form (begin . rest) '(begin etc.))
-(define-comment-form (lambda attrs body) (list 'lambda attrs 'etc.))
 (define-comment-form (let . rest) '(let etc.))
 (define-comment-form (if attrs test then else)
   (list 'if (comment-form test) 'etc.))
+
+(define-comment-form (ref varrec) (list 'ref (car varrec)))
+(define-comment-form (set! varrec val)
+  (list 'set! (car varrec) (comment-form val)))
+(define-comment-form (quote attrs) (list 'quote (attr-ref attrs 'quoted)))
+
 
 (define (emit-comment-form out form)
   (unless (eq? 'begin (car form))
