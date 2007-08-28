@@ -389,6 +389,9 @@
 
 ;;; Functions
 
+(define function-in-frame-base 0)
+(define function-out-frame-base -1)
+
 (define (emit-function-prologue out)
   (emit-push out %bp)
   (emit-mov out %sp %bp)
@@ -398,7 +401,7 @@
   (emit out "leave ; ret"))
 
 (define (emit-restore-%func out frame-base)
-  (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func))
+  (emit-mov out (dispmem value-size 0 %bp) %func))
 
 (define (emit-call out frame-base)
   (emit-push out %nargs)

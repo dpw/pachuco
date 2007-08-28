@@ -645,7 +645,9 @@
 
     ;; need to do reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
-    (codegen body (dest-value %funcres) 0 -1 general-registers out)
+    (codegen body (dest-value %funcres)
+             function-in-frame-base function-out-frame-base
+             general-registers out)
 
     (emit-function-epilogue out)
     label))
