@@ -66,12 +66,13 @@
 
 ;;; Registers
 
-(define (value-sized reg)
-  (funcall reg value-scale))
+(define register-operands ())
 
 (defmarco (define-register name . variants)
-  (quasiquote (define (unquote name)
-                (lambda (scale) (elt (quote (unquote variants)) scale)))))
+  (quasiquote (definitions
+    (define (unquote name) (quote (unquote name)))
+    (set! register-operands (acons (unquote name) (quote (unquote variants))
+                                   register-operands)))))
 
 (define-register %a "%al" "%ax" "%eax" "%rax")
 (define-register %b "%bl" "%bx" "%ebx" "%rbx")
@@ -103,17 +104,25 @@
 ;;; Address modes
 
 (define (immediate x)
-  (lambda (scale) (format nil "$~A" x)))
+  (format nil "$~A" x))
 
 (define (dispmem correction offset reg . reg2)
-  (lambda (scale)
-    (if (null reg2)
-        (format nil "~A(~A)" (- offset correction) (value-sized reg))
-        (format nil "~A(~A,~A)" (- offset correction) (value-sized reg)
-                (value-sized (first reg2))))))
+  (if (null reg2)
+      (format nil "~A(~A)" (- offset correction) (value-sized reg))
+      (format nil "~A(~A,~A)" (- offset correction) (value-sized reg)
+              (value-sized (first reg2)))))
 
 (define (mem reg)
-  (lambda (scale) (format nil "(~A)" (value-sized reg))))
+  (format nil "(~A)" (value-sized reg)))
+
+(define (insn-operand operand scale)
+  (cond ((symbol? operand)
+         (elt (cdr (assoc operand register-operands)) scale))
+        ((string? operand) operand)
+        (true (error "strange operand ~S" operand))))
+
+(define (value-sized operand)
+  (insn-operand operand value-scale))
 
 ;;; Condition codes
 
@@ -138,7 +147,7 @@
   (unless scale
     (set! scale value-scale))
   (emit out "~A~A ~A, ~A" insn (insn-size-suffix scale)
-        (funcall src scale) (funcall dest scale)))
+        (insn-operand src scale) (insn-operand dest scale)))
 
 (define-insn-2 emit-mov "mov")
 (define-insn-2 emit-lea "lea")
@@ -159,8 +168,8 @@
                    (elt (elt '(("b")
                                ("zbw" "w")
                                ("zbl" "zwl" "l")) dest-scale) src-scale)
-                   (funcall src src-scale)
-                   (funcall dest dest-scale))))
+                   (insn-operand src src-scale)
+                   (insn-operand dest dest-scale))))
     (if (= dest-scale 3)
         (if (= src-scale 3)
             (emit-mov out src dest 3)
@@ -177,7 +186,7 @@
   (emit out "pop~A ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-set out cc reg)
-  (emit out "set~A ~A" cc (funcall reg 0)))
+  (emit out "set~A ~A" cc (insn-operand reg 0)))
 
 (defmarco (define-insn-1 name insn)
   (quasiquote
@@ -187,7 +196,7 @@
 (define (emit-insn-1 out insn oper scale)
   (unless scale
     (set! scale value-scale))
-  (emit out "~A~A ~A" insn (insn-size-suffix scale) (funcall oper scale)))
+  (emit out "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-idiv "idiv")
