@@ -134,7 +134,7 @@
 
 (define (emit-insn-2 out insn src dest scale)
   (unless scale
-    (setq scale value-scale))
+    (set! scale value-scale))
   (emit out "~A~A ~A, ~A" insn (elt insn-size-suffix scale)
         (funcall src scale) (funcall dest scale)))
 
@@ -151,7 +151,7 @@
 (define-insn-2 emit-sar "sar")
 
 (define (emit-movzx out src dest src-scale . dest-scale)
-  (setq dest-scale (if (null dest-scale) value-scale (car dest-scale)))
+  (set! dest-scale (if (null dest-scale) value-scale (car dest-scale)))
   (labels ((movzx (src-scale dest-scale)
              (emit out "mov~A ~A,~A"
                    (elt (elt '(("b")
@@ -184,7 +184,7 @@
 
 (define (emit-insn-1 out insn oper scale)
   (unless scale
-    (setq scale value-scale))
+    (set! scale value-scale))
   (emit out "~A~A ~A" insn (elt insn-size-suffix scale) (funcall oper scale)))
 
 (define-insn-1 emit-neg "neg")
