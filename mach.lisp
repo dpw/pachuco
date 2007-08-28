@@ -124,8 +124,10 @@
 
 ;;; Instructions
 
-(defconstant insn-size-suffix '("b" "w" "l" "q"))
-(define usual-size-suffix (elt insn-size-suffix value-scale))
+(define (insn-size-suffix scale)
+  (elt '("b" "w" "l" "q") scale))
+
+(defconstant value-insn-size-suffix (insn-size-suffix value-scale))
 
 (defmarco (define-insn-2 name insn)
   (quasiquote
@@ -135,7 +137,7 @@
 (define (emit-insn-2 out insn src dest scale)
   (unless scale
     (set! scale value-scale))
-  (emit out "~A~A ~A, ~A" insn (elt insn-size-suffix scale)
+  (emit out "~A~A ~A, ~A" insn (insn-size-suffix scale)
         (funcall src scale) (funcall dest scale)))
 
 (define-insn-2 emit-mov "mov")
@@ -169,10 +171,10 @@
   (emit-xor out reg reg 2))
 
 (define (emit-push out reg)
-  (emit out "push~A ~A" usual-size-suffix (value-sized reg)))
+  (emit out "push~A ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-pop out reg)
-  (emit out "pop~A ~A" usual-size-suffix (value-sized reg)))
+  (emit out "pop~A ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-set out cc reg)
   (emit out "set~A ~A" cc (funcall reg 0)))
@@ -185,7 +187,7 @@
 (define (emit-insn-1 out insn oper scale)
   (unless scale
     (set! scale value-scale))
-  (emit out "~A~A ~A" insn (elt insn-size-suffix scale) (funcall oper scale)))
+  (emit out "~A~A ~A" insn (insn-size-suffix scale) (funcall oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-idiv "idiv")
@@ -194,7 +196,7 @@
   (quasiquote
     (define ((unquote name) out . scale)
       (emit out "~A~A" (unquote insn)
-            (elt insn-size-suffix (if scale (car scale) value-scale))))))
+            (insn-size-suffix (if scale (car scale) value-scale))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-pushf "pushf")
