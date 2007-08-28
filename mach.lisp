@@ -95,9 +95,9 @@
 
 ;;; Use RBX as the allocation pointer, since there are no relevant
 ;;; instructions that clobber it implicitly.
-(define %alloc %b)
+(define %alloc %r14)
 
-(define general-registers (list %a %c %d %si %di))
+(define general-registers (list %a %b %c %d %si %di))
 (define general-register-count (length general-registers))
 
 (define %func %r15)
