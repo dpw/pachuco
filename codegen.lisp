@@ -363,18 +363,22 @@
   (operator-args-reg-use form)
   general-register-count)
 
+(define (c-callee-saved reg) (member? reg '(%b %bp %r12 %r13 %r14 %r15)))
+
 (define-codegen (c-call attrs . args)
   (when (> (length args) 4)
     (error "too many arguments to c-call"))
   (operator-args-codegen form in-frame-base
                       (move-regs-to-front '(%di %si %d %c) general-registers)
                       out)
+  (unless (c-callee-saved %alloc) (emit-push out %alloc))
   (emit out "cld")
   (emit-set-ac-flag out false)
   ;; XXX should align stack to 16 byte bundary
   (emit out "call ~A" (attr-ref attrs 'c-function-name))
   (emit-set-ac-flag out true)
-  (emit-restore-%func out in-frame-base)
+  (unless (c-callee-saved %alloc) (emit-pop out %alloc))
+  (unless (c-callee-saved %func) (emit-restore-%func out in-frame-base))
   (emit-convert-value out %a dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
