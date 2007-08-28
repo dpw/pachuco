@@ -336,6 +336,7 @@
 ;;; param 0
 ;;; Silly slot for the benefit of apply
 ;;; Return address
+;;; Saved %rbp
 ;;; func slot (filled by callee) <--- (+ %sp (* frame-base value-size))
 ;;; Local var 0
 ;;; ...
@@ -372,7 +373,7 @@
   (dispmem function-tag (* value-size (1+ index)) func))
 
 (define (param-slot index frame-base)
-  (dispmem 0 (* value-size (+ frame-base 3 index)) %sp))
+  (dispmem 0 (* value-size (+ frame-base 4 index)) %sp))
 
 (define (local-slot index frame-base)
   (dispmem 0 (* value-size (- frame-base 1 index)) %sp))
@@ -389,10 +390,12 @@
 ;;; Functions
 
 (define (emit-function-prologue out)
+  (emit-push out %bp)
+  (emit-mov out %sp %bp)
   (emit-push out %func))
 
 (define (emit-function-epilogue out)
-  (emit out "ret"))
+  (emit out "leave ; ret"))
 
 (define (emit-restore-%func out frame-base)
   (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func))
