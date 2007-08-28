@@ -237,7 +237,9 @@
       (operator-args-codegen-discarding form in-frame-base out-frame-base
                                         general-registers out)
       (begin
-        (operator-args-codegen form in-frame-base general-registers out)
+        (operator-args-codegen form in-frame-base 
+                               (move-regs-to-front '(%a %c) general-registers)
+                               out)
         (emit-mov out %a %d)
         (emit-sar out (immediate 63) %d)
         (emit-idiv out %c)
@@ -252,7 +254,9 @@
       (operator-args-codegen-discarding form in-frame-base out-frame-base 
                                         general-registers out)
       (begin
-        (operator-args-codegen form in-frame-base general-registers out)
+        (operator-args-codegen form in-frame-base
+                               (move-regs-to-front '(%a %c) general-registers)
+                               out)
         (emit-mov out %a %d)
         (emit-sar out (immediate 63) %d)
         (emit-idiv out %c)
@@ -312,10 +316,13 @@
   general-register-count)
 
 (define-codegen (vec-copy attrs src src-index dst dst-index len)
-  (let* ((regs (list            %si %a        %di  %d         %c))
-         (tag (attr-ref attrs 'tag))
+  (unless (dest-discard? dest)
+    (error "vec-copy result not discarded"))
+  (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form in-frame-base regs out)
+    (operator-args-codegen form in-frame-base
+                     (move-regs-to-front '(%si %a %di %d %c) general-registers)
+                     out)
     (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
     (unless (= scale tag-bits) (emit-sar out (immediate (- tag-bits scale)) %a))
     (emit-lea out (dispmem tag value-size %si %a) %si)
@@ -323,11 +330,7 @@
     (emit-lea out (dispmem tag value-size %di %d) %di)
     (emit-sar out (immediate tag-bits) %c)
     (emit-rep-movs out scale)
-    (if (dest-discard? dest)
-        (emit-adjust-frame-base out in-frame-base out-frame-base)
-        (let* ((result (destination-reg dest regs)))
-          (emit-mov out (immediate unspecified-representation) result)
-          (emit-convert-value out result dest in-frame-base out-frame-base)))))
+    (emit-adjust-frame-base out in-frame-base out-frame-base)))
 
 ;;; Misc. runtime
 
@@ -361,14 +364,17 @@
   general-register-count)
 
 (define-codegen (c-call attrs . args)
-  (let* ((regs (list %di %si %d %c)))
-    (operator-args-codegen form in-frame-base regs out)
-    (emit out "cld")
-    (emit-set-ac-flag out false)
-    ;;; XXX should align stack to 16 byte bundary
-    (emit out "call ~A" (attr-ref attrs 'c-function-name))
-    (emit-set-ac-flag out true)
-    (emit-convert-value out %a dest in-frame-base out-frame-base)))
+  (when (> (length args) 4)
+    (error "too many arguments to c-call"))
+  (operator-args-codegen form in-frame-base
+                      (move-regs-to-front '(%di %si %d %c) general-registers)
+                      out)
+  (emit out "cld")
+  (emit-set-ac-flag out false)
+  ;; XXX should align stack to 16 byte bundary
+  (emit out "call ~A" (attr-ref attrs 'c-function-name))
+  (emit-set-ac-flag out true)
+  (emit-convert-value out %a dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
   (reg-use nargs dest-type-value)

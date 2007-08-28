@@ -87,8 +87,6 @@
 ;;; instructions that clobber it implicitly.
 (define %alloc %b)
 
-;;; Note that the implementations of rem and truncate depend on this
-;;; definitions of general-registers
 (define general-registers (list %a %c %d %si %di))
 (define general-register-count (length general-registers))
 
@@ -100,6 +98,9 @@
 ;;; %to be really careful about invoking the operators that use it
 ;;; %(check-arg-count, arg-count).
 (define %nargs (last-elem general-registers))
+
+(define (move-regs-to-front regs all-regs)
+  (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
 
 ;;; Address modes
 

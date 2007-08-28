@@ -995,7 +995,8 @@
                       (unquote (copy-tree dst))
                       (+ () (ref (unquote di-name)) (ref (unquote len-name))
                          (quote -1))
-                      (ref (unquote len-name))))))))
+                      (ref (unquote len-name))))
+        (quote unspecified)))))
 
 (defmarco (define-vector-type name tag scale from-vec-rep to-vec-rep)
   (quasiquote (definitions
