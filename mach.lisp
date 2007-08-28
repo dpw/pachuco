@@ -334,7 +334,6 @@
 ;;; ...
 ;;; param 1
 ;;; param 0
-;;; Silly slot for the benefit of apply
 ;;; Return address
 ;;; Saved %bp <--- %bp (and (+ %sp (* frame-base value-size)))
 ;;; %func
@@ -373,7 +372,7 @@
   (dispmem function-tag (* value-size (1+ index)) func))
 
 (define (param-slot index frame-base)
-  (dispmem 0 (* value-size (+ 3 index)) %bp))
+  (dispmem 0 (* value-size (+ 2 index)) %bp))
 
 (define (local-slot index frame-base)
   (dispmem (* value-size (+ 1 index)) 0 %bp))
@@ -404,10 +403,8 @@
   (emit-mov out (dispmem value-size 0 %bp) %func))
 
 (define (emit-call out frame-base)
-  (emit-push out %nargs)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  (emit-restore-%func out frame-base)
-  (emit-pop out %nargs))
+  (emit-restore-%func out frame-base))
 
 (define (emit-alloc-function out result-reg label slot-count)
   (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
