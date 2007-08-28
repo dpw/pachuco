@@ -336,8 +336,8 @@
 ;;; param 0
 ;;; Silly slot for the benefit of apply
 ;;; Return address
-;;; Saved %bp <--- %bp
-;;; func slot (filled by callee) <--- (+ %sp (* frame-base value-size))
+;;; Saved %bp <--- %bp (and (+ %sp (* frame-base value-size)))
+;;; %func
 ;;; Local var 0
 ;;; ...
 ;;; Local var N
@@ -376,7 +376,7 @@
   (dispmem 0 (* value-size (+ 3 index)) %bp))
 
 (define (local-slot index frame-base)
-  (dispmem 0 (* value-size (- -2 index)) %bp))
+  (dispmem (* value-size (+ 1 index)) 0 %bp))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
@@ -389,8 +389,8 @@
 
 ;;; Functions
 
-(define function-in-frame-base 0)
-(define function-out-frame-base -1)
+(define function-in-frame-base 1)
+(define function-out-frame-base 0)
 
 (define (emit-function-prologue out)
   (emit-push out %bp)
