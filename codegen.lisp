@@ -374,6 +374,7 @@
   ;; XXX should align stack to 16 byte bundary
   (emit out "call ~A" (attr-ref attrs 'c-function-name))
   (emit-set-ac-flag out true)
+  (emit-restore-%func out in-frame-base)
   (emit-convert-value out %a dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)

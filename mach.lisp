@@ -83,6 +83,16 @@
 (define-register %sp "%spl" "%sp" "%esp" "%rsp")
 (define-register %bp "%bpl" "%bp" "%ebp" "%rbp")
 
+(defmarco (define-extended-registers)
+  (cons 'definitions
+        (mapfor (n '(8 9 10 11 12 13 14 15))
+          (list* 'define-register
+                 (subject-language-intern (format nil "%r~D" n))
+                 (mapfor (tmpl '("%r~Dl" "%r~Dw" "%r~Dd" "%r~D"))
+                   (format nil tmpl n))))))
+
+(define-extended-registers)
+
 ;;; Use RBX as the allocation pointer, since there are no relevant
 ;;; instructions that clobber it implicitly.
 (define %alloc %b)
@@ -90,7 +100,7 @@
 (define general-registers (list %a %c %d %si %di))
 (define general-register-count (length general-registers))
 
-(define %func %bp)
+(define %func %r15)
 (define %funcres (first general-registers))
 
 ;;; %nargs is use to pass the number of arguments to functions.  We
@@ -384,11 +394,13 @@
 (define (emit-function-epilogue out)
   (emit out "ret"))
 
+(define (emit-restore-%func out frame-base)
+  (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func))
+
 (define (emit-call out frame-base)
   (emit-push out %nargs)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  ;; Restore %func
-  (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func)
+  (emit-restore-%func out frame-base)
   (emit-pop out %nargs))
 
 (define (emit-alloc-function out result-reg label slot-count)
