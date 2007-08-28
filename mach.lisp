@@ -66,7 +66,7 @@
 
 ;;; Registers
 
-(define (usual-register reg)
+(define (value-sized reg)
   (funcall reg value-scale))
 
 (defmarco (define-register name . variants)
@@ -108,12 +108,12 @@
 (define (dispmem correction offset reg . reg2)
   (lambda (scale)
     (if (null reg2)
-        (format nil "~A(~A)" (- offset correction) (usual-register reg))
-        (format nil "~A(~A,~A)" (- offset correction) (usual-register reg)
-                (usual-register (first reg2))))))
+        (format nil "~A(~A)" (- offset correction) (value-sized reg))
+        (format nil "~A(~A,~A)" (- offset correction) (value-sized reg)
+                (value-sized (first reg2))))))
 
 (define (mem reg)
-  (lambda (scale) (format nil "(~A)" (usual-register reg))))
+  (lambda (scale) (format nil "(~A)" (value-sized reg))))
 
 ;;; Condition codes
 
@@ -169,10 +169,10 @@
   (emit-xor out reg reg 2))
 
 (define (emit-push out reg)
-  (emit out "push~A ~A" usual-size-suffix (usual-register reg)))
+  (emit out "push~A ~A" usual-size-suffix (value-sized reg)))
 
 (define (emit-pop out reg)
-  (emit out "pop~A ~A" usual-size-suffix (usual-register reg)))
+  (emit out "pop~A ~A" usual-size-suffix (value-sized reg)))
 
 (define (emit-set out cc reg)
   (emit out "set~A ~A" cc (funcall reg 0)))
@@ -374,7 +374,7 @@
 
 (define (emit-call out frame-base)
   (emit-push out %nargs)
-  (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
+  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
   ;; Restore %func
   (emit-mov out (dispmem 0 (* (1+ frame-base) value-size) %sp) %func)
   (emit-pop out %nargs))

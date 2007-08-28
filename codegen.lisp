@@ -389,7 +389,7 @@
     (emit-sub out %nargs %sp)
     (emit-clear out %nargs)
     (emit-push out saved-sp)
-    (emit out "call *~A" (usual-register (dispmem function-tag 0 %func)))
+    (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
     (emit-pop out saved-sp)
     (emit-mov out saved-sp %sp)
     ;; Restore %func
@@ -410,7 +410,7 @@
   (codegen func (dest-value %func) in-frame-base in-frame-base
            (remove %nargs general-registers) out)
   (emit-adjust-frame-base out in-frame-base -1)
-  (emit out "jmp *~A" (usual-register (dispmem function-tag 0 %func))))
+  (emit out "jmp *~A" (value-sized (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
   (emit-mov out val (dispmem 0 0 args-base index)))
