@@ -416,21 +416,23 @@
 
 ;;; C-callable program wrapper
 
-(define c-callee-save-regs (list %b %bp)) ; also %r12-15
+(define c-callee-saved-regs '(%b %bp %r12 %r13 %r14 %r15))
 
 (define (emit-program-prologue out)
   (emit out ".text")
   (emit out ".globl lisp")
   (emit out "lisp:")
-  (dolist (reg c-callee-save-regs) (emit-push out reg))
+  (dolist (reg c-callee-saved-regs) (emit-push out reg))
   (emit-mov out %si %alloc)
   (emit-set-ac-flag out true)
-  (emit-mov out (immediate function-tag) %func))
+  (emit-mov out (immediate function-tag) %func)
+  (emit-function-prologue out))
 
 (define (emit-program-epilogue out)
   ;; use the alloc pointer as the result
   (emit-mov out %alloc %a)
+  (emit out "leave")
   (emit out "cld")
   (emit-set-ac-flag out false)
-  (dolist (reg (reverse c-callee-save-regs)) (emit-pop out reg))
+  (dolist (reg (reverse c-callee-saved-regs)) (emit-pop out reg))
   (emit out "ret"))

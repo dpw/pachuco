@@ -363,7 +363,7 @@
   (operator-args-reg-use form)
   general-register-count)
 
-(define (c-callee-saved reg) (member? reg '(%b %bp %r12 %r13 %r14 %r15)))
+(define (c-callee-saved reg) (member? reg c-callee-saved-regs))
 
 (define-codegen (c-call attrs . args)
   (when (> (length args) 4)
