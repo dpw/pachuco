@@ -786,11 +786,11 @@
              (comment-form form)))
 
     (unless (null? trashy-args-ru)
-      ;; first, the trashy args.  we need to save the results of these
-      ;; on the stack.  but we consider one to be non-trashy, since
-      ;; its result can reside in a register
-      (set! non-trashy-args-ru (nconc non-trashy-args-ru
-                                      (list (car trashy-args-ru))))
+      ;; First, the trashy args.  We save the results of all but one
+      ;; of these on the stack.  The result of the last one can reside
+      ;; in a register, so we reclassify it as non-trashy.
+      (set! non-trashy-args-ru
+            (nconc non-trashy-args-ru (list (car trashy-args-ru))))
       (set! trashy-args-ru (cdr trashy-args-ru))
 
       (dolist (arg-ru trashy-args-ru)
