@@ -781,6 +781,10 @@
   (let* ((trashy-args-ru (form-attr form 'trashy-args-ru))
          (non-trashy-args-ru (form-attr form 'non-trashy-args-ru))
          (args (cddr form)))
+    (when (> (length args) (length regs))
+      (error "more operator arguments than available registers in ~S"
+             (comment-form form)))
+
     (unless (null? trashy-args-ru)
       ;; first, the trashy args.  we need to save the results of these
       ;; on the stack.  but we consider one to be non-trashy, since
