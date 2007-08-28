@@ -418,7 +418,7 @@
            general-registers out)
   (codegen func (dest-value %func) in-frame-base in-frame-base
            (remove %nargs general-registers) out)
-  (emit-adjust-frame-base out in-frame-base -1)
+  ;; Don't need to adjust frame base, because leave will handle it
   (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
