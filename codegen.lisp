@@ -390,22 +390,20 @@
   general-register-count)
 
 (define-codegen (raw-apply-with-args attrs nargs bodyfunc)
-  (let* ((result (destination-reg dest general-registers))
-         (saved-sp (first (remove result general-registers))))
-    (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
-             general-registers out)
-    (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
-             (remove %nargs general-registers) out)
-    (emit-mov out %sp saved-sp)
-    (emit-sub out %nargs %sp)
-    (emit-clear out %nargs)
-    (emit-push out saved-sp)
-    (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-    (emit-pop out saved-sp)
-    (emit-mov out saved-sp %sp)
-    ;; Restore %func
-    (emit-mov out (dispmem (* in-frame-base value-size) 0 saved-sp) %func)
-    (emit-convert-value out result dest in-frame-base out-frame-base)))
+  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
+           general-registers out)
+  (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
+           (remove %nargs general-registers) out)
+  (emit-push out %nargs)
+  (emit-sub out %nargs %sp)
+  (emit-clear out %nargs)
+  (emit-push out %func)
+  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
+  (emit-pop out %func)
+  (emit-add out (param-slot in-frame-base in-frame-base) %sp)
+  (emit-add out (immediate value-size) %sp)
+  (emit-restore-%func out in-frame-base)
+  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-jump attrs func nargs)
   ;; raw-apply-call is only intended for restricted circumstances, so
