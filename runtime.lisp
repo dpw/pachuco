@@ -16,6 +16,12 @@
 ;;; Basics needed by quasiquote
 
 (define (list . l) l)
+(defmacro (list . l)
+  (define (liszt . l) l)
+  (define (aux l)
+    (if (eq? () l) ()
+        (liszt 'cons (car l) (aux (cdr l)))))
+  (aux l))
 
 (defmacro (caar x) (list 'car (list 'car x)))
 (defmacro (cadr x) (list 'car (list 'cdr x)))

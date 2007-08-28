@@ -79,7 +79,9 @@
 
     (assert-applied-result (- 1) -1)
     (assert-applied-result (- 1 2) -1)
-    (assert-applied-result (- 1 2 3) -4))
+    (assert-applied-result (- 1 2 3) -4)
+    
+    (assert-applied-result (list 1 2 3) '(1 2 3)))
 
   (begin
     (define (fac n)
