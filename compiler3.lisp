@@ -276,11 +276,11 @@
                       params)
                      ((null? params)
                       ())
-                     (t
-                      (set! dotted true)
-                      (list (cons params ()))))))
+                     (true
+                      (set! dotted params)
+                      ()))))
       (let* ((undotted-params (undot params)))
-        (list (cons 'params undotted-params) (cons 'varargs dotted))))))
+        (list (cons 'params undotted-params) (cons 'vararg dotted))))))
 
 (define-walker normalize-lambdas () ignore-domain)
 
@@ -653,13 +653,14 @@
     label))
 
 (define (wrap-lambda-body attrs body)
-  (let* ((nparams (length (attr-ref attrs 'params))))
-    (if (attr-ref attrs 'varargs)
-        (list* 'begin ()
+  (let* ((nparams (length (attr-ref attrs 'params)))
+         (vararg (attr-ref attrs 'vararg)))
+    (if vararg
+        (list* 'begin (list (list vararg))
                (quasiquote
-                 (set! (unquote (car (last-elem (attr-ref attrs 'params))))
-                       (call () (ref handle-varargs) (quote (unquote nparams))
-                             (arg-count ()) (raw-args-address ()))))
+                 (define (unquote vararg)
+                   (call () (ref handle-varargs) (quote (unquote nparams))
+                         (arg-count ()) (raw-args-address ()))))
                body)
         (quasiquote
           (if () (check-arg-count ((nparams . (unquote nparams))))
@@ -946,11 +947,6 @@
 (define-codegen (call attrs . forms)
   (let* ((new-frame-base in-frame-base)
          (args (cdr forms)))
-    ;; functions are called with a spare arg slot on the stack, in
-    ;; order to support varargs.  The value we save there is not
-    ;; significant.
-    (emit-frame-push out new-frame-base %func)
-
     (dolist (arg (reverse args))
       (reg-use arg dest-type-value)
       (codegen arg (dest-value (first general-registers))

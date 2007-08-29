@@ -667,9 +667,6 @@
     (error "expected ~S arguments, got ~S" nparams nargs))
 
   (set! (handle-varargs nparams nargs args-base)
-    ;; the number of non-varargs params is nparams-1
-    (set! nparams (1- nparams))
-
     (when (< nargs nparams)
         (error "expected at least ~S arguments, got ~S" nparams nargs))
 
@@ -699,7 +696,7 @@
 
     (set! args (cons arg1 args))
     (define args-len (args-length args))
-    (raw-apply-with-args (1+ args-len)
+    (raw-apply-with-args args-len
       (lambda ()
         (copy-args args (raw-args-address) 0)
         (raw-apply-jump func args-len)))))
