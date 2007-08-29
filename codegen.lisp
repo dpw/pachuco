@@ -115,7 +115,7 @@
   (emit-mov out %nargs result))
 
 (define-pure-operator (raw-args-address) result ()
-  (emit-lea out (param-slot 0 in-frame-base) result))
+  (emit-lea out (param-slot 0) result))
 
 ;;; Comparisons
 
@@ -378,7 +378,7 @@
   (emit out "call ~A" (attr-ref attrs 'c-function-name))
   (emit-set-ac-flag out true)
   (unless (c-callee-saved %alloc) (emit-pop out %alloc))
-  (unless (c-callee-saved %func) (emit-restore-%func out in-frame-base))
+  (unless (c-callee-saved %func) (emit-restore-%func out))
   (emit-convert-value out %a dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
@@ -398,9 +398,9 @@
   (emit-sub out %nargs %sp)
   (emit-clear out %nargs)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  (emit-add out (param-slot in-frame-base in-frame-base) %sp)
+  (emit-add out (param-slot in-frame-base) %sp)
   (emit-add out (immediate value-size) %sp)
-  (emit-restore-%func out in-frame-base)
+  (emit-restore-%func out)
   (emit-convert-value out %funcres dest in-frame-base out-frame-base))
 
 (define-reg-use (raw-apply-jump attrs func nargs)

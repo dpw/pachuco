@@ -371,18 +371,18 @@
 (define (closure-slot func index)
   (dispmem function-tag (* value-size (1+ index)) func))
 
-(define (param-slot index frame-base)
+(define (param-slot index)
   (dispmem 0 (* value-size (+ 2 index)) %bp))
 
-(define (local-slot index frame-base)
+(define (local-slot index)
   (dispmem (* value-size (+ 1 index)) 0 %bp))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode))
          (index (varrec-attr varrec 'index)))
     (cond ((eq? mode 'closure) (closure-slot %func index))
-          ((eq? mode 'param) (param-slot index frame-base))
-          ((eq? mode 'local) (local-slot index frame-base))
+          ((eq? mode 'param) (param-slot index))
+          ((eq? mode 'local) (local-slot index))
           ((eq? mode 'register) index)
           (true (error "strange variable mode ~S" mode)))))
 
@@ -399,12 +399,12 @@
 (define (emit-function-epilogue out)
   (emit out "leave ; ret"))
 
-(define (emit-restore-%func out frame-base)
+(define (emit-restore-%func out)
   (emit-mov out (dispmem value-size 0 %bp) %func))
 
-(define (emit-call out frame-base)
+(define (emit-call out)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  (emit-restore-%func out frame-base))
+  (emit-restore-%func out))
 
 (define (emit-alloc-function out result-reg label slot-count)
   (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)

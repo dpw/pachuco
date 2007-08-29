@@ -962,7 +962,7 @@
              new-frame-base new-frame-base general-registers out)
 
     (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
-    (emit-call out new-frame-base)
+    (emit-call out)
     (emit-convert-value out %funcres dest new-frame-base out-frame-base)))
 
 ;;; Strings and vectors
