@@ -285,15 +285,8 @@
 (define-walker normalize-lambdas () ignore-domain)
 
 (define-normalize-lambdas (lambda params . body)
-  (rplaca (cdr form) (acons 'name false (normalize-lambda-params params)))
+  (rplaca (cdr form) (normalize-lambda-params params))
   (normalize-lambdas-recurse form))
-
-(define-normalize-lambdas (define var . val)
-  (normalize-lambdas-recurse form)
-  (when (and val (eq (caar val) 'lambda))
-    ;; propogate variable name into the lambda, as a hint for readable
-    ;; code generation
-    (form-attr-set! (car val) 'name var)))
 
 ;;; Collect definitions in begins.  The second element of a begin form
 ;;; holds a list of varrecs.  For a lambda enclosing defines, we wrap
@@ -381,8 +374,14 @@
   (mark-variable varrec 0))
 
 (define-classify-variables (define varrec . val)
-  (classify-variables-recurse form)
-  (mark-variable varrec 2))
+  (if (and (not (null? val)) (eq? 'lambda (caar val)))
+      (begin
+        (mark-variable varrec 2)
+        (classify-variables-recurse form)
+        (form-attr-set! (car val) 'self varrec))
+      (begin
+        (classify-variables-recurse form)
+        (mark-variable varrec 2))))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
@@ -396,6 +395,7 @@
   (classify-block-variables varrecs 1 form))
 
 (define-classify-variables (lambda attrs body)
+  (form-attr-set! form 'self false)
   (classify-block-variables (attr-ref attrs 'params) 0 form))
  
 ;;; Now definition information is captured in the begins, replace
@@ -461,11 +461,19 @@
   (collect-closures-body form varrecs depth closure-cell))
 
 (define-collect-closures-aux (lambda attrs body)
-  (let* ((local-closure-cell (cons () ())))
-    (collect-closures-body form (attr-ref attrs 'params)
-                           (1+ depth) local-closure-cell)
+  (let* ((local-closure-cell (cons () ()))
+         (self-closure-cell (cons () ())))
+    ;; if we have an unwritten self-varrec, exclude it from the closure
+    (let* ((self-varrec (attr-ref attrs 'self)))
+      (when (and self-varrec (not (varrec-attr self-varrec 'written)))
+        (attr-set! attrs 'self (resolve-closure-var self-varrec (1+ depth)
+                                                    self-closure-cell))))
+
+    (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
+                           local-closure-cell)
     (form-attr-set! form 'closure (car local-closure-cell))
-    (dolist (local-varrec (car local-closure-cell))
+    (dolist (local-varrec (append (car local-closure-cell)
+                                  (car self-closure-cell)))
       (let* ((origin-varrec (varrec-attr local-varrec 'origin)))
         (varrec-attr-set! origin-varrec 'closure-stack 
                           (cdr (varrec-attr origin-varrec 'closure-stack)))
@@ -634,14 +642,20 @@
 (define (codegen-lambda-section attrs body out)
   (let* ((label (gen-label)))
     (emit out ".text")
-    (let* ((name (attr-ref attrs 'name)))
-      (when name (emit-comment out "~S" name)))
-    (emit-label out label)
-    (emit-function-prologue out)
-    (emit-comment-form out body)
 
     (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
     (assign-varrec-indices (attr-ref attrs 'params) 'param)
+
+    (let* ((self-varrec (attr-ref attrs 'self)))
+      (when self-varrec
+        (emit-comment out "~S" (car self-varrec))
+        (unless (varrec-written? self-varrec)
+          (varrec-attr-set! self-varrec 'mode 'self)
+          (varrec-attr-set! self-varrec 'index label))))
+
+    (emit-label out label)
+    (emit-function-prologue out)
+    (emit-comment-form out body)
 
     ;; need to do reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
@@ -944,21 +958,28 @@
 
 (define-reg-use (call attrs . args) general-register-count)
 
-(define-codegen (call attrs . forms)
-  (let* ((new-frame-base in-frame-base)
-         (args (cdr forms)))
+(define-codegen (call attrs func . args)
+  (let* ((new-frame-base in-frame-base))
     (dolist (arg (reverse args))
       (reg-use arg dest-type-value)
       (codegen arg (dest-value (first general-registers))
                new-frame-base new-frame-base general-registers out)
       (emit-frame-push out new-frame-base (first general-registers)))
     
-    (reg-use (first forms) dest-type-value)
-    (codegen (first forms) (dest-value %func)
-             new-frame-base new-frame-base general-registers out)
-
-    (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
-    (emit-call out)
+    (if (and (eq? 'ref (first func))
+             (eq? 'self (varrec-attr (second func) 'mode)))
+        (begin
+          (emit-mov out (immediate (fixnum-representation (length args)))
+                    %nargs)
+          (emit-call out (varrec-attr (second func) 'index)))
+        (begin
+          (reg-use func dest-type-value)
+          (codegen func (dest-value %func)
+                   new-frame-base new-frame-base general-registers out)
+          (emit-mov out (immediate (fixnum-representation (length args)))
+                    %nargs)
+          (emit-indirect-call out)
+          (emit-restore-%func out)))
     (emit-convert-value out %funcres dest new-frame-base out-frame-base)))
 
 ;;; Strings and vectors
