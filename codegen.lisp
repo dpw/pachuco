@@ -88,11 +88,8 @@
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 
 (define-codegen (ref varrec)
-  (if (dest-discard? dest)
-      (emit-adjust-frame-base out in-frame-base out-frame-base)
-      (let* ((reg (destination-reg dest regs)))
-        (emit-mov out (varrec-operand varrec in-frame-base) reg)
-        (emit-convert-value out reg dest in-frame-base out-frame-base))))
+  (emit-convert-value out (varrec-operand varrec in-frame-base)
+                      dest in-frame-base out-frame-base))
 
 ;;; Operator definitions
 

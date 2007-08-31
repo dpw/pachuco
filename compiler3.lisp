@@ -405,14 +405,26 @@
 
 (define-walker eliminate-defines () ignore-domain)
 
-(define-eliminate-defines (define var . val)
+(define-eliminate-defines (begin varrecs . body)
+  (dolist (varrec varrecs) (varrec-attr-set! varrec 'value false))
+  (eliminate-defines-forms body))
+
+(define-eliminate-defines (lambda attrs body)
+  (dolist (varrec (attr-ref attrs 'params))
+    (varrec-attr-set! varrec 'value false))
+  (eliminate-defines-recurse body))
+
+(define-eliminate-defines (define varrec . val)
   (rplaca form 'set!)
-  (when (null? val)
-    (if (varrec-written? (second form))
+  (if (null? val)
+    (if (varrec-written? varrec)
         ;; we clear written vars at the start of the begin in the
         ;; introduce-boxes phase, so these defines can be eliminated
         (overwrite-form form (quoted-unspecified))
-        (rplacd (cdr form) (quoted-unspecified))))
+        (rplacd (cdr form) (quoted-unspecified)))
+    (when (and (not (varrec-written? varrec))
+               (or (eq? 'lambda (caar val)) (eq? 'quote (caar val))))
+      (varrec-attr-set! varrec 'value (car val))))
   (eliminate-defines-recurse form))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
@@ -626,12 +638,6 @@
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted out))
                            (cons 'quoted quoted))))
 
-(define-codegen-sections (lambda attrs body)
-  (codegen-sections body out)
-  (form-attr-set! form 'label (codegen-lambda-section attrs body out)))
-
-;;; Calculate indices for variables
-
 (define (assign-varrec-indices varrecs mode)
   (let* ((index 0))
     (dolist (varrec varrecs)
@@ -639,8 +645,11 @@
       (varrec-attr-set! varrec 'mode mode)
       (set! index (1+ index)))))
 
-(define (codegen-lambda-section attrs body out)
+(define-codegen-sections (lambda attrs body)
   (let* ((label (gen-label)))
+    (form-attr-set! form 'label label)
+    (codegen-sections body out)
+
     (emit out ".text")
 
     (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
@@ -650,8 +659,7 @@
       (when self-varrec
         (emit-comment out "~S" (car self-varrec))
         (unless (varrec-written? self-varrec)
-          (varrec-attr-set! self-varrec 'mode 'self)
-          (varrec-attr-set! self-varrec 'index label))))
+          (varrec-attr-set! self-varrec 'mode 'self))))
 
     (emit-label out label)
     (emit-function-prologue out)
@@ -663,8 +671,7 @@
              function-in-frame-base function-out-frame-base
              general-registers out)
 
-    (emit-function-epilogue out)
-    label))
+    (emit-function-epilogue out)))
 
 (define (wrap-lambda-body attrs body)
   (let* ((nparams (length (attr-ref attrs 'params)))
@@ -958,6 +965,9 @@
 
 (define-reg-use (call attrs . args) general-register-count)
 
+(define (varrec-value varrec)
+  (varrec-attr (or (varrec-attr varrec 'origin) varrec) 'value))
+
 (define-codegen (call attrs func . args)
   (let* ((new-frame-base in-frame-base))
     (dolist (arg (reverse args))
@@ -966,20 +976,19 @@
                new-frame-base new-frame-base general-registers out)
       (emit-frame-push out new-frame-base (first general-registers)))
     
-    (if (and (eq? 'ref (first func))
-             (eq? 'self (varrec-attr (second func) 'mode)))
-        (begin
-          (emit-mov out (immediate (fixnum-representation (length args)))
-                    %nargs)
-          (emit-call out (varrec-attr (second func) 'index)))
-        (begin
-          (reg-use func dest-type-value)
-          (codegen func (dest-value %func)
-                   new-frame-base new-frame-base general-registers out)
-          (emit-mov out (immediate (fixnum-representation (length args)))
-                    %nargs)
-          (emit-indirect-call out)
-          (emit-restore-%func out)))
+    (reg-use func dest-type-value)
+    (codegen func (dest-value %func)
+             new-frame-base new-frame-base general-registers out)
+    (emit-mov out (immediate (fixnum-representation (length args)))
+              %nargs)
+
+    (let* ((func-value (and (eq? 'ref (first func))
+                            (varrec-value (second func)))))
+      (if func-value
+          (emit-call out (form-attr func-value 'label))
+          (emit-indirect-call out)))
+
+    (emit-restore-%func out)
     (emit-convert-value out %funcres dest new-frame-base out-frame-base)))
 
 ;;; Strings and vectors

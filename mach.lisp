@@ -305,13 +305,13 @@
 (define (destination-reg dest regs)
   (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
-(define (emit-convert-value out reg dest in-frame-base out-frame-base)
+(define (emit-convert-value out operand dest in-frame-base out-frame-base)
   (emit-adjust-frame-base out in-frame-base out-frame-base)
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
-           (unless (eq? reg dr) (emit-mov out reg dr))))
+           (unless (eq? operand dr) (emit-mov out operand dr))))
         ((dest-conditional? dest)
-         (emit-cmp out (immediate false-representation) reg)
+         (emit-cmp out (immediate false-representation) operand)
          (emit-branch out "ne" dest))
         ((dest-discard? dest))
         (true
@@ -378,14 +378,14 @@
   (dispmem (* value-size (+ 1 index)) 0 %bp))
 
 (define (varrec-operand varrec frame-base)
-  (let* ((mode (varrec-attr varrec 'mode))
-         (index (varrec-attr varrec 'index)))
-    (cond ((eq? mode 'closure) (closure-slot %func index))
-          ((eq? mode 'param) (param-slot index))
-          ((eq? mode 'local) (local-slot index))
-          ((eq? mode 'register) index)
-          ((eq? mode 'self) %func)
-          (true (error "strange variable mode ~S" mode)))))
+  (let* ((mode (varrec-attr varrec 'mode)))
+    (if (eq? mode 'self) %func
+        (let* ((index (varrec-attr varrec 'index)))
+          (cond ((eq? mode 'closure) (closure-slot %func index))
+                ((eq? mode 'param) (param-slot index))
+                ((eq? mode 'local) (local-slot index))
+                ((eq? mode 'register) index)
+                (true (error "strange variable mode ~S" mode)))))))
 
 ;;; Functions
 
