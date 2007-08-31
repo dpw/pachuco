@@ -405,26 +405,14 @@
 
 (define-walker eliminate-defines () ignore-domain)
 
-(define-eliminate-defines (begin varrecs . body)
-  (dolist (varrec varrecs) (varrec-attr-set! varrec 'value false))
-  (eliminate-defines-forms body))
-
-(define-eliminate-defines (lambda attrs body)
-  (dolist (varrec (attr-ref attrs 'params))
-    (varrec-attr-set! varrec 'value false))
-  (eliminate-defines-recurse body))
-
 (define-eliminate-defines (define varrec . val)
   (rplaca form 'set!)
-  (if (null? val)
+  (when (null? val)
     (if (varrec-written? varrec)
         ;; we clear written vars at the start of the begin in the
         ;; introduce-boxes phase, so these defines can be eliminated
         (overwrite-form form (quoted-unspecified))
-        (rplacd (cdr form) (quoted-unspecified)))
-    (when (and (not (varrec-written? varrec))
-               (or (eq? 'lambda (caar val)) (eq? 'quote (caar val))))
-      (varrec-attr-set! varrec 'value (car val))))
+        (rplacd (cdr form) (quoted-unspecified))))
   (eliminate-defines-recurse form))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
@@ -512,9 +500,11 @@
 ;;; have to rename the original parameter.  This involves wrapping the
 ;;; lambda body with a begin form.
 
+(define (varrec-origin-attr varrec attr)
+  (varrec-attr (or (varrec-attr varrec 'origin) varrec) attr))
+
 (define (varrec-boxed? varrec)
-  ;; Always look to the origin varrec for the boxed attribute
-  (varrec-attr (or (varrec-attr varrec 'origin) varrec) 'boxed))
+  (varrec-origin-attr varrec 'boxed))
 
 (define-walker introduce-boxes () ignore-domain)
 
@@ -645,9 +635,19 @@
       (varrec-attr-set! varrec 'mode mode)
       (set! index (1+ index)))))
 
+(define-codegen-sections (begin varrecs . body)
+  (dolist (varrec varrecs) (varrec-attr-set! varrec 'lambda-label false))
+  (codegen-sections-forms body out))
+
 (define-codegen-sections (lambda attrs body)
-  (let* ((label (gen-label)))
+  (let* ((label (gen-label))
+         (self-varrec (attr-ref attrs 'self)))
     (form-attr-set! form 'label label)
+    (when (and self-varrec (not (varrec-written? self-varrec)))
+      (varrec-attr-set! (varrec-attr self-varrec 'origin) 'lambda-label label))
+    (dolist (varrec (attr-ref attrs 'params))
+      (varrec-attr-set! varrec 'lambda-label false))
+
     (codegen-sections body out)
 
     (emit out ".text")
@@ -655,11 +655,10 @@
     (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
     (assign-varrec-indices (attr-ref attrs 'params) 'param)
 
-    (let* ((self-varrec (attr-ref attrs 'self)))
-      (when self-varrec
-        (emit-comment out "~S" (car self-varrec))
-        (unless (varrec-written? self-varrec)
-          (varrec-attr-set! self-varrec 'mode 'self))))
+    (when self-varrec
+      (emit-comment out "~S" (car self-varrec))
+      (unless (varrec-written? self-varrec)
+        (varrec-attr-set! self-varrec 'mode 'self)))
 
     (emit-label out label)
     (emit-function-prologue out)
@@ -965,9 +964,6 @@
 
 (define-reg-use (call attrs . args) general-register-count)
 
-(define (varrec-value varrec)
-  (varrec-attr (or (varrec-attr varrec 'origin) varrec) 'value))
-
 (define-codegen (call attrs func . args)
   (let* ((new-frame-base in-frame-base))
     (dolist (arg (reverse args))
@@ -982,10 +978,10 @@
     (emit-mov out (immediate (fixnum-representation (length args)))
               %nargs)
 
-    (let* ((func-value (and (eq? 'ref (first func))
-                            (varrec-value (second func)))))
-      (if func-value
-          (emit-call out (form-attr func-value 'label))
+    (let* ((label (and (eq? 'ref (first func))
+                       (varrec-origin-attr (second func) 'lambda-label))))
+      (if label
+          (emit-call out label)
           (emit-indirect-call out)))
 
     (emit-restore-%func out)
