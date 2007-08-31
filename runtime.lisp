@@ -73,21 +73,6 @@
 (defmacro (quasiquote form)
   (quasiquote-transform true form))
 
-(define (append . lists)
-  (if (null? lists) ()
-      (append-1 lists)))
-
-(define (append-1 lists)
-  ;; Finds the first non-empty list, and hands over to append-2
-  (define l1 (car lists))
-  (define rest (cdr lists))
-  (if (null? rest) l1 ; only one list, so that is the answer
-      (if (null? l1) (append-1 rest) ; list empty, move on to the next
-          (begin
-            (define c (cons (car l1) ()))
-            (append-2 c (cdr l1) rest)
-            c))))
-
 (define (append-2 c l1 rest)
   ;; Attach elements from the list l1 and list of lists rest onto the cons c
   (if (null? l1)
@@ -101,6 +86,21 @@
         (define c2 (cons (car l1) ()))
         (rplacd c c2)
         (append-2 c2 (cdr l1) rest))))
+
+(define (append-1 lists)
+  ;; Finds the first non-empty list, and hands over to append-2
+  (define l1 (car lists))
+  (define rest (cdr lists))
+  (if (null? rest) l1 ; only one list, so that is the answer
+      (if (null? l1) (append-1 rest) ; list empty, move on to the next
+          (begin
+            (define c (cons (car l1) ()))
+            (append-2 c (cdr l1) rest)
+            c))))
+
+(define (append . lists)
+  (if (null? lists) ()
+      (append-1 lists)))
 
 ;;; Reified builtins
 
