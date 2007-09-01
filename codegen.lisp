@@ -371,8 +371,14 @@
   (unless (c-callee-saved %alloc) (emit-push out %alloc))
   (emit out "cld")
   (emit-set-ac-flag out false)
-  ;; XXX should align stack to 16 byte bundary
+
+  ;; C ABI requires us to align stack to 16 byte bundary
+  (emit-push out %bp)
+  (emit-mov out %sp %bp)
+  (emit-and out (immediate -16) %sp)
   (emit out "call ~A" (attr-ref attrs 'c-function-name))
+  (emit out "leave")
+
   (emit-set-ac-flag out true)
   (unless (c-callee-saved %alloc) (emit-pop out %alloc))
   (unless (c-callee-saved %func) (emit-restore-%func out))
