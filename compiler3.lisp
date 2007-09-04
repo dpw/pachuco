@@ -148,13 +148,6 @@
 (defmarco (ignore-unit form) (begin))
 (defmarco (ignore-replace-2 forms replacement) replacement)
 
-(define append*-domain
-  '(list flatten*-mapfor append*-replace-2))
-(define (append*-replace-2 forms replacement)
-  (rplacd (cdr forms) replacement)
-  (list forms))
-
-
 ;;; Utils
 
 (define (attr-ref attrs attr)
@@ -231,10 +224,17 @@
 ;;; Remove the definitions forms, splicing them into the surrounding
 ;;; begin/lambda
 
-(define-walker eliminate-definitions () append*-domain)
+(define-walker eliminate-definitions ())
+
+(define (eliminate-definitions-forms forms)
+  (flatten*-mapfor (form forms) (eliminate-definitions form)))
+
+(define (eliminate-definitions-recurse form)
+  (list (list* (first form) (second form)
+               (eliminate-definitions-forms (cddr form)))))
 
 (define-eliminate-definitions (definitions attrs . body)
-  body)
+  (eliminate-definitions-forms body))
 
 ;;; Replace empty bodies with unspecified
 
