@@ -126,18 +126,25 @@
   (assert-result (apply append '((1 2) (3 4)) '((5 6) (7 8)))
                  '((1 2) (3 4) 5 6 7 8)))
 
-(define (main)
-  (define count 0)
-  (define min 0)
-  (while (< count 100)
-    (define start-t (raw-rdtsc))
-    (tests)
-    (define end-t (raw-rdtsc))
-    (define delta (- (car end-t) (car start-t)))
-    (set! min (if (or (= 0 min) (< delta min)) delta min))
-    (set! count (1+ count)))
+(when-compiling
+  (define (time-function f)
+    (define count 0)
+    (define min 0)
+    (while (< count 100)
+      (define start-t (raw-rdtsc))
+      (f)
+      (define end-t (raw-rdtsc))
+      (define delta (- (car end-t) (car start-t)))
+      (set! min (if (or (= 0 min) (< delta min)) delta min))
+      (set! count (1+ count)))
 
-  (formout stdout "Cycles: ~S~%" min))
+    (formout stdout "Cycles: ~S~%" min)))
+
+(when-interpreting
+  (define (time-function f) (f)))
+
+(define (main)
+  (time-function tests))
 
 (define (foo)
   (define dual-env (cons (make-initial-macro-env) (make-initial-interpreter-env)))
