@@ -115,7 +115,7 @@
 ;;; Address modes
 
 (define (immediate x)
-  (format nil "$~A" x))
+  (if (number? x) x (format nil "$~A" x)))
 
 (define (dispmem correction offset reg . reg2)
   (if (null reg2)
@@ -126,10 +126,14 @@
 (define (mem reg)
   (format nil "(~A)" (value-sized reg)))
 
+(define (register? reg)
+  (symbol? reg))
+
 (define (insn-operand operand scale)
   (cond ((symbol? operand)
          (elt (cdr (assoc operand register-operands)) scale))
         ((string? operand) operand)
+        ((number? operand) (format nil "$~D" operand))
         (true (error "strange operand ~S" operand))))
 
 (define (value-sized operand)
@@ -152,15 +156,13 @@
 (defmarco (define-insn-2 name insn)
   (quasiquote
     (define ((unquote name) out src dest . scale)
-      (emit-insn-2 out (unquote insn) src dest (and scale (car scale))))))
+      (emit-insn-2 out (unquote insn) src dest scale))))
 
 (define (emit-insn-2 out insn src dest scale)
-  (unless scale
-    (set! scale value-scale))
+  (set! scale (if (null? scale) value-scale (car scale)))
   (emit out "~A~A ~A, ~A" insn (insn-size-suffix scale)
         (insn-operand src scale) (insn-operand dest scale)))
 
-(define-insn-2 emit-mov "mov")
 (define-insn-2 emit-lea "lea")
 (define-insn-2 emit-add "add")
 (define-insn-2 emit-sub "sub")
@@ -173,7 +175,7 @@
 (define-insn-2 emit-sar "sar")
 
 (define (emit-movzx out src dest src-scale . dest-scale)
-  (set! dest-scale (if (null dest-scale) value-scale (car dest-scale)))
+  (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
   (labels ((movzx (src-scale dest-scale)
              (emit out "mov~A ~A,~A"
                    (elt (elt '(("b")
@@ -183,12 +185,22 @@
                    (insn-operand dest dest-scale))))
     (if (= dest-scale 3)
         (if (= src-scale 3)
-            (emit-mov out src dest 3)
+            (emit out "movq ~A, ~A" (insn-operand src 3) (insn-operand dest 3))
             (movzx src-scale 2))
         (movzx src-scale dest-scale))))
 
-(define (emit-clear out reg)
-  (emit-xor out reg reg 2))
+(define (emit-clear out reg . scale)
+  (set! scale (if (null? scale) value-scale (car scale)))
+  (emit-xor out reg reg (min 2 scale)))
+
+(define (emit-mov out src dest . scale)
+  (cond ((and (eq? src 0) (register? dest))
+         (emit-clear out dest))
+        ((and (number? src) (register? dest) (> src 0) (< src 1000000))
+         (emit-movzx out src dest
+                     (min 2 (if (null? scale) value-scale (car scale)))))
+        (true
+         (emit-insn-2 out "mov" src dest scale))))
 
 (define (emit-push out reg)
   (emit out "push~A ~A" value-insn-size-suffix (value-sized reg)))
