@@ -259,6 +259,12 @@
         (emit-idiv out %c)
         (emit-convert-value out %d dest in-frame-base out-frame-base))))
 
+(define (emit-scale-number out scale oper)
+  (unless (= scale number-tag-bits)
+    (if (< scale number-tag-bits)
+        (emit-sar out (immediate (- number-tag-bits scale)) oper)
+        (emit-shl out (immediate (- scale number-tag-bits)) oper))))
+
 ;;; Strings and vectors
 
 (define-tag-check string? string-tag string-tag-bits)
@@ -277,7 +283,7 @@
         (emit-lea out (dispmem 0 tag %alloc) result))
       (begin
         (emit-mov out len raw-len)
-        (emit-sar out (immediate (- number-tag-bits scale)) raw-len)
+        (emit-scale-number out scale raw-len)
         (emit-sub out (immediate value-size) %alloc)
         (emit-sub out raw-len %alloc)
         (emit-and out (immediate allocation-alignment-mask) %alloc)
@@ -290,22 +296,19 @@
 (define-pure-operator (raw-vec-address vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale number-tag-bits)
-      (emit-sar out (immediate (- number-tag-bits scale)) index))
+    (emit-scale-number out scale index)
     (emit-lea out (dispmem tag value-size vec index) result)))
 
 (define-pure-operator (vec-ref vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale number-tag-bits)
-      (emit-sar out (immediate (- number-tag-bits scale)) index))
+    (emit-scale-number out scale index)
     (emit-movzx out (dispmem tag value-size vec index) result scale)))
 
 (define-operator (vec-set! vec index val) val ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale number-tag-bits)
-      (emit-sar out (immediate (- number-tag-bits scale)) index))
+    (emit-scale-number out scale index)
     (emit-mov out val (dispmem tag value-size vec index) scale)))
 
 (define-reg-use (vec-copy attrs src-addr dst-addr len)
@@ -394,8 +397,7 @@
   (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
            (remove %nargs general-registers) out)
   (emit-push out %nargs)
-  (unless (= value-scale number-tag-bits)
-    (emit-sar out (immediate (- number-tag-bits value-scale)) %nargs))
+  (emit-scale-number out value-scale %nargs)
   (emit-sub out %nargs %sp)
   (emit-clear out %nargs)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
@@ -421,13 +423,11 @@
   (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
-  (unless (= value-scale number-tag-bits)
-    (emit-sar out (immediate (- number-tag-bits value-scale)) index))
+  (emit-scale-number out value-scale index)
   (emit-mov out val (dispmem 0 0 args-base index)))
 
 (define-pure-operator (raw-arg-ref args-base index) result ()
-  (unless (= value-scale number-tag-bits)
-    (emit-sar out (immediate (- number-tag-bits value-scale)) index))
+  (emit-scale-number out value-scale index)
   (emit-mov out (dispmem 0 0 args-base index) result))
 
 (define-reg-use (raw-rdtsc attrs)
