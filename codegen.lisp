@@ -148,9 +148,10 @@
 ;;; Boxes
 
 (define-pure-operator (make-box val) result ()
-  (emit-mov out val (dispmem box-size 0 %alloc))
-  (emit-lea out (dispmem box-size box-tag %alloc) result)
-  (emit-sub out (immediate box-size) %alloc))
+  (emit-sub out (immediate box-size) %alloc)
+  (emit-align-%alloc out box-tag-bits)
+  (emit-mov out val (dispmem 0 0 %alloc))
+  (emit-lea out (dispmem 0 box-tag %alloc) result))
 
 (define-operator (box-set! box val) val ()
   (emit-mov out val (dispmem box-tag 0 box)))
