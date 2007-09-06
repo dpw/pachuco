@@ -171,7 +171,7 @@
   (emit-mov out (dispmem atom-tag 0 sym) result))
 
 (define-pure-operator (primitive-make-symbol str) result ()
-  (emit-sub out value-size %alloc)
+  (emit-sub out (immediate value-size) %alloc)
   (emit-align-%alloc out atom-tag-bits)
   (emit-mov out str (dispmem 0 0 %alloc))
   (emit-lea out (dispmem 0 atom-tag %alloc) result))
