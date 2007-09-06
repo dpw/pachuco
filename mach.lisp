@@ -35,8 +35,9 @@
 ;;; Value representation
 
 (defconstant tag-bits 3)
-(defconstant tag-mask (1- (ash 1 tag-bits)))
+(define (low-bits-mask bits) (1- (ash 1 bits)))
 
+;;; number-tag must be all zeros
 (defconstant number-tag #b000)
 (defconstant function-tag #b001)
 (defconstant box-tag #b010)

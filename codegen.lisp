@@ -97,7 +97,7 @@
   (quasiquote
     (define-cc-operator ((unquote name) val) "e" ()
       ;; just check the low-order byte
-      (emit-and out (immediate tag-mask) val 0)
+      (emit-and out (immediate (low-bits-mask tag-bits)) val 0)
       (emit-cmp out (immediate (unquote tag)) val 0))))
 
 (define-tag-check function? function-tag)
@@ -169,7 +169,7 @@
   (let* ((l (gen-label)))
     (emit-cmp out (immediate lowest-symbol-representation) val)
     (emit-jcc out "l" l)
-    (emit-and out (immediate tag-mask) val 0)
+    (emit-and out (immediate (low-bits-mask tag-bits)) val 0)
     (emit-cmp out (immediate atom-tag) val 0)
     (emit-label out l)))
 
@@ -437,7 +437,7 @@
       (emit out "rdtsc")
       (emit out "shldq $~A, %rax, %rdx" (* 2 tag-bits))
       (emit out "shlq $~A, %rax" tag-bits)
-      (emit-and out (immediate tag-mask) %d)
+      (emit-and out (immediate (low-bits-mask tag-bits)) %d)
       (emit-mov out %a (dispmem pair-size 0 %alloc))
       (emit-mov out %d (dispmem pair-size value-size %alloc))
       (emit-lea out (dispmem pair-size pair-tag %alloc) result)
