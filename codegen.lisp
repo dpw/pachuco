@@ -16,18 +16,14 @@
   (let* ((label (gen-label))
          (a (codegen-quoted (car quoted) out))
          (d (codegen-quoted (cdr quoted) out)))
-    (emit out ".data")
-    (emit out ".align ~D" allocation-alignment)
-    (emit-label out label)
+    (emit-data out label pair-tag-bits)
     (emit-literal out a)
     (emit-literal out d)
     (format nil "~A+~D" label pair-tag)))
 
 (define (codegen-quoted-string str out)
   (let* ((label (gen-label)))
-    (emit out ".data")
-    (emit out ".align ~D" allocation-alignment)
-    (emit-label out label)
+    (emit-data out label string-tag-bits)
     (emit-literal out (fixnum-representation (length str)))
     (emit out ".ascii ~S" str)
     (format nil "~A+~D" label string-tag)))
@@ -40,9 +36,7 @@
         (let* ((label (gen-label))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
                                             out)))
-          (emit out ".data")
-          (emit out ".align ~D" allocation-alignment)
-          (emit-label out label)
+          (emit-data out label atom-tag-bits)
           (emit-literal out name)
           (let* ((lit (format nil "~A+~D" label atom-tag)))
             (set! emitted-symbols (acons sym lit emitted-symbols))
@@ -177,9 +171,10 @@
   (emit-mov out (dispmem atom-tag 0 sym) result))
 
 (define-pure-operator (primitive-make-symbol str) result ()
-  (emit-mov out str (dispmem allocation-alignment 0 %alloc))
-  (emit-lea out (dispmem allocation-alignment atom-tag %alloc) result)
-  (emit-sub out (immediate allocation-alignment) %alloc))
+  (emit-sub out value-size %alloc)
+  (emit-align-%alloc out atom-tag-bits)
+  (emit-mov out str (dispmem 0 0 %alloc))
+  (emit-lea out (dispmem 0 atom-tag %alloc) result))
 
 ;;;  Numbers
 
@@ -272,13 +267,13 @@
 
 (define-pure-operator (make-vec len) result (raw-len)
   (let* ((tag (attr-ref attrs 'tag))
+         (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
     (if (= scale number-tag-bits)
       (begin
         (emit-sub out (immediate value-size) %alloc)
         (emit-sub out len %alloc)
-        (unless (= allocation-alignment-scale scale)
-          (emit-and out (immediate allocation-alignment-mask) %alloc))
+        (emit-align-%alloc out tag-bits scale)
         (emit-mov out len (dispmem 0 0 %alloc))
         (emit-lea out (dispmem 0 tag %alloc) result))
       (begin
@@ -286,7 +281,7 @@
         (emit-scale-number out scale raw-len)
         (emit-sub out (immediate value-size) %alloc)
         (emit-sub out raw-len %alloc)
-        (emit-and out (immediate allocation-alignment-mask) %alloc)
+        (emit-align-%alloc out tag-bits scale)
         (emit-mov out len (dispmem 0 0 %alloc))
         (emit-lea out (dispmem 0 tag %alloc) result)))))
 

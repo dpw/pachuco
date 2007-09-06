@@ -23,14 +23,15 @@
 (define (gen-label)
   (format nil ".L~D" (incf label-counter)))
 
+(define (emit-data out label scale)
+  (emit out ".data")
+  (emit out ".align ~D" (ash 1 scale))
+  (emit-label out label))
+
 ;;; Machine definition
 
 (defconstant value-scale 3)
 (defconstant value-size (ash 1 value-scale))
-
-(defconstant allocation-alignment-scale 3)
-(defconstant allocation-alignment (ash 1 allocation-alignment-scale))
-(defconstant allocation-alignment-mask (- allocation-alignment))
 
 ;;; Value representation
 
@@ -350,6 +351,13 @@
   (emit-set out cc reg)
   (emit-shl out (immediate atom-tag-bits) reg 0)
   (emit-or out (immediate atom-tag) reg 0))
+
+;;; Heap allocation
+
+(define (emit-align-%alloc out tag-bits . scale)
+  (set! scale (if (null? scale) value-scale (car scale)))
+  (unless (= tag-bits scale)
+    (emit-and out (immediate (- (ash 1 tag-bits))) %alloc)))
 
 ;;; Stack handling
 
