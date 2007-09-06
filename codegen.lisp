@@ -127,10 +127,11 @@
 (define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result ()
-  (emit-mov out a (dispmem pair-size 0 %alloc))
-  (emit-mov out d (dispmem pair-size value-size %alloc))
-  (emit-lea out (dispmem pair-size pair-tag %alloc) result)
-  (emit-sub out (immediate pair-size) %alloc))
+  (emit-sub out (immediate pair-size) %alloc)
+  (emit-align-%alloc out pair-tag-bits)
+  (emit-mov out a (dispmem 0 0 %alloc))
+  (emit-mov out d (dispmem 0 value-size %alloc))
+  (emit-lea out (dispmem 0 pair-tag %alloc) result))
 
 (define-pure-operator (car a) result ()
   (emit-mov out (dispmem pair-tag 0 a) result))
