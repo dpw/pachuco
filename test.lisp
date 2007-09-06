@@ -129,13 +129,13 @@
 (when-compiling
   (define (time-function f)
     (define count 0)
-    (define min 0)
+    (define min false)
     (while (< count 100)
       (define start-t (raw-rdtsc))
       (f)
       (define end-t (raw-rdtsc))
-      (define delta (- (car end-t) (car start-t)))
-      (set! min (if (or (= 0 min) (< delta min)) delta min))
+      (define delta (- end-t start-t))
+      (set! min (if (and min (< min delta)) min delta))
       (set! count (1+ count)))
 
     (formout stdout "Cycles: ~S~%" min)))
