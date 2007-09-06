@@ -93,14 +93,14 @@
 
 ;;; Operator definitions
 
-(defmarco (define-tag-check name tag)
+(defmarco (define-tag-check name tag tag-bits)
   (quasiquote
     (define-cc-operator ((unquote name) val) "e" ()
       ;; just check the low-order byte
-      (emit-and out (immediate (low-bits-mask tag-bits)) val 0)
+      (emit-and out (immediate (low-bits-mask (unquote tag-bits))) val 0)
       (emit-cmp out (immediate (unquote tag)) val 0))))
 
-(define-tag-check function? function-tag)
+(define-tag-check function? function-tag function-tag-bits)
 
 ;;; Function call-related internals
 
@@ -130,7 +130,7 @@
 
 ;;; Conses
 
-(define-tag-check pair? pair-tag)
+(define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result ()
   (emit-mov out a (dispmem pair-size 0 %alloc))
@@ -169,7 +169,7 @@
   (let* ((l (gen-label)))
     (emit-cmp out (immediate lowest-symbol-representation) val)
     (emit-jcc out "l" l)
-    (emit-and out (immediate (low-bits-mask tag-bits)) val 0)
+    (emit-and out (immediate (low-bits-mask atom-tag-bits)) val 0)
     (emit-cmp out (immediate atom-tag) val 0)
     (emit-label out l)))
 
@@ -183,7 +183,7 @@
 
 ;;;  Numbers
 
-(define-tag-check number? number-tag)
+(define-tag-check number? number-tag number-tag-bits)
 
 (defmarco (define-simplify-binary-op op identity unary-op)
   (quasiquote
@@ -204,7 +204,7 @@
 
 (define-simplify-binary-op * 1 begin) 
 (define-pure-operator (* a b) a ()
-  (emit-sar out (immediate tag-bits) a)
+  (emit-sar out (immediate number-tag-bits) a)
   (emit-imul out b a))
 
 (define-simplify (- attrs a . args)
@@ -240,7 +240,7 @@
         (emit-mov out %a %d)
         (emit-sar out (immediate 63) %d)
         (emit-idiv out %c)
-        (emit-shl out (immediate tag-bits) %a)
+        (emit-shl out (immediate number-tag-bits) %a)
         (emit-convert-value out %a dest in-frame-base out-frame-base))))
 
 (define-reg-use (rem attrs a b)
@@ -261,13 +261,13 @@
 
 ;;; Strings and vectors
 
-(define-tag-check string? string-tag)
-(define-tag-check vector? vector-tag)
+(define-tag-check string? string-tag string-tag-bits)
+(define-tag-check vector? vector-tag vector-tag-bits)
 
 (define-pure-operator (make-vec len) result (raw-len)
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (if (= scale tag-bits)
+    (if (= scale number-tag-bits)
       (begin
         (emit-sub out (immediate value-size) %alloc)
         (emit-sub out len %alloc)
@@ -277,7 +277,7 @@
         (emit-lea out (dispmem 0 tag %alloc) result))
       (begin
         (emit-mov out len raw-len)
-        (emit-sar out (immediate (- tag-bits scale)) raw-len)
+        (emit-sar out (immediate (- number-tag-bits scale)) raw-len)
         (emit-sub out (immediate value-size) %alloc)
         (emit-sub out raw-len %alloc)
         (emit-and out (immediate allocation-alignment-mask) %alloc)
@@ -290,22 +290,22 @@
 (define-pure-operator (raw-vec-address vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale tag-bits)
-      (emit-sar out (immediate (- tag-bits scale)) index))
+    (unless (= scale number-tag-bits)
+      (emit-sar out (immediate (- number-tag-bits scale)) index))
     (emit-lea out (dispmem tag value-size vec index) result)))
 
 (define-pure-operator (vec-ref vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale tag-bits)
-      (emit-sar out (immediate (- tag-bits scale)) index))
+    (unless (= scale number-tag-bits)
+      (emit-sar out (immediate (- number-tag-bits scale)) index))
     (emit-movzx out (dispmem tag value-size vec index) result scale)))
 
 (define-operator (vec-set! vec index val) val ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (unless (= scale tag-bits)
-      (emit-sar out (immediate (- tag-bits scale)) index))
+    (unless (= scale number-tag-bits)
+      (emit-sar out (immediate (- number-tag-bits scale)) index))
     (emit-mov out val (dispmem tag value-size vec index) scale)))
 
 (define-reg-use (vec-copy attrs src-addr dst-addr len)
@@ -321,7 +321,7 @@
                      (move-regs-to-front '(%si %di %c) general-registers)
                      out)
     (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
-    (emit-sar out (immediate tag-bits) %c)
+    (emit-sar out (immediate number-tag-bits) %c)
     (emit-rep-movs out scale)
     (emit-adjust-frame-base out in-frame-base out-frame-base)))
 
@@ -339,10 +339,10 @@
     (emit-jump out l)))
 
 (define-pure-operator (fixnum->raw val) val ()
-  (emit-sar out (immediate tag-bits) val))
+  (emit-sar out (immediate number-tag-bits) val))
 
 (define-pure-operator (raw->fixnum val) val ()
-  (emit-shl out (immediate tag-bits) val))
+  (emit-shl out (immediate number-tag-bits) val))
 
 (define (emit-set-ac-flag out enable)
   (emit-pushf out)
@@ -431,9 +431,9 @@
   (unless (dest-discard? dest)
     (let* ((result (destination-reg dest general-registers)))
       (emit out "rdtsc")
-      (emit out "shldq $~A, %rax, %rdx" (* 2 tag-bits))
-      (emit out "shlq $~A, %rax" tag-bits)
-      (emit-and out (immediate (low-bits-mask tag-bits)) %d)
+      (emit out "shldq $~A, %rax, %rdx" (* 2 number-tag-bits))
+      (emit out "shlq $~A, %rax" number-tag-bits)
+      (emit-and out (immediate (- (ash 1 number-tag-bits))) %d)
       (emit-mov out %a (dispmem pair-size 0 %alloc))
       (emit-mov out %d (dispmem pair-size value-size %alloc))
       (emit-lea out (dispmem pair-size pair-tag %alloc) result)

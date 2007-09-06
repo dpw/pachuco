@@ -34,17 +34,29 @@
 
 ;;; Value representation
 
-(defconstant tag-bits 3)
 (define (low-bits-mask bits) (1- (ash 1 bits)))
 
 ;;; number-tag must be all zeros
 (defconstant number-tag #b000)
+(defconstant number-tag-bits 3)
+
 (defconstant function-tag #b001)
+(defconstant function-tag-bits 3)
+
 (defconstant box-tag #b010)
+(defconstant box-tag-bits 3)
+
 (defconstant pair-tag #b011)
+(defconstant pair-tag-bits 3)
+
 (defconstant vector-tag #b100)
+(defconstant vector-tag-bits 3)
+
 (defconstant string-tag #b101)
+(defconstant string-tag-bits 3)
+
 (defconstant atom-tag #b111)
+(defconstant atom-tag-bits 3)
 
 (defconstant char-scale 0)
 
@@ -52,7 +64,7 @@
 (defconstant box-size value-size)
 (defconstant pair-size (* 2 value-size))
 
-(define (fixnum-representation n) (ash n tag-bits))
+(define (fixnum-representation n) (ash n number-tag-bits))
 
 (defconstant false-representation #b111)
 (defconstant unspecified-representation #b10111)
@@ -336,7 +348,7 @@
 
 (define (emit-convert-cc-value out cc reg)
   (emit-set out cc reg)
-  (emit-shl out (immediate tag-bits) reg 0)
+  (emit-shl out (immediate atom-tag-bits) reg 0)
   (emit-or out (immediate atom-tag) reg 0))
 
 ;;; Stack handling
