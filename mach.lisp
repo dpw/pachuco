@@ -105,9 +105,9 @@
 (define %funcres (first general-registers))
 
 ;;; %nargs is use to pass the number of arguments to functions.  We
-;;; %reuse one of the general-registers for this, which means we have
-;;; %to be really careful about invoking the operators that use it
-;;; %(check-arg-count, arg-count).
+;;; reuse one of the general-registers for this, which means we have
+;;; to be really careful about invoking the operators that use it
+;;; (check-arg-count, arg-count).
 (define %nargs (last-elem general-registers))
 
 (define (move-regs-to-front regs all-regs)
