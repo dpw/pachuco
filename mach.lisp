@@ -444,6 +444,7 @@
 
 (define (emit-alloc-function out result-reg label slot-count)
   (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
+  (emit-align-%alloc out function-tag-bits)
   (emit-mov out (immediate label) (dispmem 0 0 %alloc))
   (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
 
