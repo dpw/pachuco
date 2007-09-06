@@ -394,6 +394,8 @@
   (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
            (remove %nargs general-registers) out)
   (emit-push out %nargs)
+  (unless (= value-scale number-tag-bits)
+    (emit-sar out (immediate (- number-tag-bits value-scale)) %nargs))
   (emit-sub out %nargs %sp)
   (emit-clear out %nargs)
   (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
@@ -419,9 +421,13 @@
   (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
 
 (define-operator (raw-arg-set! args-base index val) val ()
+  (unless (= value-scale number-tag-bits)
+    (emit-sar out (immediate (- number-tag-bits value-scale)) index))
   (emit-mov out val (dispmem 0 0 args-base index)))
 
 (define-pure-operator (raw-arg-ref args-base index) result ()
+  (unless (= value-scale number-tag-bits)
+    (emit-sar out (immediate (- number-tag-bits value-scale)) index))
   (emit-mov out (dispmem 0 0 args-base index) result))
 
 (define-reg-use (raw-rdtsc attrs)
