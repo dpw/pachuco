@@ -156,7 +156,7 @@
 ;;; Condition codes
 
 (define (negate-cc cc)
-  (if (eq (string-ref cc 0) #\n)
+  (if (eq? (string-ref cc 0) #\n)
       (substring cc 1 (1- (string-length cc)))
       (string-concat "n" cc)))
 
