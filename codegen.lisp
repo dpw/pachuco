@@ -550,7 +550,7 @@
                                (move-regs-to-front '(%a %c) general-registers)
                                out)
         (emit-mov out %a %d)
-        (emit-sar out (immediate 63) %d)
+        (emit-extend-sign-bit out %d)
         (emit-idiv out %c)
         (emit-shl out (immediate number-tag-bits) %a)
         (emit-convert-value out %a dest in-frame-base out-frame-base))))
@@ -567,7 +567,7 @@
                                (move-regs-to-front '(%a %c) general-registers)
                                out)
         (emit-mov out %a %d)
-        (emit-sar out (immediate 63) %d)
+        (emit-extend-sign-bit out %d)
         (emit-idiv out %c)
         (emit-convert-value out %d dest in-frame-base out-frame-base))))
 

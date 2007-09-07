@@ -101,3 +101,6 @@
           (emit out "movq ~A, ~A" (value-sized src) (value-sized dest))
           (emit-movzx-32 out src dest src-scale 2))
       (emit-movzx-32 out src dest src-scale dest-scale)))
+
+(define (emit-extend-sign-bit out oper)
+  (emit-sar out (immediate 63) oper))
