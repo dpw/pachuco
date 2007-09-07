@@ -83,6 +83,9 @@
 ;;; (check-arg-count, arg-count).
 (define %nargs (last-elem general-registers))
 
+(define c-callee-saved-regs '(%b %bp %r12 %r13 %r14 %r15))
+(define c-call-arg-regs '(%di %si %d %c %r8 %r9))
+
 ;;; Bitness-dependent assembler bits
 
 (define (emit-literal out lit)

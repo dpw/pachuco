@@ -315,29 +315,6 @@
 (define (emit-closure-slot-set out func-reg varrec val-reg)
   (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
 
-;;; C-callable program wrapper
-
-(define c-callee-saved-regs '(%b %bp %r12 %r13 %r14 %r15))
-
-(define (emit-program-prologue out)
-  (emit out ".text")
-  (emit out ".globl lisp")
-  (emit out "lisp:")
-  (dolist (reg c-callee-saved-regs) (emit-push out reg))
-  (emit-mov out %si %alloc)
-  (emit-set-ac-flag out true)
-  (emit-mov out (immediate function-tag) %func)
-  (emit-function-prologue out))
-
-(define (emit-program-epilogue out)
-  ;; use the alloc pointer as the result
-  (emit-mov out %alloc %a)
-  (emit out "leave")
-  (emit out "cld")
-  (emit-set-ac-flag out false)
-  (dolist (reg (reverse c-callee-saved-regs)) (emit-pop out reg))
-  (emit out "ret"))
-
 ;;; Literals
 
 (define (codegen-quoted quoted out)
@@ -646,23 +623,6 @@
     (emit-scale-number out scale index)
     (emit-mov out val (dispmem tag value-size vec index) scale)))
 
-(define-reg-use (vec-copy attrs src-addr dst-addr len)
-  (operator-args-reg-use form)
-  general-register-count)
-
-(define-codegen (vec-copy attrs src-addr dst-addr len)
-  (unless (dest-discard? dest)
-    (error "vec-copy result not discarded"))
-  (let* ((tag (attr-ref attrs 'tag))
-         (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form in-frame-base
-                     (move-regs-to-front '(%si %di %c) general-registers)
-                     out)
-    (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
-    (emit-sar out (immediate number-tag-bits) %c)
-    (emit-rep-movs out scale)
-    (emit-adjust-frame-base out in-frame-base out-frame-base)))
-
 ;;; Misc. runtime
 
 (define-reg-use (error-halt attrs message args) 0)
@@ -689,6 +649,8 @@
       (emit-and out (immediate #xfffbffff) (mem %sp) 2))
   (emit-popf out))
 
+;;; C calls
+
 (define-reg-use (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
   (operator-args-reg-use form)
@@ -697,10 +659,10 @@
 (define (c-callee-saved reg) (member? reg c-callee-saved-regs))
 
 (define-codegen (c-call attrs . args)
-  (when (> (length args) 4)
+  (when (> (length args) (length c-call-arg-regs))
     (error "too many arguments to c-call"))
   (operator-args-codegen form in-frame-base
-                      (move-regs-to-front '(%di %si %d %c) general-registers)
+                      (move-regs-to-front c-call-arg-regs general-registers)
                       out)
   (unless (c-callee-saved %alloc) (emit-push out %alloc))
   (emit out "cld")
@@ -717,6 +679,8 @@
   (unless (c-callee-saved %alloc) (emit-pop out %alloc))
   (unless (c-callee-saved %func) (emit-restore-%func out))
   (emit-convert-value out %a dest in-frame-base out-frame-base))
+
+;;; Apply support
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
   (reg-use nargs dest-type-value)
