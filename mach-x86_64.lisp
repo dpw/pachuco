@@ -1,4 +1,4 @@
-;;; Machine definition
+;;; x86-64 machine definition
 
 (defconstant value-scale 3)
 (defconstant value-size (ash 1 value-scale))
@@ -40,14 +40,6 @@
 
 ;;; Registers
 
-(define register-operands ())
-
-(defmarco (define-register name . variants)
-  (quasiquote (definitions
-    (define (unquote name) (quote (unquote name)))
-    (set! register-operands (acons (unquote name) (quote (unquote variants))
-                                   register-operands)))))
-
 (define-register %a "%al" "%ax" "%eax" "%rax")
 (define-register %b "%bl" "%bx" "%ebx" "%rbx")
 (define-register %c "%cl" "%cx" "%ecx" "%rcx")
@@ -67,13 +59,10 @@
 
 (define-extended-registers)
 
-;;; Use RBX as the allocation pointer, since there are no relevant
-;;; instructions that clobber it implicitly.
-(define %alloc %r14)
-
 (define general-registers (list %a %b %c %d %si %di))
 (define general-register-count (length general-registers))
 
+(define %alloc %r14)
 (define %func %r15)
 (define %funcres (first general-registers))
 

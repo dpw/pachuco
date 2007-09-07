@@ -1,5 +1,6 @@
+TARGET=x86_64
 SOURCES=runtime.lisp util.lisp interpreter.lisp expander.lisp test.lisp
-COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-x86_64.lisp compiler3.lisp codegen.lisp codegen-x86_64.lisp driver.lisp
+COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler3.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
 
 test: a.out
 	./a.out

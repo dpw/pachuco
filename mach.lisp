@@ -1,5 +1,18 @@
-;;; Common assembler bits.  The real machine definitions are in 
-;;; mach-*.lisp, but this stuffd needs to come first.
+;;; Common x86 machine definition.  The real machine definitions are
+;;; in mach-*.lisp, but this stuff needs to come first.
+
+;;; Registers
+
+(define register-operands ())
+
+(defmarco (define-register name . variants)
+  (quasiquote (definitions
+    (define (unquote name) (quote (unquote name)))
+    (set! register-operands (acons (unquote name) (quote (unquote variants))
+                                   register-operands)))))
+
+
+;;; Assembler bits
 
 (defmarco (emit-without-flushing template . args)
   (quasiquote (format t (unquote (string-concat template "~%"))
