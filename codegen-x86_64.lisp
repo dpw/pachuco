@@ -21,11 +21,13 @@
 
 ;;; C-callable program wrapper
 
+(define c-callee-saved-regs-without-%bp (remove %bp c-callee-saved-regs))
+
 (define (emit-program-prologue out)
   (emit out ".text")
   (emit out ".globl lisp")
   (emit out "lisp:")
-  (dolist (reg c-callee-saved-regs) (emit-push out reg))
+  (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
   (emit-mov out %si %alloc)
   (emit-set-ac-flag out true)
   (emit-mov out (immediate function-tag) %func)
@@ -37,7 +39,7 @@
   (emit out "leave")
   (emit out "cld")
   (emit-set-ac-flag out false)
-  (dolist (reg (reverse c-callee-saved-regs)) (emit-pop out reg))
+  (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop out reg))
   (emit out "ret"))
 
 ;;; C calls
