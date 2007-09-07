@@ -1,5 +1,5 @@
 SOURCES=runtime.lisp util.lisp interpreter.lisp expander.lisp test.lisp
-COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp compiler3.lisp codegen.lisp driver.lisp
+COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-x86_64.lisp compiler3.lisp codegen.lisp driver.lisp
 
 test: a.out
 	./a.out

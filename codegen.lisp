@@ -1,4 +1,342 @@
-;;; Machine-specific code generation
+;;; Code generation
+
+(define label-counter 0)
+
+(define (gen-label)
+  (format nil ".L~D" (incf label-counter)))
+
+(define (emit-data out label scale)
+  (emit out ".data")
+  (emit out ".align ~D" (ash 1 scale))
+  (emit-label out label))
+
+;;; Generic representation bits
+
+(define (fixnum-representation n) (ash n number-tag-bits))
+(define (low-bits-mask bits) (1- (ash 1 bits)))
+
+;;; Registers and address modes
+
+(define (immediate x)
+  (if (number? x) x (format nil "$~A" x)))
+
+(define (dispmem correction offset reg . reg2)
+  (if (null reg2)
+      (format nil "~A(~A)" (- offset correction) (value-sized reg))
+      (format nil "~A(~A,~A)" (- offset correction) (value-sized reg)
+              (value-sized (first reg2)))))
+
+(define (mem reg)
+  (format nil "(~A)" (value-sized reg)))
+
+(define (register? reg)
+  (symbol? reg))
+
+(define (insn-operand operand scale)
+  (cond ((symbol? operand)
+         (elt (cdr (assoc operand register-operands)) scale))
+        ((string? operand) operand)
+        ((number? operand) (format nil "$~D" operand))
+        (true (error "strange operand ~S" operand))))
+
+(define (value-sized operand)
+  (insn-operand operand value-scale))
+
+(define (move-regs-to-front regs all-regs)
+  (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
+
+;;; Condition codes
+
+(define (negate-cc cc)
+  (if (eq? (string-ref cc 0) #\n)
+      (substring cc 1 (1- (string-length cc)))
+      (string-concat "n" cc)))
+
+;;; Instructions
+
+(defconstant value-insn-size-suffix (insn-size-suffix value-scale))
+
+(defmarco (define-insn-2 name insn)
+  (quasiquote
+    (define ((unquote name) out src dest . scale)
+      (emit-insn-2 out (unquote insn) src dest scale))))
+
+(define (emit-insn-2 out insn src dest scale)
+  (set! scale (if (null? scale) value-scale (car scale)))
+  (emit out "~A~A ~A, ~A" insn (insn-size-suffix scale)
+        (insn-operand src scale) (insn-operand dest scale)))
+
+(define-insn-2 emit-lea "lea")
+(define-insn-2 emit-add "add")
+(define-insn-2 emit-sub "sub")
+(define-insn-2 emit-imul "imul")
+(define-insn-2 emit-and "and")
+(define-insn-2 emit-or "or")
+(define-insn-2 emit-xor "xor")
+(define-insn-2 emit-cmp "cmp")
+(define-insn-2 emit-shl "shl")
+(define-insn-2 emit-sar "sar")
+
+(define (emit-clear out reg . scale)
+  (set! scale (if (null? scale) value-scale (car scale)))
+  (emit-xor out reg reg (min 2 scale)))
+
+(define (emit-mov out src dest . scale)
+  (cond ((and (eq? src 0) (register? dest))
+         (emit-clear out dest))
+        ((and (number? src) (register? dest) (> src 0) (< src 1000000))
+         (emit-movzx out src dest
+                     (min 2 (if (null? scale) value-scale (car scale)))))
+        (true
+         (emit-insn-2 out "mov" src dest scale))))
+
+(define (emit-push out reg)
+  (emit out "push~A ~A" value-insn-size-suffix (value-sized reg)))
+
+(define (emit-pop out reg)
+  (emit out "pop~A ~A" value-insn-size-suffix (value-sized reg)))
+
+(define (emit-set out cc reg)
+  (emit out "set~A ~A" cc (insn-operand reg 0)))
+
+(defmarco (define-insn-1 name insn)
+  (quasiquote
+    (define ((unquote name) out oper . scale)
+      (emit-insn-1 out (unquote insn) oper (and scale (car scale))))))
+
+(define (emit-insn-1 out insn oper scale)
+  (unless scale
+    (set! scale value-scale))
+  (emit out "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
+
+(define-insn-1 emit-neg "neg")
+(define-insn-1 emit-idiv "idiv")
+
+(defmarco (define-insn-0 name insn)
+  (quasiquote
+    (define ((unquote name) out . scale)
+      (emit out "~A~A" (unquote insn)
+            (insn-size-suffix (if scale (car scale) value-scale))))))
+
+(define-insn-0 emit-rep-movs "rep ; movs")
+(define-insn-0 emit-pushf "pushf")
+(define-insn-0 emit-popf "popf")
+
+;;; Branching, jumping, and output handling
+
+(define (make-asm-output) (list false ()))
+
+(define (optimizing-jumps? out) (car out))
+
+(define (merge-pending-labels out to-label)
+  (rplacd (cdr out) (nconc (nmapfor (l (second out)) (cons l to-label))
+                           (cddr out)))
+  (rplaca (cdr out) ()))
+
+(define (scan-merged-labels merged-prev l labels)
+  (let* ((merged (cdr merged-prev)))
+    (if (null? merged) labels
+        (if (eq? l (cdar merged))
+            (begin
+              (rplacd merged-prev (cdr merged))
+              (scan-merged-labels merged-prev l (cons (caar merged) labels)))
+            (scan-merged-labels merged l labels)))))
+
+(define (take-merged-labels out l)
+  (scan-merged-labels (cdr out) l ()))
+
+(define (pend-label out l)
+  (rplaca (cdr out) (nconc (take-merged-labels out l)
+                           (cons l (second out)))))
+
+(define (emit-label out l)
+  (if (optimizing-jumps? out)
+      (pend-label out l)
+      (dolist (ml (cons l (take-merged-labels out l)))
+        (emit-without-flushing "~A:" l))))
+
+(define (emit-jump out label)
+  (if (optimizing-jumps? out)
+      (merge-pending-labels out label)
+      (rplaca out label)))
+
+(define (emit-branch out cc conddest)
+  (flush-asm-output out)
+  (rplaca out (list cc (dest-conditional-tlabel conddest)
+                    (dest-conditional-flabel conddest))))
+
+(define (emit-jcc out cc label)
+  (emit-without-flushing "j~A ~A" cc label))
+
+(define (emit-jmp label)
+  (emit-without-flushing "jmp ~A" label))
+
+(define (flush-asm-output out)
+  (when (optimizing-jumps? out)
+    (let* ((branch (first out))
+           (pending-labels (second out)))
+      (if (pair? branch)
+          (let* ((cc (first branch))
+                 (tlabel (second branch))
+                 (flabel (third branch)))
+            (if (member? tlabel pending-labels)
+                (unless (member? flabel pending-labels)
+                  (emit-jcc out (negate-cc cc) flabel))
+                (begin
+                 (emit-jcc out cc tlabel)
+                 (unless (member? flabel pending-labels)
+                   (emit-jmp flabel)))))
+          (unless (member? branch pending-labels)
+            (emit-jmp branch)))
+
+      (if (null? pending-labels)
+          (emit-comment out "unreachable")
+          (dolist (l pending-labels)
+            (emit-without-flushing "~A:" l)))
+
+      (rplaca out false)
+      (rplaca (cdr out) ()))))
+
+;;; Dest conversions
+
+(define (convert-value-reg-use dest-type)
+  (if (dest-type-conditional? dest-type) 1 0))
+
+(define (destination-reg dest regs)
+  (if (dest-value? dest) (dest-value-reg dest) (first regs)))
+
+(define (emit-convert-value out operand dest in-frame-base out-frame-base)
+  (emit-adjust-frame-base out in-frame-base out-frame-base)
+  (cond ((dest-value? dest)
+         (let* ((dr (dest-value-reg dest)))
+           (unless (eq? operand dr) (emit-mov out operand dr))))
+        ((dest-conditional? dest)
+         (emit-cmp out (immediate false-representation) operand)
+         (emit-branch out "ne" dest))
+        ((dest-discard? dest))
+        (true
+         (error "can't handle dest ~S" dest))))
+         
+
+(define (emit-prepare-convert-cc-value out reg)
+  (emit-clear out reg))
+
+(define (emit-convert-cc-value out cc reg)
+  (emit-set out cc reg)
+  (emit-shl out (immediate atom-tag-bits) reg 0)
+  (emit-or out (immediate atom-tag) reg 0))
+
+;;; Heap allocation
+
+(define (emit-align-%alloc out tag-bits . scale)
+  (set! scale (if (null? scale) value-scale (car scale)))
+  (unless (= tag-bits scale)
+    (emit-and out (immediate (- (ash 1 tag-bits))) %alloc)))
+
+;;; Stack handling
+
+;;; Layout:
+
+;;; param N
+;;; ...
+;;; param 1
+;;; param 0
+;;; Return address
+;;; Saved %bp <--- %bp (and (+ %sp (* frame-base value-size)))
+;;; %func
+;;; Local var 0
+;;; ...
+;;; Local var N
+;;; in-progress param N
+;;; in-progress param N-1
+;;; ...
+;;;
+;;; Functions are always called with at least 1 param slot, to allow for
+;;; varargs functions
+;;;
+;;; Functions are called with the closure in %func, arg-count in
+;;; %nargs.  They return with the result in a %funcres.
+
+(define (emit-allocate-locals out n)
+  (emit-sub out (immediate (* value-size n)) %sp))
+
+(define (emit-adjust-frame-base out in-frame-base out-frame-base)
+  (unless (= in-frame-base out-frame-base)
+    (emit-add out (immediate (* value-size (- in-frame-base out-frame-base)))
+              %sp)))
+
+(define (closure-slot func index)
+  (dispmem function-tag (* value-size (1+ index)) func))
+
+(define (param-slot index)
+  (dispmem 0 (* value-size (+ 2 index)) %bp))
+
+(define (local-slot index)
+  (dispmem (* value-size (+ 1 index)) 0 %bp))
+
+(define (varrec-operand varrec frame-base)
+  (let* ((mode (varrec-attr varrec 'mode)))
+    (if (eq? mode 'self) %func
+        (let* ((index (varrec-attr varrec 'index)))
+          (cond ((eq? mode 'closure) (closure-slot %func index))
+                ((eq? mode 'param) (param-slot index))
+                ((eq? mode 'local) (local-slot index))
+                ((eq? mode 'register) index)
+                (true (error "strange variable mode ~S" mode)))))))
+
+;;; Functions
+
+(define function-in-frame-base 1)
+(define function-out-frame-base 0)
+
+(define (emit-function-prologue out)
+  (emit-push out %bp)
+  (emit-mov out %sp %bp)
+  (emit-push out %func))
+
+(define (emit-function-epilogue out)
+  (emit out "leave ; ret"))
+
+(define (emit-restore-%func out)
+  (emit-mov out (dispmem value-size 0 %bp) %func))
+
+(define (emit-indirect-call out)
+  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func))))
+
+(define (emit-call out label)
+  (emit out "call ~A" label))
+
+(define (emit-alloc-function out result-reg label slot-count)
+  (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
+  (emit-align-%alloc out function-tag-bits)
+  (emit-mov out (immediate label) (dispmem 0 0 %alloc))
+  (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
+
+(define (emit-closure-slot-set out func-reg varrec val-reg)
+  (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
+
+;;; C-callable program wrapper
+
+(define c-callee-saved-regs '(%b %bp %r12 %r13 %r14 %r15))
+
+(define (emit-program-prologue out)
+  (emit out ".text")
+  (emit out ".globl lisp")
+  (emit out "lisp:")
+  (dolist (reg c-callee-saved-regs) (emit-push out reg))
+  (emit-mov out %si %alloc)
+  (emit-set-ac-flag out true)
+  (emit-mov out (immediate function-tag) %func)
+  (emit-function-prologue out))
+
+(define (emit-program-epilogue out)
+  ;; use the alloc pointer as the result
+  (emit-mov out %alloc %a)
+  (emit out "leave")
+  (emit out "cld")
+  (emit-set-ac-flag out false)
+  (dolist (reg (reverse c-callee-saved-regs)) (emit-pop out reg))
+  (emit out "ret"))
 
 ;;; Literals
 
@@ -127,7 +465,7 @@
 (define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result ()
-  (emit-sub out (immediate pair-size) %alloc)
+  (emit-sub out (immediate (* 2 value-size)) %alloc)
   (emit-align-%alloc out pair-tag-bits)
   (emit-mov out a (dispmem 0 0 %alloc))
   (emit-mov out d (dispmem 0 value-size %alloc))
@@ -148,7 +486,7 @@
 ;;; Boxes
 
 (define-pure-operator (make-box val) result ()
-  (emit-sub out (immediate box-size) %alloc)
+  (emit-sub out (immediate value-size) %alloc)
   (emit-align-%alloc out box-tag-bits)
   (emit-mov out val (dispmem 0 0 %alloc))
   (emit-lea out (dispmem 0 box-tag %alloc) result))

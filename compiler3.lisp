@@ -1052,7 +1052,7 @@
                                                (unquote tag) (unquote scale)))
       (simplify form)))))
 
-(define-vector-type string string-tag string-tag-bits char-scale
+(define-vector-type string string-tag string-tag-bits 0
                     (lambda (form) (list 'raw->fixnum () form))
                     (lambda (form) (list 'fixnum->raw () form)))
 (define-vector-type vector vector-tag vector-tag-bits value-scale
