@@ -316,7 +316,7 @@
 (define (check-string-range str offset len)
   (define str-len (string-length str))
   (unless (and (>= offset 0) (<= (+ offset len) str-len))
-    (error "string range out of bounds (offset: ~A, length: ~A, string length ~A"
+    (error "string range out of bounds (offset: ~A, length: ~A, string length: ~A"
            offset len str-len)))
 
 (when-compiling
@@ -338,8 +338,8 @@
 
 (define (check-vector-index vec index)
   (define vec-len (vector-length vec))
-  (unless (and (> index 0) (< index vec-len))
-    (error "vector index out of bounds (index: ~A, vector length ~A)"
+  (unless (and (>= index 0) (< index vec-len))
+    (error "vector index out of bounds (index: ~A, vector length: ~A)"
            index vec-len)))
 
 (define (check-vector-range vec offset len)
