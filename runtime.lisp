@@ -719,10 +719,10 @@
   (make-vector-from-list (list false 0 str)))
 
 (define (read-char istr)
-  (define pushed-char (vector-ref istr 0))
-  (if pushed-char
+  (define unread-char (vector-ref istr 0))
+  (if unread-char
       (begin (vector-set! istr 0 false)
-             pushed-char)
+             unread-char)
       (begin
         (define pos (vector-ref istr 1))
         (define str (vector-ref istr 2))
@@ -731,9 +731,9 @@
             (begin (vector-set! istr 1 (1+ pos))
                    (string-ref str pos ))))))
 
-(define (push-char istr ch)
+(define (unread-char istr ch)
   (when (vector-ref istr 0)
-    (error "istream already contains pushed character"))
+    (error "istream already contains unread character"))
   (vector-set! istr 0 ch))
 
 ;;; CL compatibility

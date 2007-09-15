@@ -129,7 +129,7 @@
   (begin
     (define istr (make-string-istream "hello"))
     (assert-result (read-char istr) #\h)
-    (push-char istr #\y)
+    (unread-char istr #\y)
     (assert-result (read-char istr) #\y)
     (assert-result (read-char istr) #\e)))
 
