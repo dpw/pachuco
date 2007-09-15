@@ -124,7 +124,14 @@
                                "(Hello there)"))
 
   (assert-result (apply append '((1 2) (3 4)) '((5 6) (7 8)))
-                 '((1 2) (3 4) 5 6 7 8)))
+                 '((1 2) (3 4) 5 6 7 8))
+
+  (begin
+    (define istr (make-string-istream "hello"))
+    (assert-result (read-char istr) #\h)
+    (push-char istr #\y)
+    (assert-result (read-char istr) #\y)
+    (assert-result (read-char istr) #\e)))
 
 (when-compiling
   (define (time-function f)

@@ -713,6 +713,29 @@
         (copy-args args (raw-args-address) 0)
         (raw-apply-jump func args-len)))))
 
+;;; Character istreams
+
+(define (make-string-istream str)
+  (make-vector-from-list (list false 0 str)))
+
+(define (read-char istr)
+  (define pushed-char (vector-ref istr 0))
+  (if pushed-char
+      (begin (vector-set! istr 0 false)
+             pushed-char)
+      (begin
+        (define pos (vector-ref istr 1))
+        (define str (vector-ref istr 2))
+        (if (>= pos (string-length str))
+            false
+            (begin (vector-set! istr 1 (1+ pos))
+                   (string-ref str pos ))))))
+
+(define (push-char istr ch)
+  (when (vector-ref istr 0)
+    (error "istream already contains pushed character"))
+  (vector-set! istr 0 ch))
+
 ;;; CL compatibility
 
 (defmacro (let* bindings . body)
