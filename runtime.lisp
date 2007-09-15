@@ -435,6 +435,18 @@
                            (aux)))))
          (aux))))
 
+;;; Vectors
+
+(define (make-vector-from-list l)
+  (define (copy-list-to-vector l vec pos)
+    (unless (null? l)
+      (vector-set! vec pos (car l))
+      (copy-list-to-vector (cdr l) vec (1+ pos))))
+
+  (define vec (make-vector (length l)))
+  (copy-list-to-vector l vec 0)
+  vec)
+
 ;;; Equality
 
 (define (equal? a b)
