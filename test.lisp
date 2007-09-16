@@ -154,7 +154,8 @@
   (define (time-function f) (f)))
 
 (define (main)
-  (time-function tests))
+  (time-function tests)
+  (formout stdout "Done~%"))
 
 (define (foo)
   (define dual-env (cons (make-initial-macro-env) (make-initial-interpreter-env)))
