@@ -134,7 +134,11 @@
     (assert-result (peek-char istr 0) #\b)
     (assert-result (peek-char istr 1 true) true)
     (consume-char istr)
-    (assert-result (read-char istr true) true)))
+    (assert-result (read-char istr true) true))
+
+  (begin
+    (define istr (make-string-istream "hello world"))
+    (assert-result (read-token istr) 'hello)))
 
 (when-compiling
   (define (time-function f)

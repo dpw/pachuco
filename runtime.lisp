@@ -744,6 +744,61 @@
           (error "peek-char off end of stream")
           (car eos-val))))
 
+;;; Reader
+
+(define readtable (make-string 128))
+(defmacro rt-illegal 0)
+(defmacro rt-whitespace 1)
+(defmacro rt-constituent 2)
+(begin
+  (define ch 0)
+  (while (< ch 128)
+    (string-set! readtable ch rt-illegal)
+    (set! ch (1+ ch))))
+
+(define (rt-char-type ch)
+  (define ct (if (>= ch 128) rt-illegal (string-ref readtable ch))
+  (when (= ct rt-illegal)
+    (error "bad character ~D" ch)))
+  ch)
+
+(define (read istr)
+  (define ch (peek-char istr 0))
+  (define ct (rt-char-type ch))
+  (cond ((= ct rt-whitespace)
+         (consume-char istr)
+         (read istr))
+        ((= ct rt-constituent)
+         (read-token istr))
+        (true
+         (error "don't know how to handle character ~D (~D)" ch ct))))
+         
+(define (read-token istr)
+  (define buf (make-string 20))
+  (define pos 0)
+
+  (define (buffer-char ch)
+    (define buflen (string-length buf))
+    (when (= pos buflen)
+      (define newbuf (make-string (* 2 buflen)))
+      (string-copy buf 0 newbuf 0 buflen)
+      (set! buf newbuf))
+
+    (string-set! buf pos ch)
+    (set! pos (1+ pos)))
+
+  (define (scan-token)
+    (define ch (peek-char istr 0))
+    (define ct (rt-char-type ch))
+    (cond ((= ct rt-constituent)
+           (buffer-char ch)
+           (consume-char istr)
+           (scan-token))
+          (true
+           (intern (substring buf 0 pos)))))
+
+  (scan-token))
+
 ;;; CL compatibility
 
 (defmacro (let* bindings . body)
