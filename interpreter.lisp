@@ -103,7 +103,7 @@
                      (quasiquote
                        (apply (function (unquote op)) evaled-args))
                      (quasiquote
-                       (destructuring-bind (unquote (car body)) evaled-args
+                       (bind (unquote (car body)) evaled-args
                          (unquote-splicing (cdr body))))))))))
 
 (defmarco (define-interpreter-builtin-boolean-op op)
@@ -162,5 +162,5 @@
 (define-interpreter-builtin-op stdout)
 (define-interpreter-builtin-op stderr)
 
-(define-interpreter-builtin-op apply (func &rest args)
+(define-interpreter-builtin-op apply (func . args)
   (funcall func (apply (function list*) args)))

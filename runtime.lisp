@@ -764,8 +764,8 @@
 (defmacro (subject-language-symbol-name sym) (symbol-name sym))
 (defmacro (subject-language-intern str) (intern str))
 
-;; Not a full destructuring-bind, obviously
-(defmacro (destructuring-bind vars values . body)
+;; Not a full destructuring-bind  
+(defmacro (bind vars values . body)
   (quasiquote
     (apply (lambda (unquote vars) (unquote-splicing body)) (unquote values))))
 
