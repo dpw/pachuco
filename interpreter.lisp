@@ -99,12 +99,16 @@
   (quasiquote
     (define-interpreter-builtin-form '(unquote op)
       (let* ((evaled-args (mapfor (arg args) (eval-form arg env))))
-        (unquote (if (null? body)
-                     (quasiquote
-                       (apply (function (unquote op)) evaled-args))
-                     (quasiquote
-                       (bind (unquote (car body)) evaled-args
-                         (unquote-splicing (cdr body))))))))))
+        (unquote (cond ((null? body)
+                        (quasiquote
+                          (apply (function (unquote op)) evaled-args)))
+                       ((null? (cdr body))
+                        (quasiquote
+                          (apply (function (unquote (car body))) evaled-args)))
+                       (true
+                        (quasiquote
+                          (bind (unquote (car body)) evaled-args
+                                (unquote-splicing (cdr body)))))))))))
 
 (defmarco (define-interpreter-builtin-boolean-op op)
   (quasiquote
@@ -148,16 +152,16 @@
 (define-interpreter-builtin-boolean-op string?)
 (define-interpreter-builtin-op make-string)
 (define-interpreter-builtin-op string-length)
-(define-interpreter-builtin-op string-ref)
-(define-interpreter-builtin-op string-set!)
-(define-interpreter-builtin-op string-copy)
+(define-interpreter-builtin-op primitive-string-ref string-ref)
+(define-interpreter-builtin-op primitive-string-set! string-set!)
+(define-interpreter-builtin-op primitive-string-copy string-copy)
 
 (define-interpreter-builtin-boolean-op vector?)
 (define-interpreter-builtin-op make-vector)
 (define-interpreter-builtin-op vector-length)
-(define-interpreter-builtin-op vector-ref)
-(define-interpreter-builtin-op vector-set!)
-(define-interpreter-builtin-op vector-copy)
+(define-interpreter-builtin-op primitive-vector-ref vector-ref)
+(define-interpreter-builtin-op primitive-vector-set! vector-set!)
+(define-interpreter-builtin-op primitive-vector-copy vector-copy)
 
 (define-interpreter-builtin-op stdout)
 (define-interpreter-builtin-op stderr)
