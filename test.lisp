@@ -127,11 +127,14 @@
                  '((1 2) (3 4) 5 6 7 8))
 
   (begin
-    (define istr (make-string-istream "hello"))
-    (assert-result (read-char istr) #\h)
-    (unread-char istr #\y)
-    (assert-result (read-char istr) #\y)
-    (assert-result (read-char istr) #\e)))
+    (define istr (make-string-istream "ab"))
+    (assert-result (peek-char istr 0) #\a)
+    (assert-result (peek-char istr 1) #\b)
+    (assert-result (read-char istr) #\a)
+    (assert-result (peek-char istr 0) #\b)
+    (assert-result (peek-char istr 1 true) true)
+    (consume-char istr)
+    (assert-result (read-char istr true) true)))
 
 (when-compiling
   (define (time-function f)

@@ -716,25 +716,33 @@
 ;;; Character istreams
 
 (define (make-string-istream str)
-  (make-vector-from-list (list false 0 str)))
+  (make-vector-from-list (list 0 str)))
 
-(define (read-char istr)
-  (define unread-char (vector-ref istr 0))
-  (if unread-char
-      (begin (vector-set! istr 0 false)
-             unread-char)
-      (begin
-        (define pos (vector-ref istr 1))
-        (define str (vector-ref istr 2))
-        (if (>= pos (string-length str))
-            false
-            (begin (vector-set! istr 1 (1+ pos))
-                   (string-ref str pos ))))))
+(define (read-char istr . eos-val)
+  (define pos (vector-ref istr 0))
+  (define str (vector-ref istr 1))
+  (if (< pos (string-length str))
+      (begin (vector-set! istr 0 (1+ pos))
+             (string-ref str pos))
+      (if (null? eos-val)
+          (error "read-char off end of stream")
+          (car eos-val))))
 
-(define (unread-char istr ch)
-  (when (vector-ref istr 0)
-    (error "istream already contains unread character"))
-  (vector-set! istr 0 ch))
+(define (consume-char istr)
+  (define pos (1+ (vector-ref istr 0)))
+  (define str (vector-ref istr 1))
+  (if (<= pos (string-length str))
+      (vector-set! istr 0 pos)
+      (error "consume-char off end of stream")))
+
+(define (peek-char istr offset . eos-val)
+  (define pos (+ offset (vector-ref istr 0)))
+  (define str (vector-ref istr 1))
+  (if (< pos (string-length str))
+      (string-ref str pos)
+      (if (null? eos-val)
+          (error "peek-char off end of stream")
+          (car eos-val))))
 
 ;;; CL compatibility
 
