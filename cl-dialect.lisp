@@ -62,24 +62,6 @@
 (defmacro set! (var val)
   `(setq ,var ,val))
 
-;;; Subject language primitives
-
-(defun string-length (str)
-  (length str))
-
-(defun primitive-string-ref (str index)
-  (elt str index))
-
-(defun string-ref (str index)
-  (elt str index))
-
-(defun string-set! (str index ch)
-  (setf (elt str index) ch))
-
-(defun string-copy (src src-index dest dest-index len)
-  (replace dest src :start1 dest-index :end1 (+ dest-index len)
-           :start2 src-index))
-
 (defun substring (str start len)
   (subseq str start (+ start len)))
 
@@ -90,6 +72,21 @@
   (string-flatten strs))
 
 (defun string-symbolcase (str) (string-upcase str))
+
+;;; Subject language primitives
+
+(defun string-length (str)
+  (length str))
+
+(defun string-ref (str index)
+  (elt str index))
+
+(defun string-set! (str index ch)
+  (setf (elt str index) ch))
+
+(defun string-copy (src src-index dest dest-index len)
+  (replace dest src :start1 dest-index :end1 (+ dest-index len)
+           :start2 src-index))
 
 ;;; Vectors
 

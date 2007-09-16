@@ -319,22 +319,21 @@
     (error "string range out of bounds (offset: ~A, length: ~A, string length: ~A"
            offset len str-len)))
 
-(when-compiling
-  (define (string-ref str index)
-    (check-string-index str index)
-    (primitive-string-ref str index))
+(define (string-ref str index)
+  (check-string-index str index)
+  (primitive-string-ref str index))
 
-  (define (string-set! str index ch)
-    (check-string-index str index)
-    (primitive-string-set! str index ch)
-    ch)
+(define (string-set! str index ch)
+  (check-string-index str index)
+  (primitive-string-set! str index ch)
+  ch)
 
-  (define (string-copy src src-offset dest dest-offset len)
-    (check-string-range src src-offset len)
-    (check-string-range dest dest-offset len)
-    (primitive-string-copy src src-offset dest dest-offset len)))
+(define (string-copy src src-offset dest dest-offset len)
+  (check-string-range src src-offset len)
+  (check-string-range dest dest-offset len)
+  (primitive-string-copy src src-offset dest dest-offset len))
 
-;;; Vector
+;;; Vectors
 
 (define (check-vector-index vec index)
   (define vec-len (vector-length vec))
@@ -348,20 +347,19 @@
     (error "vector range out of bounds (offset: ~A, length: ~A, vector length ~A)"
            offset len vec-len)))
 
-(when-compiling
-  (define (vector-ref vec index)
-    (check-vector-index vec index)
-    (primitive-vector-ref vec index))
+(define (vector-ref vec index)
+  (check-vector-index vec index)
+  (primitive-vector-ref vec index))
 
-  (define (vector-set! vec index val)
-    (check-vector-index vec index)
-    (primitive-vector-set! vec index val)
-    val)
+(define (vector-set! vec index val)
+  (check-vector-index vec index)
+  (primitive-vector-set! vec index val)
+  val)
 
-  (define (vector-copy src src-offset dest dest-offset len)
-    (check-vector-range src src-offset len)
-    (check-vector-range dest dest-offset len)
-    (primitive-vector-copy src src-offset dest dest-offset len)))
+(define (vector-copy src src-offset dest dest-offset len)
+  (check-vector-range src src-offset len)
+  (check-vector-range dest dest-offset len)
+  (primitive-vector-copy src src-offset dest dest-offset len))
 
 ;;; I/O
 
@@ -819,8 +817,8 @@
 (defmacro (subject-language-symbol-name sym) (symbol-name sym))
 (defmacro (subject-language-intern str) (intern str))
 
-;; Not a full destructuring-bind, obviously
-(defmacro (destructuring-bind vars values . body)
+;; Not a full destructuring-bind  
+(defmacro (bind vars values . body)
   (quasiquote
     (apply (lambda (unquote vars) (unquote-splicing body)) (unquote values))))
 
