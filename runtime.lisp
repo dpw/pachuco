@@ -363,6 +363,12 @@
   (check-vector-range dest dest-offset len)
   (primitive-vector-copy src src-offset dest dest-offset len))
 
+(define (vector-set-range! vec index len val)
+  (while (/= len 0)
+    (vector-set! vec index val)
+    (set! index (1+ index))
+    (set! len (1- len))))
+
 ;;; I/O
 
 (defmacro (define-syscall-read-write name sysname)
@@ -746,24 +752,30 @@
 
 ;;; Reader
 
-(define readtable (make-string 128))
+(define readtable (make-vector 128))
 (defmacro rt-illegal 0)
-(defmacro rt-whitespace 1)
-(defmacro rt-constituent 2)
+(defmacro rt-eof 1)
+(defmacro rt-whitespace 2)
+(defmacro rt-constituent 3)
 (begin
-  (define ch 0)
-  (while (< ch 128)
-    (string-set! readtable ch rt-illegal)
-    (set! ch (1+ ch))))
+  (vector-set-range! readtable 0 128 rt-illegal)
+  (vector-set-range! readtable (char-code #\A) 26 rt-constituent)
+  (vector-set-range! readtable (char-code #\a) 26 rt-constituent)
+  (dolist (n '(9 10 13 32))
+    (vector-set! readtable n rt-whitespace)))
 
 (define (rt-char-type ch)
-  (define ct (if (>= ch 128) rt-illegal (string-ref readtable ch))
-  (when (= ct rt-illegal)
-    (error "bad character ~D" ch)))
-  ch)
+  (if ch
+      (begin
+        (set! ch (char-code ch))
+        (define ct (if (>= ch 128) rt-illegal (vector-ref readtable ch)))
+        (when (= ct rt-illegal)
+          (error "bad character ~D" ch))
+        ct)
+      rt-eof))
 
 (define (read istr)
-  (define ch (peek-char istr 0))
+  (define ch (peek-char istr 0 false))
   (define ct (rt-char-type ch))
   (cond ((= ct rt-whitespace)
          (consume-char istr)
@@ -788,7 +800,7 @@
     (set! pos (1+ pos)))
 
   (define (scan-token)
-    (define ch (peek-char istr 0))
+    (define ch (peek-char istr 0 false))
     (define ct (rt-char-type ch))
     (cond ((= ct rt-constituent)
            (buffer-char ch)

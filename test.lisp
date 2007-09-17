@@ -138,7 +138,8 @@
 
   (begin
     (define istr (make-string-istream "hello world"))
-    (assert-result (read-token istr) 'hello)))
+    (assert-result (read istr) 'hello)
+    (assert-result (read istr) 'world)))
 
 (when-compiling
   (define (time-function f)
