@@ -28,6 +28,8 @@
     
     number? < <= > >= = /= + * - rem truncate 
     
+    char-code
+
     string? make-string string-length raw-string-address
     primitive-string-ref primitive-string-set! primitive-string-copy
     
@@ -325,6 +327,9 @@
 (define-simplify (lambda attrs . body)
   (simplify-forms body)
   (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
+
+(define-simplify (char-code attrs ch)
+  (overwrite-form form ch))
 
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec

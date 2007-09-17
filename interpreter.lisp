@@ -149,6 +149,8 @@
 (define-interpreter-builtin-op rem)
 (define-interpreter-builtin-op truncate)
 
+(define-interpreter-builtin-op char-code)
+
 (define-interpreter-builtin-boolean-op string?)
 (define-interpreter-builtin-op make-string)
 (define-interpreter-builtin-op string-length)

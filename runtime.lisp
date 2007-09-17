@@ -149,6 +149,8 @@
 (reify (rem a b))
 (reify (truncate a b))
 
+(reify (char-code a))
+
 (reify (string? a))
 (reify (make-string a))
 (reify (string-length a))
