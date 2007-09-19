@@ -137,9 +137,12 @@
     (assert-result (read-char istr true) true))
 
   (begin
-    (define istr (make-string-istream "hello world"))
+    (define istr (make-string-istream "hello world (etc (etc)  )etc(etc)"))
     (assert-result (read istr) 'hello)
-    (assert-result (read istr) 'world)))
+    (assert-result (read istr) 'world)
+    (assert-result (read istr) '(etc (etc)))
+    (assert-result (read istr) 'etc)
+    (assert-result (read istr) '(etc))))
 
 (when-compiling
   (define (time-function f)

@@ -757,10 +757,14 @@
 (defmacro rt-eof 1)
 (defmacro rt-whitespace 2)
 (defmacro rt-constituent 3)
+(defmacro rt-lparen 4)
+(defmacro rt-rparen 5)
 (begin
   (vector-set-range! readtable 0 128 rt-illegal)
   (vector-set-range! readtable (char-code #\A) 26 rt-constituent)
   (vector-set-range! readtable (char-code #\a) 26 rt-constituent)
+  (vector-set! readtable (char-code #\() rt-lparen)
+  (vector-set! readtable (char-code #\)) rt-rparen)
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace)))
 
@@ -774,17 +778,6 @@
         ct)
       rt-eof))
 
-(define (read istr)
-  (define ch (peek-char istr 0 false))
-  (define ct (rt-char-type ch))
-  (cond ((= ct rt-whitespace)
-         (consume-char istr)
-         (read istr))
-        ((= ct rt-constituent)
-         (read-token istr))
-        (true
-         (error "don't know how to handle character ~D (~D)" ch ct))))
-         
 (define (read-token istr)
   (define buf (make-string 20))
   (define pos 0)
@@ -810,6 +803,39 @@
            (intern (substring buf 0 pos)))))
 
   (scan-token))
+
+(define (read-until-token istr)
+  (define ch (peek-char istr 0 false))
+  (define ct (rt-char-type ch))
+  (when (= ct rt-whitespace)
+    (consume-char istr)
+    (read-until-token istr)))
+
+(define (read-list istr)
+  (read-until-token istr)
+  (if (eq? #\) (peek-char istr 0 false))
+      (begin
+        (consume-char istr) 
+        ())
+      (begin
+        (define h (read istr))
+        (define t (read-list istr))
+        (cons h t))))
+
+(define (read istr)
+  (define ch (peek-char istr 0 false))
+  (define ct (rt-char-type ch))
+  (cond ((= ct rt-whitespace)
+         (consume-char istr)
+         (read istr))
+        ((= ct rt-constituent)
+         (read-token istr))
+        ((= ct rt-lparen)
+         (consume-char istr)
+         (read-list istr))
+        (true
+         (error "don't know how to handle character ~D (~D)"
+                (char-code ch) ct))))
 
 ;;; CL compatibility
 
