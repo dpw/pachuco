@@ -153,7 +153,9 @@
     (assert-read "(x .())" '(x))
     
     (assert-read "(x;comment
-y)" '(x y))))
+y)" '(x y))
+    (assert-read "(x ;comment
+)" '(x))))
 
 
 (when-compiling

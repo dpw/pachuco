@@ -830,10 +830,12 @@
          (until (read-maybe istr c))
          (car c))
         (true
-         (until (read-maybe istr c))
-         (define h (car c))
-         (define t (read-list istr c))
-         (cons h t))))
+         (if (read-maybe istr c)
+             (begin
+               (define h (car c))
+               (define t (read-list istr c))
+               (cons h t))
+             (read-list istr c)))))
 
 (define (consume-line-comment istr)
   (define ch (read-char istr false))
