@@ -1,6 +1,6 @@
 (declaim (optimize (debug 2)))
 
-;;; Language
+;;; Subject-language compatibility
 
 (define-symbol-macro true t)
 (define-symbol-macro false nil)
@@ -73,7 +73,7 @@
 
 (defun string-symbolcase (str) (string-upcase str))
 
-;;; Subject language primitives
+;;; String primitives
 
 (defun string-length (str)
   (length str))
@@ -88,7 +88,7 @@
   (replace dest src :start1 dest-index :end1 (+ dest-index len)
            :start2 src-index))
 
-;;; Vectors
+;;; Vector primitives
 
 (defun make-vector (len)
   (make-array len))
