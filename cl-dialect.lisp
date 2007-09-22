@@ -164,3 +164,13 @@
 
 (defmacro bind (to val &rest body)
   `(destructuring-bind ,(restify-params to) ,val ,@body))
+
+(defun string-replace (str old new)
+  (labels ((string-replace-from (str start)
+             (let ((pos (search old str :start2 start)))
+               (if pos
+                   (let ((res (concatenate 'string (subseq str 0 pos) new
+                                           (subseq str (+ pos (length old))))))
+                     (string-replace-from res (+ pos (length new))))
+                   str))))
+    (string-replace-from str 0)))

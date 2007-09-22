@@ -10,6 +10,11 @@
   (emit out ".align ~D" (ash 1 scale))
   (emit-label out label))
 
+(define (escape-string-literal str)
+  (string-replace (string-replace (string-replace str "\\" "\\\\")
+                                  "\"" "\\\"") "
+" "\\n"))
+
 ;;; Generic representation bits
 
 (define (fixnum-representation n) (ash n number-tag-bits))
@@ -340,7 +345,7 @@
   (let* ((label (gen-label)))
     (emit-data out label string-tag-bits)
     (emit-literal out (fixnum-representation (length str)))
-    (emit out ".ascii ~S" str)
+    (emit out ".ascii \"~A\"" (escape-string-literal str))
     (format nil "~A+~D" label string-tag)))
 
 (define emitted-symbols ())
