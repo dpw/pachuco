@@ -144,10 +144,17 @@
     (assert-result (read istr) 'etc)
     (assert-result (read istr) '(etc))
 
-    (assert-result (read (make-string-istream "(x . y)")) '(x . y))
-    (assert-result (read (make-string-istream "(x .y)")) '(x .y))
-    (assert-result (read (make-string-istream "(x .(y))")) '(x y))
-    (assert-result (read (make-string-istream "(x .())")) '(x))))
+    (define (assert-read str res)
+      (assert-result (read (make-string-istream str)) res))
+
+    (assert-read "(x . y)" '(x . y))
+    (assert-read "(x .y)" '(x .y))
+    (assert-read "(x .(y))" '(x y))
+    (assert-read "(x .())" '(x))
+    
+    (assert-read "(x;comment
+y)" '(x y))))
+
 
 (when-compiling
   (define (time-function f)

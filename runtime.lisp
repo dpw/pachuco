@@ -759,6 +759,7 @@
 (defmacro rt-constituent 3)
 (defmacro rt-lparen 4)
 (defmacro rt-rparen 5)
+(defmacro rt-line-comment 6)
 (begin
   (vector-set-range! readtable 0 128 rt-illegal)
 
@@ -768,6 +769,7 @@
 
   (vector-set! readtable (char-code #\() rt-lparen)
   (vector-set! readtable (char-code #\)) rt-rparen)
+  (vector-set! readtable (char-code #\;) rt-line-comment)
 
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace)))
@@ -833,6 +835,11 @@
          (define t (read-list istr c))
          (cons h t))))
 
+(define (consume-line-comment istr)
+  (define ch (read-char istr false))
+  (when (and ch (not (eq? ch #\Newline)))
+    (consume-line-comment istr)))
+
 (define (read-maybe istr c)
   ;; like read, but might not return a value (in cases such as
   ;; comments) returns false if no value was read, otherwise it puts
@@ -848,6 +855,11 @@
         ((= ct rt-lparen)
          (consume-char istr)
          (rplaca c (read-list istr c)))
+        ((= ct rt-line-comment)
+         (consume-line-comment istr)
+         false)
+        ((= ct rt-eof)
+         (error "unexpected eof while reading"))
         (true
          (error "don't know how to handle character ~D (~D)"
                 (char-code ch) ct))))
