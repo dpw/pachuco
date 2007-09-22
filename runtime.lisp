@@ -815,7 +815,7 @@
     (consume-char istr)
     (consume-whitespace istr)))
 
-(define (read-list istr)
+(define (read-list istr c)
   (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
   (cond ((eq? #\) ch)
@@ -825,10 +825,12 @@
               (not (eq? rt-constituent
                         (rt-char-type (peek-char istr 1 false)))))
          (consume-char istr)
-         (read istr))
+         (until (read-maybe istr c))
+         (car c))
         (true
-         (define h (read istr))
-         (define t (read-list istr))
+         (until (read-maybe istr c))
+         (define h (car c))
+         (define t (read-list istr c))
          (cons h t))))
 
 (define (read-maybe istr c)
@@ -845,7 +847,7 @@
          (rplaca c (read-token istr)))
         ((= ct rt-lparen)
          (consume-char istr)
-         (rplaca c (read-list istr)))
+         (rplaca c (read-list istr c)))
         (true
          (error "don't know how to handle character ~D (~D)"
                 (char-code ch) ct))))
