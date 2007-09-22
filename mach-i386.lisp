@@ -1,5 +1,12 @@
 ;;; i386 machine definition
 
+;;; This is mildly broken: correct programs will work, but programs
+;;; with type errors may produce surprising behaviour.  The issue is
+;;; that we rely on alignment checks for type checks, so we don't
+;;; really support tag-bits > bytes-per-value.  The common codegen
+;;; code needs enhancing to emit type checks in the appropriate
+;;; places.
+
 (defconstant value-scale 2)
 (defconstant value-size (ash 1 value-scale))
 
