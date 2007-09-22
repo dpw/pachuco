@@ -831,20 +831,29 @@
          (define t (read-list istr))
          (cons h t))))
 
-(define (read istr)
+(define (read-maybe istr c)
+  ;; like read, but might not return a value (in cases such as
+  ;; comments) returns false if no value was read, otherwise it puts
+  ;; the value into the car of the second arg.  this is the first time
+  ;; it hurt not to have multiple returns!
   (define ch (peek-char istr 0 false))
   (define ct (rt-char-type ch))
   (cond ((= ct rt-whitespace)
          (consume-char istr)
-         (read istr))
+         (read-maybe istr c))
         ((= ct rt-constituent)
-         (read-token istr))
+         (rplaca c (read-token istr)))
         ((= ct rt-lparen)
          (consume-char istr)
-         (read-list istr))
+         (rplaca c (read-list istr)))
         (true
          (error "don't know how to handle character ~D (~D)"
                 (char-code ch) ct))))
+
+(define (read istr)
+  (define c (cons () ()))
+  (until (read-maybe istr c))
+  (car c))
 
 ;;; CL compatibility
 
