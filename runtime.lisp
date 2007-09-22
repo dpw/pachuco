@@ -761,10 +761,14 @@
 (defmacro rt-rparen 5)
 (begin
   (vector-set-range! readtable 0 128 rt-illegal)
+
   (vector-set-range! readtable (char-code #\A) 26 rt-constituent)
   (vector-set-range! readtable (char-code #\a) 26 rt-constituent)
+  (vector-set! readtable (char-code #\.) rt-constituent)
+
   (vector-set! readtable (char-code #\() rt-lparen)
   (vector-set! readtable (char-code #\)) rt-rparen)
+
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace)))
 
@@ -804,23 +808,28 @@
 
   (scan-token))
 
-(define (read-until-token istr)
+(define (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
   (define ct (rt-char-type ch))
   (when (= ct rt-whitespace)
     (consume-char istr)
-    (read-until-token istr)))
+    (consume-whitespace istr)))
 
 (define (read-list istr)
-  (read-until-token istr)
-  (if (eq? #\) (peek-char istr 0 false))
-      (begin
-        (consume-char istr) 
-        ())
-      (begin
-        (define h (read istr))
-        (define t (read-list istr))
-        (cons h t))))
+  (consume-whitespace istr)
+  (define ch (peek-char istr 0 false))
+  (cond ((eq? #\) ch)
+         (consume-char istr) 
+         ())
+        ((and (eq? #\. ch)
+              (not (eq? rt-constituent
+                        (rt-char-type (peek-char istr 1 false)))))
+         (consume-char istr)
+         (read istr))
+        (true
+         (define h (read istr))
+         (define t (read-list istr))
+         (cons h t))))
 
 (define (read istr)
   (define ch (peek-char istr 0 false))

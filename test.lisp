@@ -142,7 +142,12 @@
     (assert-result (read istr) 'world)
     (assert-result (read istr) '(etc (etc)))
     (assert-result (read istr) 'etc)
-    (assert-result (read istr) '(etc))))
+    (assert-result (read istr) '(etc))
+
+    (assert-result (read (make-string-istream "(x . y)")) '(x . y))
+    (assert-result (read (make-string-istream "(x .y)")) '(x .y))
+    (assert-result (read (make-string-istream "(x .(y))")) '(x y))
+    (assert-result (read (make-string-istream "(x .())")) '(x))))
 
 (when-compiling
   (define (time-function f)
