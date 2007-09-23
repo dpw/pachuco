@@ -750,54 +750,47 @@
           (error "peek-char off end of stream")
           (car eos-val))))
 
-;;; Basic parsing functions
-
-(define (digit? ch)
-  (define cc (char-code ch))
-  (and (>= cc (char-code #\0)) (<= cc (char-code #\9))))
-
-(define (digit-value ch)
-  (- (char-code ch) (char-code #\0)))
-
-(define (parse-integer istr radix)
-  (define ch (read-char istr))
-  (unless (digit? ch)
-    (error "not a digit: ~C" ch))
-  (define res (digit-value ch))
-  
-  (define (scan-integer)
-    (define ch (peek-char istr 0 false))
-    (when (and ch (digit? ch))
-      (set! res (+ (* radix res) (digit-value ch)))
-      (consume-char istr)
-      (scan-integer)))
-
-  (scan-integer)
-  res)
-
 ;;; Reader
 
 (define readtable (make-vector 128))
-(defmacro rt-illegal 0)
-(defmacro rt-eof 1)
-(defmacro rt-whitespace 2)
-(defmacro rt-constituent 3)
-(defmacro rt-lparen 4)
-(defmacro rt-rparen 5)
-(defmacro rt-line-comment 6)
+
+(defmacro rt-illegal -1)
+
+(defmacro rt-alpha-uc 0)
+(defmacro rt-alpha-lc 1)
+(defmacro rt-digit 2)
+(defmacro rt-constituent-misc 3)
+(defmacro rt-constituent-max 3)
+
+(defmacro rt-eof 4)
+(defmacro rt-whitespace 5)
+(defmacro rt-lparen 6)
+(defmacro rt-rparen 7)
+(defmacro rt-line-comment 8)
+(defmacro rt-max 8)
+
+(define digit-bases (make-vector (1+ rt-max)))
+
 (begin
   (vector-set-range! readtable 0 128 rt-illegal)
 
-  (vector-set-range! readtable (char-code #\A) 26 rt-constituent)
-  (vector-set-range! readtable (char-code #\a) 26 rt-constituent)
-  (vector-set! readtable (char-code #\.) rt-constituent)
+  (dolist (n '(9 10 13 32))
+    (vector-set! readtable n rt-whitespace))
 
   (vector-set! readtable (char-code #\() rt-lparen)
   (vector-set! readtable (char-code #\)) rt-rparen)
   (vector-set! readtable (char-code #\;) rt-line-comment)
 
-  (dolist (n '(9 10 13 32))
-    (vector-set! readtable n rt-whitespace)))
+  (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
+  (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
+  (vector-set-range! readtable (char-code #\0) 10 rt-digit)
+  (dolist (ch '(#\. #\- #\* #\+))
+    (vector-set! readtable (char-code ch) rt-constituent-misc))
+
+  (vector-set-range! digit-bases 0 rt-max false)
+  (vector-set! digit-bases rt-digit (char-code #\0))
+  (vector-set! digit-bases rt-alpha-uc (- (char-code #\A) 10))
+  (vector-set! digit-bases rt-alpha-lc (- (char-code #\a) 10)))
 
 (define (rt-char-type ch)
   (if ch
@@ -808,6 +801,35 @@
           (error "bad character ~D" ch))
         ct)
       rt-eof))
+
+(define (rt-constituent? ct)
+  (<= ct rt-constituent-max))
+
+(define (read-integer istr radix)
+  (define (digit-value ch accept-terminating)
+    (define ct (rt-char-type ch))
+    (define base (vector-ref digit-bases ct))
+    (if base
+        (begin
+          (define val (- (char-code ch) base))
+          (when (>= val radix)
+            (error "digit ~C not valid for radix ~D" ch radix))
+          val)
+        (if (and accept-terminating (not (rt-constituent? ct)))
+            false
+            (error "invalid digit ~C" ch))))
+
+  (define res (digit-value (read-char istr) false))
+  
+  (define (scan-integer)
+    (define val (digit-value (peek-char istr 0 false) true))
+    (when val
+      (set! res (+ (* radix res) val))
+      (consume-char istr)
+      (scan-integer)))
+
+  (scan-integer)
+  res)
 
 (define (read-token istr)
   (define buf (make-string 20))
@@ -825,15 +847,14 @@
 
   (define (scan-token)
     (define ch (peek-char istr 0 false))
-    (define ct (rt-char-type ch))
-    (cond ((= ct rt-constituent)
-           (buffer-char ch)
-           (consume-char istr)
-           (scan-token))
-          (true
-           (intern (substring buf 0 pos)))))
+    (when (rt-constituent? (rt-char-type ch))
+      (buffer-char ch)
+      (consume-char istr)
+      (scan-token)))
 
-  (scan-token))
+  (scan-token)
+  (intern (substring buf 0 pos)))
+
 
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
@@ -849,8 +870,7 @@
          (consume-char istr) 
          ())
         ((and (eq? #\. ch)
-              (not (eq? rt-constituent
-                        (rt-char-type (peek-char istr 1 false)))))
+              (not (rt-constituent? (rt-char-type (peek-char istr 1 false)))))
          (consume-char istr)
          (until (read-maybe istr c))
          (car c))
@@ -877,7 +897,7 @@
   (cond ((= ct rt-whitespace)
          (consume-char istr)
          (read-maybe istr c))
-        ((= ct rt-constituent)
+        ((rt-constituent? ct)
          (rplaca c (read-token istr)))
         ((= ct rt-lparen)
          (consume-char istr)
