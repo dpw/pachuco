@@ -34,13 +34,6 @@
   (expand-files files (lambda (expanded) (format t "~S~%" expanded)))
   (quit))
 
-;(defun do-compile-files (files form)
-;  (let ((program (make-buffer)))
-;    (expand-files files (lambda (expanded) (buffer-add program expanded)))
-;    (buffer-add program form)
-;    (compile-program (buffer-list program))
-;    (quit)))
-
 (defun do-compile3-files (files form)
   (let ((program (make-buffer)))
     (expand-files files (lambda (expanded) (buffer-add program expanded)))
