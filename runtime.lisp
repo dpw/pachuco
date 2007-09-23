@@ -792,7 +792,8 @@
 (defmacro rt-rparen 7)
 (defmacro rt-line-comment 8)
 (defmacro rt-double-quote 9)
-(defmacro rt-max 9)
+(defmacro rt-sharp-sign 10)
+(defmacro rt-max 10)
 
 (define digit-bases (make-vector (1+ rt-max)))
 
@@ -805,7 +806,8 @@
   (dolist (ch-ct (list (cons #\( rt-lparen)
                        (cons #\) rt-rparen)
                        (cons #\; rt-line-comment)
-                       (cons #\" rt-double-quote)))
+                       (cons #\" rt-double-quote)
+                       (cons #\# rt-sharp-sign)))
     (vector-set! readtable (char-code (car ch-ct)) (cdr ch-ct)))
 
   (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
@@ -860,6 +862,7 @@
 
 (define (read-token istr)
   (define buf (make-string-buffer))
+  (string-buffer-write-char buf (read-char istr))
 
   (define (scan-token)
     (define ch (peek-char istr 0 false))
@@ -869,7 +872,7 @@
       (scan-token)))
 
   (scan-token)
-  (intern (string-buffer-to-string buf)))
+  (string-buffer-to-string buf))
 
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
@@ -902,7 +905,7 @@
   (when (and ch (not (eq? ch #\Newline)))
     (consume-line-comment istr)))
 
-(define (read-string istr)
+(define (read-string-literal istr)
   (define buf (make-string-buffer))
 
   (define (scan-string)
@@ -915,6 +918,23 @@
 
   (scan-string)
   (string-buffer-to-string buf))
+
+(define (read-char-literal istr)
+  (if (rt-constituent? (rt-char-type (peek-char istr 1 false)))
+      (begin
+        ;; a character name token
+        (define name (read-token istr))
+        (cond ((string-equal? name "Space") #\Space)
+              ((string-equal? name "Newline") #\Newline)
+              (true (error "unknown character name ~A" name))))
+      (read-char istr)))
+
+(define (read-sharp-signed istr)
+  (define ch (read-char istr))
+  (cond ((eq? ch #\\)
+         (read-char-literal istr))
+        (true
+         (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)
   ;; like read, but might not return a value (in cases such as
@@ -929,13 +949,16 @@
         ((= ct rt-digit)
          (rplaca c (read-integer istr 10)))
         ((rt-constituent? ct)
-         (rplaca c (read-token istr)))
+         (rplaca c (intern (read-token istr))))
         ((= ct rt-lparen)
          (consume-char istr)
          (rplaca c (read-list istr c)))
         ((= ct rt-double-quote)
          (consume-char istr)
-         (rplaca c (read-string istr)))
+         (rplaca c (read-string-literal istr)))
+        ((= ct rt-sharp-sign)
+         (consume-char istr)
+         (rplaca c (read-sharp-signed istr)))
         ((= ct rt-line-comment)
          (consume-line-comment istr)
          false)

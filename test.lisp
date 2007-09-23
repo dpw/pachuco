@@ -163,6 +163,11 @@
     (assert-read "\"hello\"" "hello")
     (assert-read "\"\\\" \\\\ \\\"\"" "\" \\ \"")
     
+    (assert-read "#\\x" #\x)
+    (assert-read "#\\\"" #\")
+    (assert-read "#\\Space" #\Space)
+    (assert-read "#\\Newline" #\Newline)
+
     (assert-read "(x;comment
 y)" '(x y))
     (assert-read "(x ;comment
