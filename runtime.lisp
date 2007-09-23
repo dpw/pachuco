@@ -541,9 +541,9 @@
       (if *print-readably*
           (begin
             (write-string stream "#\\")
-            (write-string (cond ((eq? ch #\Newline) "Newline")
-                                    (true (character-string ch)))))
-          (write-string (character-string ch)))
+            (write-string stream (cond ((eq? ch #\Newline) "Newline")
+                                       (true (character-string ch)))))
+          (write-string stream (character-string ch)))
       (print stream ch)))
 
 (define (print-symbol stream sym)
