@@ -154,6 +154,8 @@
       (assert-result (read (make-string-istream str)) expect))
 
     (assert-read "(100)" '(100))
+    (assert-read "#x1Ff" 511)
+    (assert-read "#b101" 5)
 
     (assert-read "(x . y)" '(x . y))
     (assert-read "(x .y)" '(x .y))

@@ -931,10 +931,10 @@
 
 (define (read-sharp-signed istr)
   (define ch (read-char istr))
-  (cond ((eq? ch #\\)
-         (read-char-literal istr))
-        (true
-         (error "unknown sharp sign sequence #~C" ch))))
+  (cond ((eq? ch #\\) (read-char-literal istr))
+        ((or (eq? ch #\x) (eq? ch #\X)) (read-integer istr 16))
+        ((or (eq? ch #\b) (eq? ch #\B)) (read-integer istr 2))
+        (true (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)
   ;; like read, but might not return a value (in cases such as
