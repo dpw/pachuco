@@ -773,6 +773,9 @@
 
 ;;; Reader
 
+;;; Reader syntax is currently intended to be consistent with the CL
+;;; spec.
+
 (define readtable (make-vector 128))
 
 (defmacro rt-illegal -1)
