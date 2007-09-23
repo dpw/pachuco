@@ -788,7 +788,8 @@
 (defmacro rt-lparen 6)
 (defmacro rt-rparen 7)
 (defmacro rt-line-comment 8)
-(defmacro rt-max 8)
+(defmacro rt-double-quote 9)
+(defmacro rt-max 9)
 
 (define digit-bases (make-vector (1+ rt-max)))
 
@@ -798,9 +799,11 @@
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace))
 
-  (vector-set! readtable (char-code #\() rt-lparen)
-  (vector-set! readtable (char-code #\)) rt-rparen)
-  (vector-set! readtable (char-code #\;) rt-line-comment)
+  (dolist (ch-ct (list (cons #\( rt-lparen)
+                       (cons #\) rt-rparen)
+                       (cons #\; rt-line-comment)
+                       (cons #\" rt-double-quote)))
+    (vector-set! readtable (char-code (car ch-ct)) (cdr ch-ct)))
 
   (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
@@ -896,6 +899,20 @@
   (when (and ch (not (eq? ch #\Newline)))
     (consume-line-comment istr)))
 
+(define (read-string istr)
+  (define buf (make-string-buffer))
+
+  (define (scan-string)
+    (define ch (read-char istr))
+    (unless (eq? ch #\")
+      (when (eq? ch #\\)
+        (set! ch (read-char istr)))
+      (string-buffer-write-char buf ch)
+      (scan-string)))
+
+  (scan-string)
+  (string-buffer-to-string buf))
+
 (define (read-maybe istr c)
   ;; like read, but might not return a value (in cases such as
   ;; comments) returns false if no value was read, otherwise it puts
@@ -913,6 +930,9 @@
         ((= ct rt-lparen)
          (consume-char istr)
          (rplaca c (read-list istr c)))
+        ((= ct rt-double-quote)
+         (consume-char istr)
+         (rplaca c (read-string istr)))
         ((= ct rt-line-comment)
          (consume-line-comment istr)
          false)

@@ -159,6 +159,9 @@
     (assert-read "(x .y)" '(x .y))
     (assert-read "(x .(y))" '(x y))
     (assert-read "(x .())" '(x))
+
+    (assert-read "\"hello\"" "hello")
+    (assert-read "\"\\\" \\\\ \\\"\"" "\" \\ \"")
     
     (assert-read "(x;comment
 y)" '(x y))
