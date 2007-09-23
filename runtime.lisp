@@ -475,6 +475,44 @@
 (define (write-string stream str)
   (stream str 0 (string-length str)))
 
+;;; String buffers
+
+(define (make-string-buffer)
+  (cons 0 (make-string 20)))
+
+(define (string-buffer-write strbuf str str-pos len)
+  (define buf-pos (car strbuf))
+  (define buf-pos-after (+ buf-pos len))
+  (when (> buf-pos-after (string-length (cdr strbuf)))
+    (define new-buf-size (* 2 (string-length (cdr strbuf))))
+    (while (> buf-pos-after new-buf-size)
+      (set! new-buf-size (* 2 new-buf-size)))
+    
+    (define new-buf (make-string new-buf-size))
+    (string-copy (cdr strbuf) 0 new-buf 0 buf-pos)
+    (rplacd strbuf new-buf))
+
+  (string-copy str str-pos (cdr strbuf) buf-pos len)
+  (rplaca strbuf buf-pos-after))
+
+(define (string-buffer-write-char strbuf ch)
+  (define buf-pos (car strbuf))
+  (when (= buf-pos (string-length (cdr strbuf)))
+    (define new-buf (make-string (* 2 (string-length (cdr strbuf)))))
+    (string-copy (cdr strbuf) 0 new-buf 0 buf-pos)
+    (rplacd strbuf new-buf))
+
+  (string-set! (cdr strbuf) buf-pos ch)
+  (rplaca strbuf (1+ buf-pos)))
+
+(define (string-buffer-stream strbuf)
+  (lambda (str pos len) (string-buffer-write strbuf str pos len)))
+
+(define (string-buffer-to-string strbuf)
+  (define str (make-string (car strbuf)))
+  (string-copy (cdr strbuf) 0 str 0 (car strbuf))
+  str)
+
 ;;; Printing and formatting
 
 (define print-number-digits "0123456789abcdefghijklmnopqrstuvwxyz")
@@ -650,26 +688,9 @@
   (formout-list stream control args))
 
 (define (format-list control args)
-  (define space 100)
-  (define buf (make-string space))
-  (define pos 0)
-
-  (define (out str offset len)
-    (when (< space len)
-      (set! space (* 2 (string-length buf)))
-      (when (< space len)
-        (set! space (* 2 len)))
-
-      (define new-buf (make-string space))
-      (string-copy buf 0 new-buf 0 pos)
-      (set! buf new-buf))
-
-    (string-copy str offset buf pos len)
-    (set! pos (+ pos len))
-    (set! space (- space len)))
-
-  (formout-list out control args)
-  (substring buf 0 pos))
+  (define buf (make-string-buffer))
+  (formout-list (string-buffer-stream buf) control args)
+  (string-buffer-to-string buf))
 
 (define (format control . args)
   (format-list control args))
@@ -832,28 +853,17 @@
   res)
 
 (define (read-token istr)
-  (define buf (make-string 20))
-  (define pos 0)
-
-  (define (buffer-char ch)
-    (define buflen (string-length buf))
-    (when (= pos buflen)
-      (define newbuf (make-string (* 2 buflen)))
-      (string-copy buf 0 newbuf 0 buflen)
-      (set! buf newbuf))
-
-    (string-set! buf pos ch)
-    (set! pos (1+ pos)))
+  (define buf (make-string-buffer))
 
   (define (scan-token)
     (define ch (peek-char istr 0 false))
     (when (rt-constituent? (rt-char-type ch))
-      (buffer-char ch)
+      (string-buffer-write-char buf ch)
       (consume-char istr)
       (scan-token)))
 
   (scan-token)
-  (intern (substring buf 0 pos)))
+  (intern (string-buffer-to-string buf)))
 
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
