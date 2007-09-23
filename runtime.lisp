@@ -925,7 +925,7 @@
   (define ct (rt-char-type ch))
   (cond ((= ct rt-whitespace)
          (consume-char istr)
-         (read-maybe istr c))
+         false)
         ((= ct rt-digit)
          (rplaca c (read-integer istr 10)))
         ((rt-constituent? ct)
