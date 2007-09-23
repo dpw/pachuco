@@ -28,7 +28,7 @@
   (emit out ".globl lisp")
   (emit out "lisp:")
   (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
-  (emit-mov out %si %alloc)
+  (emit-mov out (first c-call-arg-regs) %alloc)
   (emit-set-ac-flag out true)
   (emit-mov out (immediate function-tag) %func)
   (emit-function-prologue out))

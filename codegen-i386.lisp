@@ -34,7 +34,7 @@
   (emit-push out %bp)
   (emit-mov out %sp %bp)
   (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
-  (emit-mov out (dispmem 0 (* 3 value-size) %bp) %alloc)
+  (emit-mov out (dispmem 0 (* 2 value-size) %bp) %alloc)
   (emit-set-ac-flag out true)
   (emit-mov out (immediate function-tag) %func)
   (emit-function-prologue out))
