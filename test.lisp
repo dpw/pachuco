@@ -137,6 +137,12 @@
     (assert-result (read-char istr true) true))
 
   (begin
+    (assert-result (parse-integer (make-string-istream "123") 10) 123)
+    (define istr (make-string-istream "123x"))
+    (assert-result (parse-integer istr 10) 123)
+    (assert-result (peek-char istr 0) #\x))
+
+  (begin
     (define istr (make-string-istream "hello world (etc (etc)  )etc(etc)"))
     (assert-result (read istr) 'hello)
     (assert-result (read istr) 'world)

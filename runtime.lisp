@@ -750,6 +750,31 @@
           (error "peek-char off end of stream")
           (car eos-val))))
 
+;;; Basic parsing functions
+
+(define (digit? ch)
+  (define cc (char-code ch))
+  (and (>= cc (char-code #\0)) (<= cc (char-code #\9))))
+
+(define (digit-value ch)
+  (- (char-code ch) (char-code #\0)))
+
+(define (parse-integer istr radix)
+  (define ch (read-char istr))
+  (unless (digit? ch)
+    (error "not a digit: ~C" ch))
+  (define res (digit-value ch))
+  
+  (define (scan-integer)
+    (define ch (peek-char istr 0 false))
+    (when (and ch (digit? ch))
+      (set! res (+ (* radix res) (digit-value ch)))
+      (consume-char istr)
+      (scan-integer)))
+
+  (scan-integer)
+  res)
+
 ;;; Reader
 
 (define readtable (make-vector 128))
@@ -846,7 +871,7 @@
   ;; like read, but might not return a value (in cases such as
   ;; comments) returns false if no value was read, otherwise it puts
   ;; the value into the car of the second arg.  this is the first time
-  ;; it hurt not to have multiple returns!
+  ;; it hurts not to have multiple returns!
   (define ch (peek-char istr 0 false))
   (define ct (rt-char-type ch))
   (cond ((= ct rt-whitespace)
