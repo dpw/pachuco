@@ -855,7 +855,6 @@
   (scan-token)
   (intern (substring buf 0 pos)))
 
-
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0 false))
   (define ct (rt-char-type ch))
@@ -897,6 +896,8 @@
   (cond ((= ct rt-whitespace)
          (consume-char istr)
          (read-maybe istr c))
+        ((= ct rt-digit)
+         (rplaca c (read-integer istr 10)))
         ((rt-constituent? ct)
          (rplaca c (read-token istr)))
         ((= ct rt-lparen)
