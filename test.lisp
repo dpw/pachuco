@@ -150,6 +150,8 @@
     (assert-result (read istr) 'etc)
     (assert-result (read istr) '(etc))
 
+    (assert-result (read (make-string-istream " ") true) true)
+
     (define (assert-read str expect)
       (assert-result (read (make-string-istream str)) expect))
 

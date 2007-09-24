@@ -771,6 +771,9 @@
           (error "peek-char off end of stream")
           (car eos-val))))
 
+(define (istream-eos? istr)
+  (= (vector-ref istr 0) (string-length (vector-ref istr 1))))
+
 ;;; Reader
 
 ;;; Reader syntax is currently intended to be consistent with the CL
@@ -786,7 +789,7 @@
 (defmacro rt-constituent-misc 3)
 (defmacro rt-constituent-max 3)
 
-(defmacro rt-eof 4)
+(defmacro rt-eos 4)
 (defmacro rt-whitespace 5)
 (defmacro rt-lparen 6)
 (defmacro rt-rparen 7)
@@ -829,7 +832,7 @@
         (when (= ct rt-illegal)
           (error "bad character ~D" ch))
         ct)
-      rt-eof))
+      rt-eos))
 
 (define (rt-constituent? ct)
   (<= ct rt-constituent-max))
@@ -962,16 +965,21 @@
         ((= ct rt-line-comment)
          (consume-line-comment istr)
          false)
-        ((= ct rt-eof)
-         (error "unexpected eof while reading"))
+        ((= ct rt-eos)
+         (error "unexpected end of stream while reading"))
         (true
          (error "don't know how to handle character ~D (~D)"
                 (char-code ch) ct))))
 
-(define (read istr)
+(define (read istr . eos-val)
   (define c (cons () ()))
-  (until (read-maybe istr c))
-  (car c))
+  (define (attempt-read)
+    (if (and (not (null? eos-val)) (istream-eos? istr))
+        (car eos-val)
+        (if (read-maybe istr c)
+            (car c)
+            (attempt-read))))
+  (attempt-read))
 
 ;;; CL compatibility
 
