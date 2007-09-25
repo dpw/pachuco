@@ -434,13 +434,12 @@
   (and (= (string-length b) len)
        (begin
          (define pos 0)
-         (define (aux)
-           ;;; CHARS-ARE-NUMBERS
+         (define (compare-chars)
            (or (= pos len)
                (and (eq? (string-ref a pos) (string-ref b pos))
                     (begin (set! pos (1+ pos))
-                           (aux)))))
-         (aux))))
+                           (compare-chars)))))
+         (compare-chars))))
 
 ;;; Vectors
 
