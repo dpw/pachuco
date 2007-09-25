@@ -372,24 +372,54 @@
 
 ;;; I/O
 
+(define (make-c-string str)
+  (define len (string-length str))
+  (define c-str (make-string (1+ len)))
+  (string-copy str 0 c-str 0 len)
+  (string-set! c-str len (code-char 0))
+  (raw-string-address c-str 0))
+
 (when-compiling
+  (define (check-syscall-result name res)
+    (when (< res 0)
+      (error "~A: ~D" name (- res)))
+    res)
+
+  (defmacro (checked-syscall name . args)
+    (quasiquote
+      (check-syscall-result (unquote name)
+        (raw->fixnum (c-call (unquote name) (unquote-splicing args))))))
+
   (defmacro (define-syscall-read-write name sysname)
     (quasiquote (define ((unquote name) fd str offset len)
                   (check-string-range str offset len)
-                  (raw->fixnum (c-call (unquote sysname) (fixnum->raw fd)
-                                       (raw-string-address str offset)
-                                       (fixnum->raw len))))))
+                  (checked-syscall  (unquote sysname) (fixnum->raw fd)
+                                    (raw-string-address str offset)
+                                    (fixnum->raw len)))))
 
   (define-syscall-read-write syscall-read "read")
   (define-syscall-read-write syscall-write "write")
 
   (define (stdout str offset len)
-      (syscall-write 1 str offset len))
+    (syscall-write 1 str offset len))
 
   (define (stderr str offset len)
-      (syscall-write 2 str offset len)))
+    (syscall-write 2 str offset len))
 
-;;; Standard library
+  (define (syscall-open pathname flags mode)
+    (checked-syscall "open" (make-c-string pathname)
+                     (fixnum->raw flags) (fixnum->raw mode)))
+
+  (define (syscall-close fd)
+    (checked-syscall "close" (fixnum->raw fd)))
+
+  ;; O_* values for Linux x86/x86_64
+
+  (define (open-file-for-reading pathname)
+    (syscall-open pathname 0 0))
+
+  (define (close-file fd)
+    (syscall-close fd)))
 
 ;;; Lists
 
