@@ -573,16 +573,18 @@
       (write-string stream str)))
 
 
+(define character-names '((#\Space . "Space")
+                          (#\Newline . "Newline")))
+
 (define (print-char stream ch)
-  ;; CHARS-ARE-NUMBERS
-  (if (number? ch)
-      (if *print-readably*
-          (begin
-            (write-string stream "#\\")
-            (write-string stream (cond ((eq? ch #\Newline) "Newline")
-                                       (true (character-string ch)))))
-          (write-string stream (character-string ch)))
-      (print stream ch)))
+  (if *print-readably*
+      (begin
+       (write-string stream "#\\")
+       (define name (assoc ch character-names))
+       (write-string stream (if name
+                                (character-string ch)
+                                (cdr name))))
+      (write-string stream (character-string ch))))
 
 (define (print-symbol stream sym)
   (define str (symbol-name sym))
@@ -922,14 +924,19 @@
   (scan-string)
   (string-buffer-to-string buf))
 
+(define (rassoc-equal key l)
+  (cond ((null? l) false)
+        ((equal? key (cdar l)) (car l))
+        (true (rassoc-equal key (cdr l)))))
+
 (define (read-char-literal istr)
   (if (rt-constituent? (rt-char-type (peek-char istr 1 false)))
       (begin
         ;; a character name token
         (define name (read-token istr))
-        (cond ((string-equal? name "Space") #\Space)
-              ((string-equal? name "Newline") #\Newline)
-              (true (error "unknown character name ~A" name))))
+        (define named-char (rassoc-equal name character-names))
+        (unless named-char (error "unknown character name ~A" name))
+        (car named-char))
       (read-char istr)))
 
 (define (read-sharp-signed istr)
