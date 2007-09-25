@@ -371,14 +371,14 @@
 
 ;;; I/O
 
-(defmacro (define-syscall-read-write name sysname)
-  (quasiquote (define ((unquote name) fd str offset len)
-                (check-string-range str offset len)
-                (raw->fixnum (c-call (unquote sysname) (fixnum->raw fd)
-                                     (raw-string-address str offset)
-                                     (fixnum->raw len))))))
-
 (when-compiling
+  (defmacro (define-syscall-read-write name sysname)
+    (quasiquote (define ((unquote name) fd str offset len)
+                  (check-string-range str offset len)
+                  (raw->fixnum (c-call (unquote sysname) (fixnum->raw fd)
+                                       (raw-string-address str offset)
+                                       (fixnum->raw len))))))
+
   (define-syscall-read-write syscall-read "read")
   (define-syscall-read-write syscall-write "write")
 
