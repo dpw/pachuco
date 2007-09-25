@@ -132,9 +132,9 @@
     (assert-result (peek-char istr 1) #\b)
     (assert-result (read-char istr) #\a)
     (assert-result (peek-char istr 0) #\b)
-    (assert-result (peek-char istr 1 true) true)
+    (assert-result (peek-char istr 1) false)
     (consume-char istr)
-    (assert-result (read-char istr true) true))
+    (assert-result (read-char istr true) false))
 
   (begin
     (assert-result (read-integer (make-string-istream "1fF") 16) 511)
@@ -175,8 +175,11 @@
     (assert-read "(x;comment
 y)" '(x y))
     (assert-read "(x ;comment
-)" '(x))))
+)" '(x)))
 
+  (with-open-file-for-reading (f "testfile")
+    (assert-result (read f) '("hello" world))
+    (assert-result (read f false) false)))
 
 (when-compiling
   (define (time-function f)

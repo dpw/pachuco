@@ -113,6 +113,16 @@
 (defun stderr (str offset len)
   (write-sequence str *standard-output* :start offset :end (+ offset len)))
 
+(defun open-file-for-reading (pathname)
+  (open pathname))
+(defun close-file (f)
+  (close f))
+(defun make-file-reader (f)
+  (lambda (args)
+    (destructuring-bind (str offset len) args
+      (let ((pos (read-sequence str f :start offset :end (+ offset len))))
+        (- pos offset)))))
+
 ;; Quasiquote
 
 (defun quasiquote-transform (innermost form)

@@ -419,7 +419,10 @@
     (syscall-open pathname 0 0))
 
   (define (close-file fd)
-    (syscall-close fd)))
+    (syscall-close fd))
+
+  (define (make-file-reader fd)
+    (lambda (str offset len) (syscall-read fd str offset len))))
 
 ;;; Lists
 
@@ -769,37 +772,72 @@
 
 ;;; Character istreams
 
+;;; istreams are represented as a vector of 3 elements:
+;;; - Read position in the buffer
+;;; - End position of valid data in the buffer
+;;; - The buffer
+;;; - The reader function to get more data (false if no more data)
+
+(define (make-reader-istream reader)
+  (make-vector-from-list (list 0 0 (make-string 100) reader)))
+
 (define (make-string-istream str)
-  (make-vector-from-list (list 0 str)))
+  (make-vector-from-list (list 0 (string-length str) str false)))
 
-(define (read-char istr . eos-val)
-  (define pos (vector-ref istr 0))
-  (define str (vector-ref istr 1))
-  (if (< pos (string-length str))
-      (begin (vector-set! istr 0 (1+ pos))
-             (string-ref str pos))
-      (if (null? eos-val)
-          (error "read-char off end of stream")
-          (car eos-val))))
-
-(define (consume-char istr)
-  (define pos (1+ (vector-ref istr 0)))
-  (define str (vector-ref istr 1))
-  (if (<= pos (string-length str))
-      (vector-set! istr 0 pos)
-      (error "consume-char off end of stream")))
-
-(define (peek-char istr offset . eos-val)
-  (define pos (+ offset (vector-ref istr 0)))
-  (define str (vector-ref istr 1))
-  (if (< pos (string-length str))
-      (string-ref str pos)
-      (if (null? eos-val)
-          (error "peek-char off end of stream")
-          (car eos-val))))
+(define (istream-refill istr)
+  ;; Refill the buffer of an istream.  Returns false if there is no
+  ;; more data available from the underlying reader function.
+  (if (vector-ref istr 3)
+      (begin
+        ;; move data down within the buffer
+        (define pos (vector-ref istr 0))
+        (define len (- (vector-ref istr 1) pos))
+        (define buf (vector-ref istr 2))
+        (when (> pos 0)
+          (string-copy buf pos buf 0 len))
+        (vector-set! istr 0 0)
+        (define readlen ((vector-ref istr 3) buf len
+                                             (- (string-length buf) len)))
+        (vector-set! istr 1 (+ len readlen))
+        (if (> readlen 0) true
+            (begin
+              (vector-set! istr 3 false)
+              false)))
+      false))
 
 (define (istream-eos? istr)
-  (= (vector-ref istr 0) (string-length (vector-ref istr 1))))
+  (and (= (vector-ref istr 0) (vector-ref istr 1))
+       (not (istream-refill istr))))
+
+(define (read-char istr . accept-eos)
+  (set! accept-eos (if (null? accept-eos) false (car accept-eos)))
+  (define pos (vector-ref istr 0))
+  (cond ((< pos (vector-ref istr 1))
+         (vector-set! istr 0 (1+ pos))
+         (string-ref (vector-ref istr 2) pos))
+        ((istream-refill istr)
+         (read-char istr accept-eos))
+        (accept-eos false)
+        (true (error "read-char off end of stream"))))
+
+(define (consume-char istr)
+  (define pos (vector-ref istr 0))
+  (cond ((< pos (vector-ref istr 1))
+         (vector-set! istr 0 (1+ pos)))
+        ((istream-refill istr)
+         (consume-char istr))
+        (true (error "consume-char off end of stream"))))
+
+(define (peek-char istr offset)
+  (define pos (+ offset (vector-ref istr 0)))
+  (cond ((< pos (vector-ref istr 1))
+         (string-ref (vector-ref istr 2) pos))
+        ((istream-refill istr)
+         ;; FIXME: we may need to expand the buffered data to include
+         ;; offset.  But for now, offset is always 0 or 1, and
+         ;; therefore smaller than the buffer size
+         (peek-char istr offset))
+        (true false)))
 
 ;;; Reader
 
@@ -881,7 +919,7 @@
   (define res (digit-value (read-char istr) false))
   
   (define (scan-integer)
-    (define val (digit-value (peek-char istr 0 false) true))
+    (define val (digit-value (peek-char istr 0) true))
     (when val
       (set! res (+ (* radix res) val))
       (consume-char istr)
@@ -895,7 +933,7 @@
   (string-buffer-write-char buf (read-char istr))
 
   (define (scan-token)
-    (define ch (peek-char istr 0 false))
+    (define ch (peek-char istr 0))
     (when (rt-constituent? (rt-char-type ch))
       (string-buffer-write-char buf ch)
       (consume-char istr)
@@ -905,7 +943,7 @@
   (string-buffer-to-string buf))
 
 (define (consume-whitespace istr)
-  (define ch (peek-char istr 0 false))
+  (define ch (peek-char istr 0))
   (define ct (rt-char-type ch))
   (when (= ct rt-whitespace)
     (consume-char istr)
@@ -913,12 +951,12 @@
 
 (define (read-list istr c)
   (consume-whitespace istr)
-  (define ch (peek-char istr 0 false))
+  (define ch (peek-char istr 0))
   (cond ((eq? #\) ch)
          (consume-char istr) 
          ())
         ((and (eq? #\. ch)
-              (not (rt-constituent? (rt-char-type (peek-char istr 1 false)))))
+              (not (rt-constituent? (rt-char-type (peek-char istr 1)))))
          (consume-char istr)
          (until (read-maybe istr c))
          (car c))
@@ -931,7 +969,7 @@
              (read-list istr c)))))
 
 (define (consume-line-comment istr)
-  (define ch (read-char istr false))
+  (define ch (read-char istr true))
   (when (and ch (not (eq? ch #\Newline)))
     (consume-line-comment istr)))
 
@@ -955,7 +993,7 @@
         (true (rassoc-equal key (cdr l)))))
 
 (define (read-char-literal istr)
-  (if (rt-constituent? (rt-char-type (peek-char istr 1 false)))
+  (if (rt-constituent? (rt-char-type (peek-char istr 1)))
       (begin
         ;; a character name token
         (define name (read-token istr))
@@ -976,7 +1014,7 @@
   ;; comments) returns false if no value was read, otherwise it puts
   ;; the value into the car of the second arg.  this is the first time
   ;; it hurts not to have multiple returns!
-  (define ch (peek-char istr 0 false))
+  (define ch (peek-char istr 0))
   (define ct (rt-char-type ch))
   (cond ((= ct rt-whitespace)
          (consume-char istr)
@@ -1012,6 +1050,19 @@
             (car c)
             (attempt-read))))
   (attempt-read))
+
+;;; Files
+
+(defmacro (with-open-file-for-reading var-pathname . body)
+  (define fd (gensym))
+  (quasiquote
+    (begin
+      (define (unquote fd)
+              (open-file-for-reading (unquote (cadr var-pathname))))
+      (define (unquote (car var-pathname))
+              (make-reader-istream (make-file-reader (unquote fd))))
+      (unquote-splicing body)
+      (close-file (unquote fd)))))
 
 ;;; CL compatibility
 
