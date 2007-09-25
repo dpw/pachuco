@@ -201,23 +201,3 @@ y)" '(x y))
 (define (main)
   (time-function tests)
   (formout stdout "Done~%"))
-
-(define (foo)
-  (define dual-env (cons (make-initial-macro-env) (make-initial-interpreter-env)))
-  (define expanded (expand-body-form '((lambda (x y) (+ x y)) 1 2) dual-env))
-  (define res (eval-body-form expanded (cdr dual-env)))
-  (formout stdout ">>> ~S~%" res))
-
-(define (bar x)
-  (lambda ()
-    (define res x)
-    (set! x (1+ x))
-    res))
-
-;(define vec (raw-make-vector 5 3 10))
-;(raw-vector-set! 5 3 vec 5 "Hello")
-;(define vec2 (raw-make-vector 5 3 10))
-;(raw-vector-copy 5 3 true vec 0 vec2 0 10)
-;(formout stdout "~A~%" (raw-vector-ref 5 3 vec2 5))
-
-;(error "Whoops!")
