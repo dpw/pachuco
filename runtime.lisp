@@ -494,16 +494,11 @@
 
 ;;; IO
 
-(define (read-line)
-  (defmacro buffer-size 1000)
-  (define str (make-string buffer-size))
-  (substring str 0 (syscall-read 0 str 0 buffer-size)))
+(define (write-substring writer str pos len)
+  (writer str pos len))
 
-(define (write-substring stream str pos len)
-  (stream str pos len))
-
-(define (write-string stream str)
-  (stream str 0 (string-length str)))
+(define (write-string writer str)
+  (writer str 0 (string-length str)))
 
 ;;; String buffers
 
@@ -535,7 +530,7 @@
   (string-set! (cdr strbuf) buf-pos ch)
   (rplaca strbuf (1+ buf-pos)))
 
-(define (string-buffer-stream strbuf)
+(define (string-buffer-writer strbuf)
   (lambda (str pos len) (string-buffer-write strbuf str pos len)))
 
 (define (string-buffer-to-string strbuf)
@@ -560,14 +555,14 @@
     (define (unquote name)
       (begin
         (define str (character-string (unquote ch)))
-        (lambda (stream) (write-string stream str))))))
+        (lambda (writer) (write-string writer str))))))
 
 (define-char-printer print-newline #\Newline)
 (define-char-printer print-double-quote #\")
 
-(define (print-number stream num)
+(define (print-number writer num)
   (if (= num 0)
-      (write-string stream "0")
+      (write-string writer "0")
       (begin
         (unless (and (<= 2 *print-radix*)
                      (<= *print-radix* (string-length print-number-digits)))
@@ -592,33 +587,33 @@
          (set! pos (1- pos))
          (string-set! buf pos #\-))
         
-        (write-substring stream buf pos (- buf-size pos)))))
+        (write-substring writer buf pos (- buf-size pos)))))
 
-(define (print-string stream str)
+(define (print-string writer str)
   (if *print-readably*
       (begin
-        (print-double-quote stream)
-        (write-string stream str)
-        (print-double-quote stream))
-      (write-string stream str)))
+        (print-double-quote writer)
+        (write-string writer str)
+        (print-double-quote writer))
+      (write-string writer str)))
 
 
 (define character-names '((#\Space . "Space")
                           (#\Newline . "Newline")))
 
-(define (print-char stream ch)
+(define (print-char writer ch)
   (if *print-readably*
       (begin
-       (write-string stream "#\\")
+       (write-string writer "#\\")
        (define name (assoc ch character-names))
-       (write-string stream (if name
+       (write-string writer (if name
                                 (character-string ch)
                                 (cdr name))))
-      (write-string stream (character-string ch))))
+      (write-string writer (character-string ch))))
 
-(define (print-symbol stream sym)
+(define (print-symbol writer sym)
   (define str (symbol-name sym))
-  (write-substring stream str 0 (string-length str)))
+  (write-substring writer str 0 (string-length str)))
 
 (define special-printed-forms
   '((false . "false")
@@ -626,49 +621,49 @@
     (unspecified . "unspecified")
     (() . "()")))
 
-(define (print-list stream l)
-  (write-string stream "(")
-  (print stream (car l))
+(define (print-list writer l)
+  (write-string writer "(")
+  (print writer (car l))
   (set! l (cdr l))
 
   (while (pair? l)
-    (write-string stream " ")
-    (print stream (car l))
+    (write-string writer " ")
+    (print writer (car l))
     (set! l (cdr l)))
 
   (unless (null? l)
-    (write-string stream " . ")
-    (print stream l))
+    (write-string writer " . ")
+    (print writer l))
 
-  (write-string stream ")"))
+  (write-string writer ")"))
 
-(define (print stream obj)
+(define (print writer obj)
   (cond ((pair? obj)
-         (print-list stream obj))
+         (print-list writer obj))
         ((number? obj)
-         (print-number stream obj))
+         (print-number writer obj))
         ((string? obj)
-         (print-string stream obj))
+         (print-string writer obj))
         ((symbol? obj)
-         (print-symbol stream obj))
+         (print-symbol writer obj))
         ((function? obj)
-         (write-string stream "#<function>"))
+         (write-string writer "#<function>"))
         (true
          (define special (assoc obj special-printed-forms))
          (if special
-             (write-string stream (cdr special))
+             (write-string writer (cdr special))
              (error "cannot print object")))))
 
 ;;; Formatted IO
 
-(define (formout-list stream control args)
+(define (formout-list writer control args)
   (define pos 0)
   (define write-from 0)
   (define control-len (string-length control))
   (define ch)
 
   (define (flush)
-    (write-substring stream control write-from (- pos write-from)))
+    (write-substring writer control write-from (- pos write-from)))
 
   (while (< pos control-len)
     (set! ch (string-ref control pos)) 
@@ -685,30 +680,30 @@
                        (set! write-from (1- write-from)))
 
                       ((eq? ch #\%)
-                       (print-newline stream))
+                       (print-newline writer))
 
                       ((or (eq? ch #\A) (eq? ch #\a))
                        (with-value (*print-readably* false)
-                         (print stream (car args)))
+                         (print writer (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\S) (eq? ch #\s))
                        (with-value (*print-readably* true)
-                         (print stream (car args)))
+                         (print writer (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\D) (eq? ch #\d))
                        (with-value (*print-radix* 10)
-                         (print stream (car args)))
+                         (print writer (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\X) (eq? ch #\x))
                        (with-value (*print-radix* 16)
-                         (print stream (car args)))
+                         (print writer (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\C) (eq? ch #\c))
-                       (print-char stream (car args))
+                       (print-char writer (car args))
                        (set! args (cdr args)))
 
                       (true
@@ -716,12 +711,12 @@
 
   (flush))
 
-(define (formout stream control . args)
-  (formout-list stream control args))
+(define (formout writer control . args)
+  (formout-list writer control args))
 
 (define (format-list control args)
   (define buf (make-string-buffer))
-  (formout-list (string-buffer-stream buf) control args)
+  (formout-list (string-buffer-writer buf) control args)
   (string-buffer-to-string buf))
 
 (define (format control . args)
