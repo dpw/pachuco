@@ -150,6 +150,7 @@
 (reify (truncate a b))
 
 (reify (char-code a))
+(reify (code-char a))
 
 (reify (string? a))
 (reify (make-string a))

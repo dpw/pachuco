@@ -150,6 +150,7 @@
 (define-interpreter-builtin-op truncate)
 
 (define-interpreter-builtin-op char-code)
+(define-interpreter-builtin-op code-char)
 
 (define-interpreter-builtin-boolean-op string?)
 (define-interpreter-builtin-op make-string)
