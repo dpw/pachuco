@@ -597,6 +597,32 @@
 (define (string-concat . strs)
   (string-flatten strs))
 
+(define (string-range-equal? a astart b bstart len)
+  (cond ((= 0 len) true)
+        ((or (>= astart (string-length a))
+             (>= bstart (string-length b))
+             (not (eq? (string-ref a astart) (string-ref b bstart))))
+         false)
+        (true
+         (string-range-equal? a (1+ astart) b (1+ bstart) (1- len)))))
+
+(define (string-search haystack needle start)
+  (define len (string-length needle))
+  (cond ((> (+ start len) (string-length haystack)) false)
+        ((string-range-equal? haystack start needle 0 len) start)
+        (true (string-search haystack needle (1+ start)))))
+
+(define (string-replace str old new)
+  (define (string-replace-from str start)
+    (define pos (string-search str old start))
+    (if pos
+        (begin
+          (define rest (+ pos (string-length old)))
+          (define res (string-concat (substring str 0 pos) new
+                           (substring str rest (- (string-length str) rest))))
+          (string-replace-from res (+ pos (string-length new))))
+        str))
+  (string-replace-from str 0))
 
 ;;; Vectors
 

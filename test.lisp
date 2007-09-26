@@ -104,6 +104,7 @@
   (assert-result (string-equal? "foo" "foo") true)
   (assert-result (string-equal? "foo" "bar") false)
   (assert-result (substring "Hello" 1 3) "ell")
+  (assert-result (string-replace "banana" "an" "rane") "braneranea")
 
   (begin
     (define (assert-uniform-format a expect)
