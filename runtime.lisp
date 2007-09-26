@@ -113,7 +113,6 @@
 (reify (function? a))
 
 (reify (symbol? a))
-(reify (gensym a))
 (reify (symbol-name a))
 
 (reify (pair? a))
@@ -166,7 +165,12 @@
   (reify (stdout a b c))
   (reify (stderr a b c))
   (reify (stdin-reader a b c))
-  (reify (intern a)))
+  (reify (intern a))
+
+  ;; Gensym is an interesting case.  We need it early on for macros.
+  ;; So when interpreting, we get it from the host.  When compiling,
+  ;; we introduce it much later
+  (reify (gensym a)))
 
 ;;; Arithmetic
 
@@ -772,7 +776,11 @@
     (raw-apply-with-args args-len
       (lambda ()
         (copy-args args (raw-args-address) 0)
-        (raw-apply-jump func args-len)))))
+        (raw-apply-jump func args-len))))
+
+  (define gensym-counter 0)
+  (define (gensym)
+    (intern (format "gensym-~D" (set! gensym-counter (1+ gensym-counter))))))
 
 ;;; Character istreams
 
