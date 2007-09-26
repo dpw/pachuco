@@ -3,7 +3,7 @@
 (define label-counter 0)
 
 (define (gen-label)
-  (format~ false ".L~D" (incf label-counter)))
+  (format~ false ".L~D" (set! label-counter (1+ label-counter))))
 
 (define (emit-data out label scale)
   (emit out ".data")
