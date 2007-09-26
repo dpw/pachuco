@@ -316,18 +316,21 @@
 ;;; Adjust lambdas so that they only take one body form.
 
 (define-simplify (lambda attrs . body)
-  (simplify-forms body)
+  (simplify-recurse form)
   (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
 
 (define-simplify (char-code attrs ch)
-  (overwrite-form form ch))
+  (overwrite-form form ch)
+  (simplify-recurse form))
 
 (define-simplify (code-char attrs code)
-  (overwrite-form form code))
+  (overwrite-form form code)
+  (simplify-recurse form))
 
 (define-simplify (character? attrs ch)
   ;; we currently conflate characters and numbers
-  (rplaca form 'number?))
+  (rplaca form 'number?)
+  (simplify-recurse form))
 
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec
