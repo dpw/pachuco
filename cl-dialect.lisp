@@ -122,10 +122,9 @@
 (defun close-file (f)
   (close f))
 (defun make-file-reader (f)
-  (lambda (args)
-    (destructuring-bind (str offset len) args
-      (let ((pos (read-sequence str f :start offset :end (+ offset len))))
-        (- pos offset)))))
+  (lambda (str offset len)
+    (let ((pos (read-sequence str f :start offset :end (+ offset len))))
+      (- pos offset))))
 
 ;; Quasiquote
 

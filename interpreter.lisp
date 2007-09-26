@@ -171,7 +171,9 @@
 (define-interpreter-builtin-op stdin-reader)
 (define-interpreter-builtin-op open-file-for-reading)
 (define-interpreter-builtin-op close-file)
-(define-interpreter-builtin-op make-file-reader)
+(define-interpreter-builtin-op make-file-reader (f)
+  (let* ((reader (make-file-reader f)))
+    (lambda (args) (apply reader args))))
 
 (define-interpreter-builtin-op apply (func . args)
   (funcall func (apply (function list*) args)))
