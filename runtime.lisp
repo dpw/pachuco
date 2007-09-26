@@ -411,7 +411,7 @@
         (define pivot (car l))
         (nconc (sort (filterfor (x (cdr l)) (pred x pivot)) pred)
                (list pivot)
-               (sort (filterfor (x (cdr l)) (pred pivot x)) pred)))))
+               (sort (filterfor (x (cdr l)) (not (pred x pivot))) pred)))))
 
 (define (reverse l)
   (define (aux acc l)

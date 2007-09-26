@@ -51,6 +51,7 @@
   (assert-result (remove 1 '(0 1 2 1)) '(0 2)) 
   (assert-result (delete 1 (copy-list '(0 1 2 1))) '(0 2))
   (assert-result (sort '(3 6 4 8 7 5 2 9 1 0) <) '(0 1 2 3 4 5 6 7 8 9))
+  (assert-result (sort '(1 2 1 2) <) '(1 1 2 2))
   (assert-result (reverse '(1 2 3)) '(3 2 1))
 
   (assert-result (mapfor (x '(1 2 3)) (1+ x)) '(2 3 4))
@@ -62,6 +63,9 @@
   (assert-result (findfor (x '(1 2 3)) (> x 1)) 2)
   (assert-result (findfor (x ()) (error "Whoa!")) false)
   (assert-result (findfor (x '(1)) (> x 1)) false)
+
+  (assert-result (filterfor (x '(0 1 2 3 4 5)) (= 0 (rem x 2)))
+                 '(0 2 4))
 
   (assert-result (sublist '(1 2 3) 1) '(2 3))
   (assert-result (sublist '(1 2 3 4) 1 3) '(2 3))
