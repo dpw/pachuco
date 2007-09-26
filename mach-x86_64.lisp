@@ -53,9 +53,9 @@
   (cons 'definitions
         (mapfor (n '(8 9 10 11 12 13 14 15))
           (list* 'define-register
-                 (subject-language-intern (format nil "%r~D" n))
+                 (subject-language-intern (format~ false "%r~D" n))
                  (mapfor (tmpl '("%r~Dl" "%r~Dw" "%r~Dd" "%r~D"))
-                   (format nil tmpl n))))))
+                   (format~ false tmpl n))))))
 
 (define-extended-registers)
 
