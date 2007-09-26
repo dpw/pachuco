@@ -6,3 +6,5 @@ COMPILER
 stage0-test
 stage1
 stage1-test
+stage2
+stage2-test
