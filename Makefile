@@ -11,12 +11,14 @@ endif
 COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
 CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
 
-RUNTIME_SOURCES=runtime.lisp
-TEST_SOURCES=$(RUNTIME_SOURCES) test.lisp
+TEST_SOURCES=runtime.lisp test.lisp
 
-cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-expand-files '( $(foreach f,$(1),\"$(f)\" )))"
-cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-interpret-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
-cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-compile-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
+SL_COMPILER_SOURCES=runtime.lisp util.lisp expander.lisp interpreter.lisp driver.lisp drivermain.lisp
+
+listify=( $(foreach f,$(1),\"$(f)\") )
+cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-expand-files '$(call listify,$(1))) (quit))"
+cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-interpret-files '$(call listify,$(1)) '(main)) (quit))"
+cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-compile-files '$(call listify,$(1)) '(main)) (quit))"
 
 all: stage0-test-run
 
@@ -38,6 +40,16 @@ stage0-test: main.o stage0-test.s
 stage0-test-run: stage0-test
 	./stage0-test
 
+stage1.s: $(SL_COMPILER_SOURCES) $(CL_COMPILER_SOURCES)
+	$(call cl_compile,$(SL_COMPILER_SOURCES)) >$@
+
+stage1: main.o stage1.s
+	gcc $(CFLAGS) $^ -o $@
+
+sl_interp=echo "$(call listify,$(1)) (main)" | ./stage1
+stage1-interp: stage1 $(TEST_SOURCES)
+	$(call sl_interp,$(TEST_SOURCES))
+
 clean:
-	rm -f stage0-test.s stage0-test
+	rm -f *.s *.o stage0-test stage1
 

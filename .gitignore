@@ -3,4 +3,5 @@ COMPILER
 *~
 *.o
 *.s
-stage0-*
+stage0-test
+stage1
