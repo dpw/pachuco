@@ -1319,6 +1319,8 @@
         ((eq? out false) (apply format args))
         (true (apply formout out args))))
 
+(define (reduce~ initial l f) (reduce initial l f))
+
 ;; Not a full destructuring-bind  
 (defmacro (bind vars values . body)
   (quasiquote

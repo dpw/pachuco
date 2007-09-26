@@ -512,8 +512,9 @@
              (overwrite-form form (list* '(unquote unary-op) () args)))
             (true
              (overwrite-form form 
-                             (reduce (lambda (a b) (list '(unquote op) () a b))
-                                     args)))))))
+                             (reduce~ (car args) (cdr args)
+                                      (lambda (a b)
+                                        (list '(unquote op) () a b)))))))))
 
 (define-simplify-binary-op + 0 begin) 
 (define-pure-operator (+ a b) a ()
@@ -528,7 +529,7 @@
   (simplify-recurse form)
   (if (null? args) (rplaca form 'negate)
       (overwrite-form form
-                      (reduce (lambda (a b) (list '- () a b)) (cons a args)))))
+                      (reduce~ a args (lambda (a b) (list '- () a b))))))
 
 (define-pure-operator (negate a) a ()
   (emit-neg out a))

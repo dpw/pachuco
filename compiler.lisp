@@ -870,8 +870,9 @@
                                 in-frame-base out-frame-base))))))))
 
 (define (operator-args-reg-use-discarding form)
-  (reduce (function max)
-          (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
+  (if (null? (cddr form)) ()
+      (let* ((rus (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
+        (reduce~ (car rus) (cdr rus) (function max)))))
 
 (define (operator-args-codegen-discarding form in-frame-base out-frame-base
                                           regs out)
@@ -954,11 +955,13 @@
 
 (define-reg-use (lambda attrs body)
   (let* ((closure (attr-ref attrs 'closure)))
-    (nmapfor (varrec closure)
-      (cons varrec (list 'ref (varrec-attr varrec 'source))))
-    (1+ (reduce (function max)
-                (mapfor (varrec-ref closure)
-                        (reg-use (cdr varrec-ref) dest-type-value))))))
+    (unless (null? closure) 
+      (nmapfor (varrec closure)
+        (cons varrec (list 'ref (varrec-attr varrec 'source))))
+      (let* ((closure-ref-rus (mapfor (varrec-ref closure)
+                                (reg-use (cdr varrec-ref) dest-type-value))))
+        (1+ (reduce~ (car closure-ref-rus) (cdr closure-ref-rus)
+                     (function max)))))))
 
 (define-codegen (lambda attrs body)
   (let* ((closure (attr-ref attrs 'closure)))

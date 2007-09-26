@@ -194,8 +194,11 @@
       (read in nil (car eos))
       (read in)))
 
+(defmacro with-open-file-for-reading (&rest body)
+  `(with-open-file ,@body))
+
 (defmacro sublist (&rest args)
   `(subseq ,@args))
 
-(defmacro with-open-file-for-reading (&rest body)
-  `(with-open-file ,@body))
+(defun reduce~ (initial l f)
+  (reduce f l :initial-value initial))
