@@ -903,7 +903,7 @@
         (set! ch (char-code ch))
         (define ct (if (>= ch 128) rt-illegal (vector-ref readtable ch)))
         (when (= ct rt-illegal)
-          (error "bad character ~C (~D)" ch ch))
+          (error "bad character ~C (~D)" ch (char-code ch)))
         ct)
       rt-eos))
 
@@ -966,8 +966,23 @@
         ((and (eq? #\. ch)
               (not (rt-constituent? (rt-char-type (peek-char istr 1)))))
          (consume-char istr)
+
          (until (read-maybe istr c))
-         (car c))
+         (define result (car c))
+
+         ;; find and consume the closing )
+         (define (find-rparen)
+           (consume-whitespace istr)
+           (define ch (peek-char istr 0))
+           (if (eq? #\) ch)
+               (consume-char istr)
+               (begin
+                 (when (read-maybe istr c)
+                   (error "more than one object follows . in list"))
+                 (find-rparen))))
+         (find-rparen)
+         
+         result)
         (true
          (if (read-maybe istr c)
              (begin
@@ -1049,8 +1064,8 @@
         ((= ct rt-eos)
          (error "unexpected end of stream while reading"))
         (true
-         (error "don't know how to handle character ~D (~D)"
-                (char-code ch) ct))))
+         (error "don't know how to handle character ~C (~D -> ~D)"
+                ch (char-code ch) ct))))
 
 (define (read istr . eos-val)
   (define c (cons () ()))
