@@ -646,7 +646,7 @@
 
 (define-codegen-sections (begin varrecs . body)
   (dolist (varrec varrecs) (varrec-attr-set! varrec 'lambda-label false))
-  (codegen-sections-forms body out))
+  (codegen-sections-recurse form out))
 
 (define-codegen-sections (lambda attrs body)
   (let* ((label (gen-label))
