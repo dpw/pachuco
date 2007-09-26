@@ -857,18 +857,19 @@
 (defmacro rt-alpha-uc 0)
 (defmacro rt-alpha-lc 1)
 (defmacro rt-digit 2)
-(defmacro rt-constituent-misc 3)
-(defmacro rt-constituent-max 3)
+(defmacro rt-minus 3)
+(defmacro rt-constituent-misc 4)
+(defmacro rt-constituent-max 4)
 
-(defmacro rt-eos 4)
-(defmacro rt-whitespace 5)
-(defmacro rt-lparen 6)
-(defmacro rt-rparen 7)
-(defmacro rt-line-comment 8)
-(defmacro rt-double-quote 9)
-(defmacro rt-single-quote 10)
-(defmacro rt-sharp-sign 11)
-(defmacro rt-max 11)
+(defmacro rt-eos 5)
+(defmacro rt-whitespace 6)
+(defmacro rt-lparen 7)
+(defmacro rt-rparen 8)
+(defmacro rt-line-comment 9)
+(defmacro rt-double-quote 10)
+(defmacro rt-single-quote 11)
+(defmacro rt-sharp-sign 12)
+(defmacro rt-max 12)
 
 (define digit-bases (make-vector (1+ rt-max)))
 
@@ -889,7 +890,8 @@
   (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (char-code #\0) 10 rt-digit)
-  (dolist (ch '(#\. #\- #\* #\+ #\? #\< #\> #\= #\/))
+  (vector-set! readtable (char-code #\-) rt-minus)
+  (dolist (ch '(#\. #\* #\+ #\? #\< #\> #\= #\/))
     (vector-set! readtable (char-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)
@@ -911,6 +913,13 @@
   (<= ct rt-constituent-max))
 
 (define (read-integer istr radix)
+  (define first-digit (read-char istr))
+  (define negative (if (eq? #\- first-digit)
+                       (begin
+                         (set! first-digit (read-char istr))
+                         true)
+                       false))
+
   (define (digit-value ch accept-terminating)
     (define ct (rt-char-type ch))
     (define base (vector-ref digit-bases ct))
@@ -924,7 +933,7 @@
             false
             (error "invalid digit ~C" ch))))
 
-  (define res (digit-value (read-char istr) false))
+  (define res (digit-value first-digit false))
   
   (define (scan-integer)
     (define val (digit-value (peek-char istr 0) true))
@@ -934,7 +943,7 @@
       (scan-integer)))
 
   (scan-integer)
-  res)
+  (if negative (- res) res))
 
 (define (read-token istr)
   (define buf (make-string-buffer))
@@ -1042,7 +1051,9 @@
   (cond ((= ct rt-whitespace)
          (consume-char istr)
          false)
-        ((= ct rt-digit)
+        ((or (= ct rt-digit)
+             (and (= ct rt-minus)
+                  (eq? rt-digit (rt-char-type (peek-char istr 1)))))
          (rplaca c (read-integer istr 10)))
         ((rt-constituent? ct)
          (rplaca c (intern (read-token istr))))
