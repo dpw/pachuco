@@ -29,6 +29,7 @@
 (defmacro (cddr x) (list 'cdr (list 'cdr x)))
 (defmacro (cadar x) (list 'car (list ' cdr (list 'car x))))
 (defmacro (cdddr x) (list 'cdr (list ' cdr (list 'cdr x))))
+(defmacro (cddddr x) (list 'cdr (list 'cdr (list ' cdr (list 'cdr x)))))
 
 (defmacro (first x) (list 'car x))
 (defmacro (second x) (list 'car (list 'cdr x)))
@@ -223,6 +224,8 @@
 (defmacro (until test . rest)
   (quasiquote (while (not (unquote test)) (unquote-splicing rest))))
 
+(define (identity x) x)
+
 ;;; Lists
 
 (define (length l)
@@ -268,6 +271,9 @@
 
 (define (copy-list l)
   (if (pair? l) (cons (car l) (copy-list (cdr l))) l))
+
+(define (copy-tree l)
+  (if (pair? l) (cons (copy-tree (car l)) (copy-tree (cdr l)))))
 
 (define (flatten* ls)
   (define (find-end l ls)
