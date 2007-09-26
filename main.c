@@ -5,7 +5,7 @@ extern long lisp(long heap_end);
 
 int main(void)
 {
-	long heap_size = 128 * 1024 * 1024; /* 128MB */
+	long heap_size = 512 * 1024 * 1024; /* 512MB */
 	void *heap = mmap(NULL, heap_size, PROT_READ|PROT_WRITE,
 			  MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	long alloc_before, alloc_after;
