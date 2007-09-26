@@ -165,6 +165,7 @@
   ;; to provide function forms
   (reify (stdout a b c))
   (reify (stderr a b c))
+  (reify (stdin-reader a b c))
   (reify (intern a)))
 
 ;;; Arithmetic
@@ -405,6 +406,9 @@
 
   (define (stderr str offset len)
     (syscall-write 2 str offset len))
+
+  (define (stdin-reader str offset len)
+    (syscall-read 0 str offset len))
 
   (define (syscall-open pathname flags mode)
     (checked-syscall "open" (make-c-string pathname)
@@ -838,6 +842,8 @@
          ;; therefore smaller than the buffer size
          (peek-char istr offset))
         (true false)))
+
+(define stdin (make-reader-istream stdin-reader))
 
 ;;; Reader
 

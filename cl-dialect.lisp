@@ -111,7 +111,11 @@
 (defun stdout (str offset len)
   (write-sequence str *standard-output* :start offset :end (+ offset len)))
 (defun stderr (str offset len)
-  (write-sequence str *standard-output* :start offset :end (+ offset len)))
+  (write-sequence str *error-output* :start offset :end (+ offset len)))
+(defun stdin-reader (str offset len)
+  (let ((pos (read-sequence str *standard-input* :start offset
+                                                 :end (+ offset len))))
+    (- pos offset)))
 
 (defun open-file-for-reading (pathname)
   (open pathname))
