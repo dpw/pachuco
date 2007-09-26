@@ -13,7 +13,7 @@ CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
 
 TEST_SOURCES=runtime.lisp test.lisp
 
-SL_COMPILER_SOURCES=runtime.lisp util.lisp expander.lisp interpreter.lisp driver.lisp drivermain.lisp
+SL_COMPILER_SOURCES=runtime.lisp $(COMPILER_SOURCES) drivermain.lisp
 
 listify=( $(foreach f,$(1),\"$(f)\") )
 cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-expand-files '$(call listify,$(1))) (quit))"
@@ -46,9 +46,23 @@ stage1.s: $(SL_COMPILER_SOURCES) $(CL_COMPILER_SOURCES)
 stage1: main.o stage1.s
 	gcc $(CFLAGS) $^ -o $@
 
-sl_interp=echo "$(call listify,$(1)) (main)" | ./stage1
+stage1_interp=echo "interpret $(call listify,$(1)) (main)" | ./stage1
+stage1_compile=echo "compile $(call listify,$(1)) (main)" | ./stage1
+
 stage1-interp: stage1 $(TEST_SOURCES)
-	$(call sl_interp,$(TEST_SOURCES))
+	$(call stage1_interp,$(TEST_SOURCES))
+
+stage1-compile: stage1 $(TEST_SOURCES)
+	$(call stage1_compile,$(TEST_SOURCES))
+
+stage1-test.s: stage1 $(TEST_SOURCES)
+	$(call stage1_compile,$(TEST_SOURCES)) >$@
+
+stage1-test: main.o stage1-test.s
+	gcc $(CFLAGS) $^ -o $@
+
+stage1-test-run: stage1-test
+	./stage1-test
 
 clean:
 	rm -f *.s *.o stage0-test stage1

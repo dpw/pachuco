@@ -5,3 +5,4 @@ COMPILER
 *.s
 stage0-test
 stage1
+stage1-test
