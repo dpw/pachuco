@@ -242,8 +242,9 @@
   (if (null? l) 0 (1+ (length (cdr l)))))
 
 (define (member? item l)
-  (if (eq? item (car l)) true
-      (member? item (cdr l))))
+  (cond ((null? l) false)
+        ((eq? item (car l)) true)
+        (true (member? item (cdr l)))))
 
 (define (adjoin item l)
   (if (member? item l) l (cons item l)))
