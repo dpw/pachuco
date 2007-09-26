@@ -12,7 +12,7 @@
   (collect-closures program)
   (introduce-boxes program)
   (codegen-program program)
-  ;(format t "~S~%" program)
+  ;(format~ true "~S~%" program)
   )
 
 (define keywords-1
@@ -852,14 +852,15 @@
 
 (defmarco (define-operator template outreg supplemental-regs . body)
   (let* ((body-ru (max (+ (length (cdr template)) (length supplemental-regs))))
-         (attr-template (list* (car template) 'attrs (cdr template))))
+         (name (car template))
+         (params (cdr template)))
     (quasiquote (definitions
-      (define-reg-use (unquote attr-template)
+      (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (max (operator-args-reg-use form)
              (unquote body-ru)
              (convert-value-reg-use dest-type)))
 
-      (define-codegen (unquote attr-template)
+      (define-codegen ((unquote name) attrs (unquote-splicing params))
         (operator-args-codegen form in-frame-base regs out)
         (bind ((unquote-splicing (cdr template))
                (unquote-splicing supplemental-regs) . others) regs
@@ -880,16 +881,17 @@
 
 (defmarco (define-pure-operator template outreg supplemental-regs . body)
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
-         (attr-template (list* (car template) 'attrs (cdr template))))
+         (name (car template))
+         (params (cdr template)))
     (quasiquote (definitions
-      (define-reg-use (unquote attr-template)
+      (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (if (dest-type-discard? dest-type)
             (operator-args-reg-use-discarding form)
             (max (unquote body-ru)
                  (operator-args-reg-use form)
                  (convert-value-reg-use dest-type))))
 
-      (define-codegen (unquote attr-template)
+      (define-codegen ((unquote name) attrs (unquote-splicing params))
         (if (dest-discard? dest)
             (operator-args-codegen-discarding form in-frame-base
                                               out-frame-base regs out)
@@ -904,16 +906,17 @@
 
 (defmarco (define-cc-operator template cc supplemental-regs . body)
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
-         (attr-template (list* (car template) 'attrs (cdr template))))
+         (name (car template))
+         (params (cdr template)))
     (quasiquote (definitions
-      (define-reg-use (unquote attr-template)
+      (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (if (dest-type-discard? dest-type)
             (operator-args-reg-use-discarding form)
             (max (+ (if (dest-type-conditional? dest-type) 0 1)
                     (unquote body-ru))
                  (operator-args-reg-use form))))
 
-      (define-codegen (unquote attr-template)
+      (define-codegen ((unquote name) attrs (unquote-splicing params))
         (cond ((dest-discard? dest)
                (operator-args-codegen-discarding form in-frame-base
                                                  out-frame-base regs out))
