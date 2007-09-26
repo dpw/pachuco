@@ -40,6 +40,12 @@
   (assert-result (1+ 1) 2)
   (assert-result (1- 1) 0)
 
+  (assert-result (flatten* '(())) ())
+  (assert-result (flatten* (list (copy-list '(1 2)) (copy-list '(3 4))))
+                 '(1 2 3 4))
+  (assert-result (flatten* (list () (copy-list '(1 2)) () (copy-list '(3 4))))
+                 '(1 2 3 4))
+
   (assert-result (mapfor (x '(1 2 3)) (1+ x)) '(2 3 4))
   (assert-result (mapfor (x ()) (error "Whoa!")) ())
   (assert-result (mapfor (x '(a)) x) '(a))

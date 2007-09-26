@@ -177,38 +177,8 @@
 (defmacro (1- n) (quasiquote (- (unquote n) 1)))
 (defmacro (1+ n) (quasiquote (+ (unquote n) 1)))
 
-;;; Lists
-
-(define (length l)
-  (if (null? l) 0 (1+ (length (cdr l)))))
-
-(define (last-n-conses l n)
-  (define (aux l)
-    (if (null? l) ()
-        (begin
-          (define res (aux (cdr l)))
-          (if (= n 0) res
-              (begin
-                (set! n (1- n))
-                l)))))
-  (aux l))
-
-(define (last-cons l)
-  (last-n-conses l 1))
-
-(define (last-elem l)
-  (car (last-cons l)))
-
-(define (list* l1 . l)
-  (if (null? l) l1
-    (begin
-      (set! l (cons l1 l))
-      (define penultimate (last-n-conses l 2))
-      (rplacd penultimate (cadr penultimate))
-      l)))
-
-(define (copy-list l)
-  (if (pair? l) (cons (car l) (copy-list (cdr l))) l))
+(define (max a . nums)
+  (reduce a nums (lambda (a b) (if (> a b) a b))))
 
 ;;; Booleans
 
@@ -253,6 +223,73 @@
   (quasiquote (while (not (unquote test)) (unquote-splicing rest))))
 
 ;;; Lists
+
+(define (length l)
+  (if (null? l) 0 (1+ (length (cdr l)))))
+
+(define (member? item l)
+  (if (eq? item (car l)) true
+      (member? item (cdr l))))
+
+(define (adjoin item l)
+  (if (member? item l) l (cons item l)))
+
+(define (elt l index)
+  (if (= 0 index) (car l) (elt (cdr l) (1- index))))
+
+(define (nthcdr index l)
+  (if (= 0 index) l (nthcdr (1- index) (cdr l))))
+
+(define (last-n-conses l n)
+  (define (aux l)
+    (if (null? l) ()
+        (begin
+          (define res (aux (cdr l)))
+          (if (= n 0) res
+              (begin
+                (set! n (1- n))
+                l)))))
+  (aux l))
+
+(define (last-cons l)
+  (last-n-conses l 1))
+
+(define (last-elem l)
+  (car (last-cons l)))
+
+(define (list* l1 . l)
+  (if (null? l) l1
+    (begin
+      (set! l (cons l1 l))
+      (define penultimate (last-n-conses l 2))
+      (rplacd penultimate (cadr penultimate))
+      l)))
+
+(define (copy-list l)
+  (if (pair? l) (cons (car l) (copy-list (cdr l))) l))
+
+(define (flatten* ls)
+  (define (find-end l ls)
+    (if (not (null? (cdr l)))
+        (find-end (cdr l) ls)
+        (if (not (null? ls))
+            (find-start l ls))))
+
+  (define (find-start l ls)
+    (when (not (null? ls))
+      (if (not (null? (car ls)))
+          (begin
+           (rplacd l (car ls))
+           (find-end (car ls) (cdr ls)))
+          (find-start l (cdr ls)))))
+  
+  (if (not (null? ls))
+      (if (not (null? (car ls)))
+          (begin
+            (find-end (car ls) (cdr ls))
+            (car ls))
+          (flatten* (cdr ls)))
+      ()))
 
 (defmacro (dolist binding . body)
   (define l (gensym))
