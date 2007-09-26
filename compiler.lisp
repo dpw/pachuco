@@ -871,7 +871,7 @@
 (define (operator-args-codegen-discarding form in-frame-base out-frame-base
                                           regs out)
   (dolist (arg (cddr form))
-    (codegen arg dest-discard frame-base frame-base regs out))
+    (codegen arg dest-discard in-frame-base in-frame-base regs out))
   (emit-adjust-frame-base out in-frame-base out-frame-base))
 
 (defmarco (define-pure-operator template outreg supplemental-regs . body)
