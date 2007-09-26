@@ -1115,11 +1115,18 @@
 
 (defmacro (let* bindings . body)
   (quasiquote (begin
-               (unquote-splicing (mapfor (binding bindings)
-                                         (if (pair? binding)
-                                             (cons 'define binding)
-                                             (list 'define binding))))
-               (unquote-splicing body))))
+                (unquote-splicing (mapfor (binding bindings)
+                                          (if (pair? binding)
+                                              (cons 'define binding)
+                                              (list 'define binding))))
+                (unquote-splicing body))))
+
+(defmacro (labels funcs . body)
+  (quasiquote (begin
+                (unquote-splicing
+                  (mapfor (func funcs)
+                    (list* 'define (cons (car func) (cadr func)) (cddr func))))
+                (unquote-splicing body))))
 
 (defmacro (defmarco template . body)
   (quasiquote (defmacro (unquote template) (unquote-splicing body))))
@@ -1130,6 +1137,13 @@
 (defmacro (subject-language-boolean bool) bool)
 (defmacro (subject-language-symbol-name sym) (symbol-name sym))
 (defmacro (subject-language-intern str) (intern str))
+
+(defmacro (read~ . args) (cons 'read args))
+
+(define (format~ out . args)
+  (cond ((eq? out true) (apply formout stdout args))
+        ((eq? out false) (apply format args))
+        (true (apply formout out args))))
 
 ;; Not a full destructuring-bind  
 (defmacro (bind vars values . body)

@@ -188,3 +188,14 @@
                      (string-replace-from res (+ pos (length new))))
                    str))))
     (string-replace-from str 0)))
+
+(defmacro format~ (&rest args)
+  `(format ,@args))
+
+(defun read~ (in &rest eos)
+  (if eos
+      (read in nil (car eos))
+      (read in)))
+
+(defmacro with-open-file-for-reading (&rest body)
+  `(with-open-file ,@body))
