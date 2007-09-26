@@ -101,30 +101,12 @@
                                   ((symbol? p) (symbol-name p))
                                   (t (error "~S" p)))))))
 
-(defmarco (define-walker name implicit-vars . domain-lit)
+(defmarco (define-walker name implicit-vars)
   (let* ((form-name name)
          (recurse-name (compound-symbol name "-recurse"))
-         (forms-name (compound-symbol name "-forms"))
          (define-name (compound-symbol "define-" name))
          (alist-name (compound-symbol name "-alist")))
     (quasiquote (definitions
-      (unquote-splicing (if (null? domain-lit) ()
-        (let* ((domain (eval (car domain-lit)))
-               (unit (first domain))
-               (reduce (second domain))
-               (replace-2 (third domain)))
-          (quasiquote (
-      (define ((unquote forms-name) forms (unquote-splicing implicit-vars))
-        ((unquote reduce) (form forms)
-          ((unquote form-name) form (unquote-splicing implicit-vars))))
-
-      (define ((unquote recurse-name) forms (unquote-splicing implicit-vars))
-        ((unquote replace-2) forms ((unquote forms-name) (cddr forms)
-                                             (unquote-splicing implicit-vars))))
-
-)))))
-
-         
       (define (unquote alist-name) ())
 
       (define ((unquote form-name) form (unquote-splicing implicit-vars))
@@ -145,10 +127,19 @@
                                (unquote-splicing body)))
                        (unquote (unquote alist-name))))))))))
 
+(defmarco (define-trivial-walker name implicit-vars)
+  (let* ((form-name name)
+         (recurse-name (compound-symbol name "-recurse"))
+         (forms-name (compound-symbol name "-forms")))
+    (quasiquote (definitions
+      (define-walker (unquote name) (unquote implicit-vars))
 
-(define ignore-domain '(ignore-unit dolist ignore-replace-2))
-(defmarco (ignore-unit form) (begin))
-(defmarco (ignore-replace-2 forms replacement) replacement)
+      (define ((unquote forms-name) forms (unquote-splicing implicit-vars))
+        (dolist (form forms)
+          ((unquote form-name) form (unquote-splicing implicit-vars))))
+
+      (define ((unquote recurse-name) form (unquote-splicing implicit-vars))
+        ((unquote forms-name) (cddr form) (unquote-splicing implicit-vars)))))))
 
 ;;; Utils
 
@@ -211,7 +202,7 @@
         ((symbol? quoted)
          (rplaca cell (adjoin quoted (car cell))))))
          
-(define-walker gather-symbols-aux (cell) ignore-domain)
+(define-trivial-walker gather-symbols-aux (cell))
 
 (define-gather-symbols-aux (quote quoted)
   (gather-symbols-from-quoted-form quoted cell))
@@ -240,7 +231,7 @@
 
 ;;; Replace empty bodies with unspecified
 
-(define-walker replace-empty-bodies () ignore-domain)
+(define-trivial-walker replace-empty-bodies ())
 
 (define-replace-empty-bodies (begin attrs . body)
   (if (null? body)
@@ -284,7 +275,7 @@
       (let* ((undotted-params (undot params)))
         (list (cons 'params undotted-params) (cons 'vararg dotted))))))
 
-(define-walker normalize-lambdas () ignore-domain)
+(define-trivial-walker normalize-lambdas ())
 
 (define-normalize-lambdas (lambda params . body)
   (rplaca (cdr form) (normalize-lambda-params params))
@@ -297,7 +288,7 @@
 ;;; (lambda (...) ... (define x ...) ...)
 ;;; => (lambda (...) (begin ((x)) ... (define x ...) ...))
 
-(define-walker collect-defines-aux (cell) ignore-domain)
+(define-trivial-walker collect-defines-aux (cell))
 
 (define-collect-defines-aux (define var . val)
   (rplaca cell (cons (list var) (car cell)))
@@ -320,7 +311,7 @@
 
 ;;; This phase is for miscellaneous simplifications
 
-(define-walker simplify () ignore-domain)
+(define-trivial-walker simplify ())
 
 ;;; Adjust lambdas so that they only take one body form.
 
@@ -337,7 +328,7 @@
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec
 
-(define-walker resolve-variables-aux (frames) ignore-domain)
+(define-trivial-walker resolve-variables-aux (frames))
 
 (define (resolve-variable var frames)
   (let* ((varrec (lassoc var frames)))
@@ -368,7 +359,7 @@
 ;;;
 ;;; A "written" boolean attribute is added to each varrec.
 
-(define-walker classify-variables () ignore-domain)
+(define-trivial-walker classify-variables ())
 
 (define (mark-variable varrec use)
   (varrec-attr-set! varrec 'state
@@ -411,7 +402,7 @@
 
 (define (varrec-written? varrec) (varrec-attr varrec 'written))
 
-(define-walker eliminate-defines () ignore-domain)
+(define-trivial-walker eliminate-defines ())
 
 (define-eliminate-defines (define varrec . val)
   (rplaca form 'set!)
@@ -447,7 +438,7 @@
           (rplaca closure-cell (cons local-varrec (car closure-cell)))
           local-varrec))))
 
-(define-walker collect-closures-aux (depth closure-cell) ignore-domain)
+(define-trivial-walker collect-closures-aux (depth closure-cell))
 
 (define-collect-closures-aux (ref varrec)
   (rplaca (cdr form) (resolve-closure-var varrec depth closure-cell)))
@@ -514,7 +505,7 @@
 (define (varrec-boxed? varrec)
   (varrec-origin-attr varrec 'boxed))
 
-(define-walker introduce-boxes () ignore-domain)
+(define-trivial-walker introduce-boxes ())
 
 (define-introduce-boxes (ref varrec)
   (when (varrec-boxed? varrec)
@@ -633,7 +624,7 @@
     (codegen program dest-discard 0 0 general-registers out)
     (emit-program-epilogue out)))
 
-(define-walker codegen-sections (out) ignore-domain)
+(define-trivial-walker codegen-sections (out))
 
 (define-codegen-sections (quote quoted)
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted out))
@@ -700,9 +691,8 @@
                     (quote (unquote nparams))
                     (arg-count ())))))))
 
-(define-walker reg-use (dest-type) ignore-domain)
-(define-walker codegen (dest in-frame-base out-frame-base regs out)
-               ignore-domain)
+(define-trivial-walker reg-use (dest-type))
+(define-trivial-walker codegen (dest in-frame-base out-frame-base regs out))
 
 ;;; Begin
 
