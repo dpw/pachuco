@@ -120,7 +120,7 @@
   (quasiquote
     (define ((unquote name) out . scale)
       (emit out "~A~A" (unquote insn)
-            (insn-size-suffix (if scale (car scale) value-scale))))))
+            (insn-size-suffix (if (null? scale) value-scale (car scale)))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-pushf "pushf")
