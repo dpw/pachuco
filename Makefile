@@ -18,6 +18,8 @@ cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(
 cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-interpret-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
 cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-compile-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
 
+all: stage0-test-run
+
 stage0-expand: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
 	$(call cl_expand,$(TEST_SOURCES))
 
