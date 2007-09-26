@@ -367,6 +367,22 @@
         ((eq? item (car l)) (remove item (cdr l)))
         (true (cons (car l) (remove item (cdr l))))))
 
+(define (delete item l)
+  (define (aux c l)
+    (unless (null? l)
+      (if (eq? item (car l))
+          (begin
+            (rplacd c (cdr l))
+            (aux c (cdr l)))
+          (aux l (cdr l)))))
+
+  (if (null? l) ()
+      (if (eq? item (car l))
+          (delete item (cdr l))
+          (begin
+            (aux l (cdr l))
+            l))))
+
 (define (sort l pred)
   (if (null? l) l
       (begin
