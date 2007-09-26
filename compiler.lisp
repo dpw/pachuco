@@ -1,4 +1,4 @@
-(define (compile3-program program)
+(define (compile-program program)
   (set! program (list* 'begin () (normalize-forms program)))
   (set! program (gather-symbols program))
   (set! program (car (eliminate-definitions program)))

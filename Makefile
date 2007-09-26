@@ -8,30 +8,34 @@ CFLAGS := $(CFLAGS) -m32
 endif
 endif
 
-SOURCES=runtime.lisp util.lisp interpreter.lisp expander.lisp test.lisp
-COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
+COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
+CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
 
-test: a.out
-	./a.out
+RUNTIME_SOURCES=runtime.lisp
+TEST_SOURCES=$(RUNTIME_SOURCES) test.lisp
 
-expand:
-	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-expand-files '( $(foreach f,$(SOURCES),\"$(f)\" )))"
+cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-expand-files '( $(foreach f,$(1),\"$(f)\" )))"
+cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-interpret-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
+cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(do-compile-files '( $(foreach f,$(1),\"$(f)\" )) '(main))"
 
-interp:
-	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-interpret-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))"
+stage0-expand: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
+	$(call cl_expand,$(TEST_SOURCES))
 
-lisp.s: $(COMPILER_SOURCES) $(SOURCES)
-	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-compile3-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))" >$@
+stage0-interp: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
+	$(call cl_interp,$(TEST_SOURCES))
 
-compile3:
-	sbcl --noinform --noprint $(foreach f,$(COMPILER_SOURCES),--load $(f)) --eval "(do-compile3-files '( $(foreach f,$(SOURCES),\"$(f)\" )) '(main))"
+stage0-compile: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
+	$(call cl_compile,$(TEST_SOURCES))
 
-lisp.o: lisp.s
-	gcc $(CFLAGS) -c $^ -o $@
+stage0-test.s: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
+	$(call cl_compile,$(TEST_SOURCES)) >$@
 
-a.out: main.c lisp.s
+stage0-test: main.o stage0-test.s
 	gcc $(CFLAGS) $^ -o $@
 
+stage0-test-run: stage0-test
+	./stage0-test
+
 clean:
-	rm -f lisp.s lisp.o a.out
+	rm -f stage0-test.s stage0-test
 

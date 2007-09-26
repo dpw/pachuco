@@ -3,4 +3,4 @@ COMPILER
 *~
 *.o
 *.s
-a.out
+stage0-*

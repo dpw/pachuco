@@ -89,13 +89,6 @@
             (* n (fac (- n 1)))))
     (assert-result (fac 6) 720))
 
-  (begin
-    (define b (make-buffer))
-    (buffer-add b 1)
-    (buffer-add b 2)
-    (buffer-add b 3)
-    (assert-result (buffer-list b) '(1 2 3)))
-
   ;; Test string ref, string copy
   (assert-result (string-equal? "foo" "foo") true)
   (assert-result (string-equal? "foo" "bar") false)
