@@ -3,7 +3,7 @@
 (define label-counter 0)
 
 (define (gen-label)
-  (format nil ".L~D" (incf label-counter)))
+  (format~ false ".L~D" (incf label-counter)))
 
 (define (emit-data out label scale)
   (emit out ".data")
@@ -23,16 +23,16 @@
 ;;; Registers and address modes
 
 (define (immediate x)
-  (if (number? x) x (format nil "$~A" x)))
+  (if (number? x) x (format~ false "$~A" x)))
 
 (define (dispmem correction offset reg . reg2)
   (if (null reg2)
-      (format nil "~A(~A)" (- offset correction) (value-sized reg))
-      (format nil "~A(~A,~A)" (- offset correction) (value-sized reg)
+      (format~ false "~A(~A)" (- offset correction) (value-sized reg))
+      (format~ false "~A(~A,~A)" (- offset correction) (value-sized reg)
               (value-sized (first reg2)))))
 
 (define (mem reg)
-  (format nil "(~A)" (value-sized reg)))
+  (format~ false "(~A)" (value-sized reg)))
 
 (define (register? reg)
   (symbol? reg))
@@ -41,7 +41,7 @@
   (cond ((symbol? operand)
          (elt (cdr (assoc operand register-operands)) scale))
         ((string? operand) operand)
-        ((number? operand) (format nil "$~D" operand))
+        ((number? operand) (format~ false "$~D" operand))
         (true (error "strange operand ~S" operand))))
 
 (define (value-sized operand)
@@ -330,7 +330,7 @@
         (true (let* ((c (assoc quoted simple-representations)))
              (cond (c (cdr c))
                    ((symbol? quoted) (codegen-quoted-symbol quoted out))
-                   (t (error "unrecognised quoted form ~S" quoted)))))))
+                   (true (error "unrecognised quoted form ~S" quoted)))))))
 
 (define (codegen-quoted-pair quoted out)
   (let* ((label (gen-label))
@@ -339,14 +339,14 @@
     (emit-data out label pair-tag-bits)
     (emit-literal out a)
     (emit-literal out d)
-    (format nil "~A+~D" label pair-tag)))
+    (format~ false "~A+~D" label pair-tag)))
 
 (define (codegen-quoted-string str out)
   (let* ((label (gen-label)))
     (emit-data out label string-tag-bits)
     (emit-literal out (fixnum-representation (length str)))
     (emit out ".ascii \"~A\"" (escape-string-literal str))
-    (format nil "~A+~D" label string-tag)))
+    (format~ false "~A+~D" label string-tag)))
 
 (define emitted-symbols ())
 
@@ -358,7 +358,7 @@
                                             out)))
           (emit-data out label atom-tag-bits)
           (emit-literal out name)
-          (let* ((lit (format nil "~A+~D" label atom-tag)))
+          (let* ((lit (format~ false "~A+~D" label atom-tag)))
             (set! emitted-symbols (acons sym lit emitted-symbols))
             lit)))))
 

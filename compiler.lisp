@@ -76,7 +76,7 @@
                    ((member? keyword keywords-1) (normalize-1 form))
                    (true (list* 'call () (normalize-forms form))))))
         ((symbol? form) (list 'ref form))
-        (t (list 'quote form))))
+        (true (list 'quote form))))
 
 (define (normalize-forms forms)
   (mapfor (form forms) (normalize form)))
@@ -99,7 +99,7 @@
   (intern (string-flatten (mapfor (p pieces)
                             (cond ((string? p) (string-symbolcase p))
                                   ((symbol? p) (symbol-name p))
-                                  (t (error "~S" p)))))))
+                                  (true (error "~S" p)))))))
 
 (defmarco (define-walker name implicit-vars)
   (let* ((form-name name)
