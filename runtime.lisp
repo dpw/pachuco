@@ -331,6 +331,9 @@
             ((unquote loopf) (cdr (unquote in)))
             (unquote out))))))
 
+(defmacro (flatten*-mapfor binding . body)
+  (quasiquote (flatten* (mapfor (unquote binding) (unquote-splicing body)))))
+
 (defmacro (findfor binding . body)
   (define loopf (gensym))
   (define l (gensym))
