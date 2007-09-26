@@ -150,6 +150,7 @@
 
     (assert-read "(100)" '(100))
     (assert-read "-100" -100)
+    (assert-read "1-" '1-)
     (assert-read "#x1Ff" 511)
     (assert-read "#x-1Ff" -511)
     (assert-read "#b101" 5)

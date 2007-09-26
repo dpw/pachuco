@@ -857,19 +857,18 @@
 (defmacro rt-alpha-uc 0)
 (defmacro rt-alpha-lc 1)
 (defmacro rt-digit 2)
-(defmacro rt-minus 3)
-(defmacro rt-constituent-misc 4)
-(defmacro rt-constituent-max 4)
+(defmacro rt-constituent-misc 3)
+(defmacro rt-constituent-max 3)
 
-(defmacro rt-eos 5)
-(defmacro rt-whitespace 6)
-(defmacro rt-lparen 7)
-(defmacro rt-rparen 8)
-(defmacro rt-line-comment 9)
-(defmacro rt-double-quote 10)
-(defmacro rt-single-quote 11)
-(defmacro rt-sharp-sign 12)
-(defmacro rt-max 12)
+(defmacro rt-eos 4)
+(defmacro rt-whitespace 5)
+(defmacro rt-lparen 6)
+(defmacro rt-rparen 7)
+(defmacro rt-line-comment 8)
+(defmacro rt-double-quote 9)
+(defmacro rt-single-quote 10)
+(defmacro rt-sharp-sign 11)
+(defmacro rt-max 11)
 
 (define digit-bases (make-vector (1+ rt-max)))
 
@@ -890,8 +889,7 @@
   (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (char-code #\0) 10 rt-digit)
-  (vector-set! readtable (char-code #\-) rt-minus)
-  (dolist (ch '(#\. #\* #\+ #\? #\< #\> #\= #\/))
+  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/))
     (vector-set! readtable (char-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)
@@ -913,37 +911,38 @@
   (<= ct rt-constituent-max))
 
 (define (read-integer istr radix)
-  (define first-digit (read-char istr))
+  ;; Reads an integer from the istream.  Returns false if an integer
+  ;; could not be parsed, others returns the value, stopping after the
+  ;; last character forming part of the number.
+  (define first-digit (peek-char istr 0))
   (define negative (if (eq? #\- first-digit)
                        (begin
-                         (set! first-digit (read-char istr))
+                         (consume-char istr)
+                         (set! first-digit (peek-char istr 0))
                          true)
                        false))
 
-  (define (digit-value ch accept-terminating)
+  (define (digit-value ch)
     (define ct (rt-char-type ch))
     (define base (vector-ref digit-bases ct))
     (if base
         (begin
           (define val (- (char-code ch) base))
-          (when (>= val radix)
-            (error "digit ~C not valid for radix ~D" ch radix))
-          val)
-        (if (and accept-terminating (not (rt-constituent? ct)))
-            false
-            (error "invalid digit ~C" ch))))
+          (if (< val radix) val false))
+        false))
 
-  (define res (digit-value first-digit false))
-  
-  (define (scan-integer)
-    (define val (digit-value (peek-char istr 0) true))
-    (when val
-      (set! res (+ (* radix res) val))
-      (consume-char istr)
-      (scan-integer)))
-
-  (scan-integer)
-  (if negative (- res) res))
+  (define res (digit-value first-digit))
+  (if res
+      (begin
+        (define (scan-integer)
+          (consume-char istr)
+          (define val (digit-value (peek-char istr 0)))
+          (when val
+            (set! res (+ (* radix res) val))
+            (scan-integer)))
+        (scan-integer)
+        (if negative (- res) res))
+      false))
 
 (define (read-token istr)
   (define buf (make-string-buffer))
@@ -958,6 +957,13 @@
 
   (scan-token)
   (string-buffer-to-string buf))
+
+(define (interpret-token token)
+  (define istr (make-string-istream token))
+  (define num (read-integer istr 10))
+  (if (and num (istream-eos? istr))
+      num
+      (intern token)))
 
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0))
@@ -1036,9 +1042,17 @@
 
 (define (read-sharp-signed istr)
   (define ch (read-char istr))
+
+  (define (read-radixed-integer istr radix)
+    (define val (read-integer istr radix))
+    (unless (and val 
+                 (not (rt-constituent? (rt-char-type (peek-char istr 0)))))
+      (error "bad digit ~C" (peek-char istr 0)))
+    val)
+
   (cond ((eq? ch #\\) (read-char-literal istr))
-        ((or (eq? ch #\x) (eq? ch #\X)) (read-integer istr 16))
-        ((or (eq? ch #\b) (eq? ch #\B)) (read-integer istr 2))
+        ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer istr 16))
+        ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer istr 2))
         (true (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)
@@ -1051,12 +1065,8 @@
   (cond ((= ct rt-whitespace)
          (consume-char istr)
          false)
-        ((or (= ct rt-digit)
-             (and (= ct rt-minus)
-                  (eq? rt-digit (rt-char-type (peek-char istr 1)))))
-         (rplaca c (read-integer istr 10)))
         ((rt-constituent? ct)
-         (rplaca c (intern (read-token istr))))
+         (rplaca c (interpret-token (read-token istr))))
         ((= ct rt-lparen)
          (consume-char istr)
          (rplaca c (read-list istr c)))
