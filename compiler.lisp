@@ -611,8 +611,8 @@
 (define (dest-conditional-flabel dest) (third dest))
 
 (define (dest-discard? dest) (not dest))
-(define (dest-value? dest) (and dest (eq (car dest) 'dest-value)))
-(define (dest-conditional? dest) (and dest (eq (car dest) 'dest-conditional)))
+(define (dest-value? dest) (and dest (eq? (car dest) 'dest-value)))
+(define (dest-conditional? dest) (and dest (eq? (car dest) 'dest-conditional)))
 
 ;;; Top-level sections:  Lambdas and quoted forms
 
