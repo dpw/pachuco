@@ -59,6 +59,9 @@
   (assert-result (findfor (x ()) (error "Whoa!")) false)
   (assert-result (findfor (x '(1)) (> x 1)) false)
 
+  (assert-result (sublist '(1 2 3) 1) '(2 3))
+  (assert-result (sublist '(1 2 3 4) 1 3) '(2 3))
+
   (begin
     (define x '(1 2))
     

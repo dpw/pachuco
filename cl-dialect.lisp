@@ -194,5 +194,8 @@
       (read in nil (car eos))
       (read in)))
 
+(defmacro sublist (&rest args)
+  `(subseq ,@args))
+
 (defmacro with-open-file-for-reading (&rest body)
   `(with-open-file ,@body))

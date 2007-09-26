@@ -413,6 +413,17 @@
         (aux (cons (car l) acc) (cdr l))))
   (aux () l))
 
+(define (sublist l start . end)
+  (if (null? end) (copy-list (nthcdr start l))
+      (begin
+        (define (copy-partial-list l len)
+          (cond ((= 0 len) ())
+                ((not (null? l))
+                 (cons (car l) (copy-partial-list (cdr l) (1- len))))
+                (true
+                 (error "sublist fell off the end of the list"))))
+        (copy-partial-list (nthcdr start l) (- (first end) start)))))
+
 ;;; Symbols
 
 (when-compiling
