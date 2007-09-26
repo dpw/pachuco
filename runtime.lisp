@@ -271,26 +271,24 @@
 
 (define (flatten* ls)
   (define (find-end l ls)
-    (if (not (null? (cdr l)))
-        (find-end (cdr l) ls)
-        (if (not (null? ls))
-            (find-start l ls))))
+    (if (null? (cdr l))
+        (find-start l ls)
+        (find-end (cdr l) ls)))
 
   (define (find-start l ls)
-    (when (not (null? ls))
-      (if (not (null? (car ls)))
+    (unless (null? ls)
+      (if (null? (car ls))
+          (find-start l (cdr ls))
           (begin
-           (rplacd l (car ls))
-           (find-end (car ls) (cdr ls)))
-          (find-start l (cdr ls)))))
+            (rplacd l (car ls))
+            (find-end (car ls) (cdr ls))))))
   
-  (if (not (null? ls))
-      (if (not (null? (car ls)))
+  (if (null? ls) ()
+      (if (null? (car ls))
+          (flatten* (cdr ls))
           (begin
             (find-end (car ls) (cdr ls))
-            (car ls))
-          (flatten* (cdr ls)))
-      ()))
+            (car ls)))))
 
 (define (nconc . ls)
   (flatten* ls))
