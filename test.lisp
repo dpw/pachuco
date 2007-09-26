@@ -157,6 +157,8 @@
     (assert-read "(x .(y))" '(x y))
     (assert-read "(x .())" '(x))
 
+    (assert-read "'(x)" '(quote (x)))
+    
     (assert-read "\"hello\"" "hello")
     (assert-read "\"\\\" \\\\ \\\"\"" "\" \\ \"")
     

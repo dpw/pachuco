@@ -866,8 +866,9 @@
 (defmacro rt-rparen 7)
 (defmacro rt-line-comment 8)
 (defmacro rt-double-quote 9)
-(defmacro rt-sharp-sign 10)
-(defmacro rt-max 10)
+(defmacro rt-single-quote 10)
+(defmacro rt-sharp-sign 11)
+(defmacro rt-max 11)
 
 (define digit-bases (make-vector (1+ rt-max)))
 
@@ -881,6 +882,7 @@
                        (cons #\) rt-rparen)
                        (cons #\; rt-line-comment)
                        (cons #\" rt-double-quote)
+                       (cons #\' rt-single-quote)
                        (cons #\# rt-sharp-sign)))
     (vector-set! readtable (char-code (car ch-ct)) (cdr ch-ct)))
 
@@ -901,7 +903,7 @@
         (set! ch (char-code ch))
         (define ct (if (>= ch 128) rt-illegal (vector-ref readtable ch)))
         (when (= ct rt-illegal)
-          (error "bad character ~D" ch))
+          (error "bad character ~C (~D)" ch ch))
         ct)
       rt-eos))
 
@@ -1035,6 +1037,9 @@
         ((= ct rt-double-quote)
          (consume-char istr)
          (rplaca c (read-string-literal istr)))
+        ((= ct rt-single-quote)
+         (consume-char istr)
+         (rplaca c (list 'quote (read istr))))
         ((= ct rt-sharp-sign)
          (consume-char istr)
          (rplaca c (read-sharp-signed istr)))
