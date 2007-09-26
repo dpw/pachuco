@@ -357,8 +357,11 @@
     (define ((unquote loopf) (unquote l))
       (unless (null? (unquote l))
         (define (unquote (first binding)) (car (unquote l)))
-        (rplaca (unquote l) (begin (unquote-splicing body)))))
-    ((unquote loopf) (unquote (second binding))))))
+        (rplaca (unquote l) (begin (unquote-splicing body)))
+        ((unquote loopf) (cdr (unquote l)))))
+    (define (unquote l) (unquote (second binding)))
+    ((unquote loopf) (unquote l))
+    (unquote l))))
 
 (defmacro (flatten*-mapfor binding . body)
   (quasiquote (flatten* (mapfor (unquote binding) (unquote-splicing body)))))

@@ -57,6 +57,8 @@
   (assert-result (mapfor (x ()) (error "Whoa!")) ())
   (assert-result (mapfor (x '(a)) x) '(a))
 
+  (assert-result (nmapfor (x (list 1 2 3)) (1+ x)) '(2 3 4))
+
   (assert-result (findfor (x '(1 2 3)) (> x 1)) 2)
   (assert-result (findfor (x ()) (error "Whoa!")) false)
   (assert-result (findfor (x '(1)) (> x 1)) false)
