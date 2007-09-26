@@ -391,6 +391,12 @@
                (list pivot)
                (sort (filterfor (x (cdr l)) (pred pivot x)) pred)))))
 
+(define (reverse l)
+  (define (aux acc l)
+    (if (null? l) acc
+        (aux (cons (car l) acc) (cdr l))))
+  (aux () l))
+
 ;;; Symbols
 
 (when-compiling
