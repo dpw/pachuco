@@ -196,6 +196,9 @@
 (define (last-cons l)
   (last-n-conses l 1))
 
+(define (last-elem l)
+  (car (last-cons l)))
+
 (define (list* l1 . l)
   (if (null? l) l1
     (begin
@@ -464,12 +467,6 @@
   (string-copy str offset newstr 0 len)
   newstr)
 
-(define (chomp str)
-  (define len (string-length str))
-  (if (and (> len 0) (eq? #\Newline (string-ref str (1- len))))
-      (substring str 0 (1- len))
-      str))
-
 (define (string-equal? a b)
   (define len (string-length a))
   (and (= (string-length b) len)
@@ -481,6 +478,21 @@
                     (begin (set! pos (1+ pos))
                            (compare-chars)))))
          (compare-chars))))
+
+(define (string-flatten strs)
+  (define pos 0)
+  (dolist (str strs)
+    (set! pos (+ pos (string-length str))))
+  (define res (make-string pos))
+  (set! pos 0)
+  (dolist (str strs)
+    (string-copy str 0 res pos (string-length str))
+    (set! pos (+ pos (string-length str))))
+  res)
+
+(define (string-concat . strs)
+  (string-flatten strs))
+
 
 ;;; Vectors
 
@@ -1143,12 +1155,16 @@
 (defmacro (defmarco template . body)
   (quasiquote (defmacro (unquote template) (unquote-splicing body))))
 
+(defmacro (defconstant name val)
+  (quasiquote (defmacro (unquote name) (unquote val))))
+
 (defmacro (funcall . form) form)
 (defmacro (function f) f)
 
 (defmacro (subject-language-boolean bool) bool)
 (defmacro (subject-language-symbol-name sym) (list 'symbol-name sym))
 (defmacro (subject-language-intern str) (list 'intern str))
+(defmacro (string-symbolcase str) str)
 
 (defmacro (read~ . args) (cons 'read args))
 
