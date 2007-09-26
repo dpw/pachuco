@@ -48,9 +48,6 @@
   (let ((c (gensym)))
   `(mapl #'(lambda (,c) (rplaca ,c (let ((,var (car ,c))) ,@body))) ,l)))
 
-(defmacro comprehend ((var l) test map)
-  `(mapcan #'(lambda (,var) (and ,test (list ,map))) ,l))
-
 (defmacro flatten*-mapfor ((var l) &rest body)
   `(mapcan #'(lambda (,var) ,@body) ,l)) 
 
