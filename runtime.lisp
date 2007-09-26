@@ -150,6 +150,7 @@
 (reify (rem a b))
 (reify (truncate a b))
 
+(reify (character? a))
 (reify (char-code a))
 (reify (code-char a))
 

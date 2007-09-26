@@ -21,6 +21,7 @@
 (defun eq? (a b) (eql a b))
 (defun function? (a) (functionp a))
 (defun number? (a) (numberp a))
+(defun character? (a) (characterp a))
 (defun string? (a) (stringp a))
 (defun vector? (a) (vectorp a))
 (defun error-halt (message args) (apply #'error (cons message args)))
