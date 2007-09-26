@@ -284,7 +284,9 @@
   (if (pair? l) (cons (car l) (copy-list (cdr l))) l))
 
 (define (copy-tree l)
-  (if (pair? l) (cons (copy-tree (car l)) (copy-tree (cdr l)))))
+  (if (pair? l)
+      (cons (copy-tree (car l)) (copy-tree (cdr l)))
+      l))
 
 (define (flatten* ls)
   (define (find-end l ls)

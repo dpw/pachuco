@@ -41,6 +41,8 @@
   (assert-result (1- 1) 0)
   (assert-result (ash 2 3) 16)
 
+  (assert-result (copy-tree '((1 . 2) 3)) '((1 . 2) 3))
+
   (assert-result (nconc ()) ())
   (assert-result (nconc (copy-list '(1 2)) (copy-list '(3 4))) '(1 2 3 4))
   (assert-result (nconc () (copy-list '(1 2)) () (copy-list '(3 4)))
