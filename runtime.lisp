@@ -1147,8 +1147,8 @@
 (defmacro (function f) f)
 
 (defmacro (subject-language-boolean bool) bool)
-(defmacro (subject-language-symbol-name sym) (symbol-name sym))
-(defmacro (subject-language-intern str) (intern str))
+(defmacro (subject-language-symbol-name sym) (list 'symbol-name sym))
+(defmacro (subject-language-intern str) (list 'intern str))
 
 (defmacro (read~ . args) (cons 'read args))
 
