@@ -963,7 +963,11 @@
   (define num (read-integer istr 10))
   (if (and num (istream-eos? istr))
       num
-      (intern token)))
+      (begin
+        (define special (rassoc-equal token special-printed-forms))
+        (if special
+            (car special)
+            (intern token)))))
 
 (define (consume-whitespace istr)
   (define ch (peek-char istr 0))

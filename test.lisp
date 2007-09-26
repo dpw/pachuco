@@ -171,6 +171,10 @@
     (assert-read "#\\Space" #\Space)
     (assert-read "#\\Newline" #\Newline)
 
+    (assert-read "true" true)
+    (assert-read "false" false)
+    (assert-read "unspecified" unspecified)
+
     (assert-read "(x;comment
 y)" '(x y))
     (assert-read "(x ;comment
