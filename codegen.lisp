@@ -107,11 +107,10 @@
 (defmarco (define-insn-1 name insn)
   (quasiquote
     (define ((unquote name) out oper . scale)
-      (emit-insn-1 out (unquote insn) oper (and scale (car scale))))))
+      (emit-insn-1 out (unquote insn) oper
+                   (if (null? scale) value-scale (car scale))))))
 
 (define (emit-insn-1 out insn oper scale)
-  (unless scale
-    (set! scale value-scale))
   (emit out "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
