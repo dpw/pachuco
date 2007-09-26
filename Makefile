@@ -9,7 +9,7 @@ endif
 endif
 
 SOURCES=runtime.lisp util.lisp interpreter.lisp expander.lisp test.lisp
-COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler3.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
+COMPILER_SOURCES=cl-dialect.lisp util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
 
 test: a.out
 	./a.out
