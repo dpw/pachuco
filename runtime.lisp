@@ -889,7 +889,7 @@
   (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (char-code #\0) 10 rt-digit)
-  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\!))
+  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\! #\~))
     (vector-set! readtable (char-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)
