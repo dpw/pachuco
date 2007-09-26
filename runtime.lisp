@@ -182,6 +182,9 @@
 (define (max a . nums)
   (reduce a nums (lambda (a b) (if (> a b) a b))))
 
+(define (min a . nums)
+  (reduce a nums (lambda (a b) (if (< a b) a b))))
+
 ;; We only support left shifts, because that is all the compiler needs
 (define (ash n count)
   (cond ((= count 0) n)
