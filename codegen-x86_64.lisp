@@ -34,11 +34,11 @@
   (emit-function-prologue out))
 
 (define (emit-program-epilogue out)
-  ;; use the alloc pointer as the result
-  (emit-mov out %alloc %a)
   (emit out "leave")
   (emit out "cld")
   (emit-set-ac-flag out false)
+  ;; use the alloc pointer as the result
+  (emit-mov out %alloc %a)
   (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop out reg))
   (emit out "ret"))
 

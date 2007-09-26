@@ -114,6 +114,7 @@
   (emit out "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
+(define-insn-1 emit-not "not")
 (define-insn-1 emit-idiv "idiv")
 
 (defmarco (define-insn-0 name insn)
@@ -651,7 +652,12 @@
   (emit-pushf out)
   (if enable
       (emit-or out (immediate #x40000) (mem %sp) 2)
-      (emit-and out (immediate #xfffbffff) (mem %sp) 2))
+      (begin
+        ;; we can't use an immediate mask value, due to fixnum limitations
+        (define reg (first general-registers))
+        (emit-mov out (immediate #x40000) reg 2)
+        (emit-not out reg 2)
+        (emit-and out reg (mem %sp) 2)))
   (emit-popf out))
 
 ;;; Apply support
