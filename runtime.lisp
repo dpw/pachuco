@@ -182,6 +182,12 @@
 (define (max a . nums)
   (reduce a nums (lambda (a b) (if (> a b) a b))))
 
+;; We only support left shifts, because that is all the compiler needs
+(define (ash n count)
+  (cond ((= count 0) n)
+        ((> count 0) (ash (+ n n) (1- count)))
+        (true (error "no support for right shifts"))))
+
 ;;; Booleans
 
 (defmacro (not a) (quasiquote (if (unquote a) false true)))
