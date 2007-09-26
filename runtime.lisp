@@ -292,6 +292,9 @@
           (flatten* (cdr ls)))
       ()))
 
+(define (nconc . ls)
+  (flatten* ls))
+
 (defmacro (dolist binding . body)
   (define l (gensym))
   (quasiquote
@@ -309,27 +312,36 @@
   (define in (gensym))
   (define out (gensym))
   (define tail (gensym))
-  (quasiquote
-    (begin
-      (define (unquote in) (unquote (second binding)))
-      (if (null? (unquote in)) ()
-          (begin
-            (define ((unquote bodyf) (unquote (first binding)))
-                (unquote-splicing body))
+  (quasiquote (begin
+    (define (unquote in) (unquote (second binding)))
+    (if (null? (unquote in)) ()
+        (begin
+          (define ((unquote bodyf) (unquote (first binding)))
+              (unquote-splicing body))
 
-            (define (unquote out)
-                (cons ((unquote bodyf) (car (unquote in))) ()))
-            (define (unquote tail) (unquote out))
-            (define ((unquote loopf) (unquote in))
-              (unless (null? (unquote in))
-                (define (unquote out)
-                    (cons ((unquote bodyf) (car (unquote in))) ()))
-                (rplacd (unquote tail) (unquote out))
-                (set! (unquote tail) (unquote out))
-                ((unquote loopf) (cdr (unquote in)))))
+          (define (unquote out)
+              (cons ((unquote bodyf) (car (unquote in))) ()))
+          (define (unquote tail) (unquote out))
+          (define ((unquote loopf) (unquote in))
+            (unless (null? (unquote in))
+              (define (unquote out)
+                  (cons ((unquote bodyf) (car (unquote in))) ()))
+              (rplacd (unquote tail) (unquote out))
+              (set! (unquote tail) (unquote out))
+              ((unquote loopf) (cdr (unquote in)))))
 
-            ((unquote loopf) (cdr (unquote in)))
-            (unquote out))))))
+          ((unquote loopf) (cdr (unquote in)))
+          (unquote out))))))
+
+(defmacro (nmapfor binding . body)
+  (define loopf (gensym))
+  (define l (gensym))
+  (quasiquote (begin
+    (define ((unquote loopf) (unquote l))
+      (unless (null? (unquote l))
+        (define (unquote (first binding)) (car (unquote l)))
+        (rplaca (unquote l) (begin (unquote-splicing body)))))
+    ((unquote loopf) (unquote (second binding))))))
 
 (defmacro (flatten*-mapfor binding . body)
   (quasiquote (flatten* (mapfor (unquote binding) (unquote-splicing body)))))
@@ -337,14 +349,33 @@
 (defmacro (findfor binding . body)
   (define loopf (gensym))
   (define l (gensym))
+  (quasiquote (begin
+    (define ((unquote loopf) (unquote l))
+      (if (null? (unquote l)) false
+          (begin (define (unquote (first binding)) (car (unquote l)))
+                 (if (begin (unquote-splicing body)) (unquote (first binding))
+                     ((unquote loopf) (cdr (unquote l)))))))
+    ((unquote loopf) (unquote (second binding))))))
+
+(defmacro (filterfor binding . body)
   (quasiquote
-    (begin
-      (define ((unquote loopf) (unquote l))
-        (if (null? (unquote l)) false
-            (begin (define (unquote (car binding)) (car (unquote l)))
-                   (if (begin (unquote-splicing body)) (unquote (car binding))
-                       ((unquote loopf) (cdr (unquote l)))))))
-      ((unquote loopf) (unquote (cadr binding))))))
+    (flatten*-mapfor (unquote binding)
+      (if (begin (unquote-splicing body))
+          (list (unquote (first binding)))
+          ()))))
+
+(define (remove item l)
+  (cond ((null? l) l)
+        ((eq? item (car l)) (remove item (cdr l)))
+        (true (cons (car l) (remove item (cdr l))))))
+
+(define (sort l pred)
+  (if (null? l) l
+      (begin
+        (define pivot (car l))
+        (nconc (sort (filterfor (x (cdr l)) (pred x pivot)) pred)
+               (list pivot)
+               (sort (filterfor (x (cdr l)) (pred pivot x)) pred)))))
 
 ;;; Symbols
 
