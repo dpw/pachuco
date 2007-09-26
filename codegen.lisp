@@ -344,7 +344,7 @@
 (define (codegen-quoted-string str out)
   (let* ((label (gen-label)))
     (emit-data out label string-tag-bits)
-    (emit-literal out (fixnum-representation (length str)))
+    (emit-literal out (fixnum-representation (string-length str)))
     (emit out ".ascii \"~A\"" (escape-string-literal str))
     (format~ false "~A+~D" label string-tag)))
 
