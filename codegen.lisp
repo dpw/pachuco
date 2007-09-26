@@ -26,7 +26,7 @@
   (if (number? x) x (format~ false "$~A" x)))
 
 (define (dispmem correction offset reg . reg2)
-  (if (null reg2)
+  (if (null? reg2)
       (format~ false "~A(~A)" (- offset correction) (value-sized reg))
       (format~ false "~A(~A,~A)" (- offset correction) (value-sized reg)
               (value-sized (first reg2)))))
@@ -351,7 +351,7 @@
 (define emitted-symbols ())
 
 (define (codegen-quoted-symbol sym out)
-  (let ((emitted (assoc sym emitted-symbols)))
+  (let* ((emitted (assoc sym emitted-symbols)))
     (if emitted (cdr emitted)
         (let* ((label (gen-label))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
