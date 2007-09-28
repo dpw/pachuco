@@ -74,3 +74,17 @@
     (unless (c-callee-saved %alloc) (emit-pop out %alloc))
     (unless (c-callee-saved %func) (emit-restore-%func out))
     (emit-convert-value out %a dest in-frame-base out-frame-base)))
+
+;;; Cycle counter access
+
+;;; On i386, we can't return enough bits in a fixnum to make this
+;;; really useful
+
+(define-reg-use (raw-rdtsc attrs)
+  (if (dest-type-discard? dest-type) 0 general-register-count))
+
+(define-codegen (raw-rdtsc attrs)
+  (unless (dest-discard? dest)
+    (emit out "rdtsc")
+    (emit-shl out (immediate number-tag-bits) %a))
+  (emit-convert-value out %a dest in-frame-base out-frame-base))

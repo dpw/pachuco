@@ -708,12 +708,3 @@
 (define-pure-operator (raw-arg-ref args-base index) result ()
   (emit-scale-number out value-scale index)
   (emit-mov out (dispmem 0 0 args-base index) result))
-
-(define-reg-use (raw-rdtsc attrs)
-  (if (dest-type-discard? dest-type) 0 general-register-count))
-
-(define-codegen (raw-rdtsc attrs)
-  (unless (dest-discard? dest)
-    (emit out "rdtsc")
-    (emit-shl out (immediate number-tag-bits) %a))
-  (emit-convert-value out %a dest in-frame-base out-frame-base))
