@@ -1,4 +1,4 @@
-;;; Expansion process
+;;; Macro expansion
 
 (define builtin-expanders ())
 

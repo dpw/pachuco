@@ -1,3 +1,7 @@
+;;; The runtime does not yet support command line arguments.  So this
+;;; main function reads what action to perform from stdin, and then
+;;; calls into the driver.lisp functions to do it.
+
 (define (main)
   (define command (read stdin))
   (define files (read stdin))

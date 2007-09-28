@@ -1,6 +1,7 @@
-(declaim (optimize (debug 2)))
+;;; The file provides the definitions required to support the hybrid
+;;; dialect under Common Lisp implementations.
 
-;;; Subject-language compatibility
+(declaim (optimize (debug 2)))
 
 (define-symbol-macro true t)
 (define-symbol-macro false nil)
@@ -15,7 +16,6 @@
 (defun subject-language-intern (str)
   (intern (string-upcase str)))
 
-;; Functions from the interpreter basic env list
 (defun null? (a) (null a))
 (defun pair? (a) (consp a))
 (defun eq? (a b) (eql a b))
@@ -31,7 +31,6 @@
   (if (member a '(false true () unspecified)) false
       (symbolp a)))
 
-;;; mapfor - a bit like list comprehensions
 (defmacro mapfor (decl &rest body)
   (let ((var (first decl))
         (l (second decl)))

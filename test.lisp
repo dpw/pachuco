@@ -1,4 +1,4 @@
-;;; Test
+;;; Tests
 
 (defmacro (assert-result expr expect)
   (quasiquote

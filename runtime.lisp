@@ -1,3 +1,5 @@
+;;; Runtime and library of basic definitions
+
 (defmacro (when-compiling . rest)
   (if compiling (cons 'definitions rest) '(definitions)))
 (defmacro (when-interpreting . rest)

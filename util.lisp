@@ -1,26 +1,34 @@
+;;; Miscellaneous utilities
+
 ;;; List-like buffers
 ;;; Represented as (head . tail)
 
 (define (make-buffer)
+  ;; create a buffer
   (let* ((buf (cons () ())))
     (cons buf buf)))
 
 (define (buffer-add buf el)
+  ;; add an item to the end of a buffer
   (let* ((newtail (cons el ())))
     (rplacd (cdr buf) newtail)
     (rplacd buf newtail)))
 
 (define (buffer-concat buf1 buf2)
+  ;; concatenate two buffers
   (rplacd (cdr buf1) (cdar buf2))
   (rplacd buf1 (cdr buf2)))
 
 (define (buffer-list buf)
+  ;; turn a buffer into a list
   (cdar buf))
 
 
-(define (lassoc item lalist)
+(define (lassoc key lalist)
+  ;; from a list-of-alists, find a cons with the key
   (if (null? lalist) false
-      (or (assoc item (car lalist)) (lassoc item (cdr lalist)))))
+      (or (assoc key (car lalist)) (lassoc key (cdr lalist)))))
 
 (define (lapush key val lalist)
+  ;; push an key-val entry onto a list-of-alists
   (rplaca lalist (cons (cons key val) (car lalist))))

@@ -1,6 +1,7 @@
 ;;; i386-specific code generation
 
-;;; Vector copy.
+;;; Vector copy.  We don't share this with x86-64, because we have to
+;;; avoid running out of registers
 
 (define-reg-use (vec-copy attrs src-addr dst-addr len)
   (operator-args-reg-use form)

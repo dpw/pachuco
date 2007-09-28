@@ -1,4 +1,8 @@
+;;; The compiler
+
 (define (compile-program program)
+  ;; Compile the program, printing the resulting assembly on standard
+  ;; output
   (set! program (list* 'begin () (normalize-forms program)))
   (set! program (gather-symbols program))
   (set! program (car (eliminate-definitions program)))
@@ -58,16 +62,16 @@
 ;;; Transform a program so that every form begins with a
 ;;; distinguishing keyword:
 ;;;
-;;; if, begin, definitions, define, lambda, set!, quote: as in source
+;;; if, definitions, define, lambda, set!: as in source
 ;;; language
 ;;;
-;;; builtin: builtin operators
+;;; quote: All quoted and literal forms
 ;;;
 ;;; call: a function call
 ;;;
 ;;; ref: a variable reference
 ;;;
-;;; All literals are also quoted during this transformation
+;;; And the builtin operators
 
 (define (normalize form)
   (cond ((pair? form)
@@ -87,19 +91,22 @@
 (define (normalize-2 form)
   (list* (car form) (cadr form) (normalize-forms (cddr form))))
 
-;;; Improved form walker
-
-;;; define-walker creates:
-;;; - The name-alist
-;;; - The define-name macro
-;;; - A name-form function
-;;; - A name-forms function, which combines results
 
 (define (compound-symbol . pieces)
   (intern (string-flatten (mapfor (p pieces)
                             (cond ((string? p) (string-symbolcase p))
                                   ((symbol? p) (symbol-name p))
                                   (true (error "~S" p)))))))
+
+
+;;; A walker is a function which recurses over a program tree,
+;;; dispatching forms to handlers based on their keywords.
+;;; define-walker is a macro providing a convenient way to define
+;;; walkers.
+;;;
+;;; A define-walker needs to be paired with a recursion function,
+;;; which defines how to handle forms that don't match one of the
+;;; handlers
 
 (defmarco (define-walker name implicit-vars)
   (let* ((form-name name)
@@ -126,6 +133,10 @@
                          (bind (unquote (cdr template)) (cdr form)
                                (unquote-splicing body)))
                        (unquote (unquote alist-name))))))))))
+
+;;; define-trivial-walker is like define-walker, but it also provides
+;;; a recusrion function that does a straightforward recursion into
+;;; subforms
 
 (defmarco (define-trivial-walker name implicit-vars)
   (let* ((form-name name)
@@ -589,24 +600,31 @@
   (unless (eq? 'begin (car form))
     (emit-comment out "~S" (comment-form form))))
 
-;;; code generation
 
-;;; Result types are represented as:
-;;; true - value wanted
-;;; false - value not wanted
-;;; (tlabel . flabel) - conditional
+;;; Arch-independent code generation
 
-(defconstant dest-type-discard 'dest-type-discard)
-(defconstant dest-type-value 'dest-type-value)
-(defconstant dest-type-conditional 'dest-type-conditional)
+;;; dest-types describe the destination of the result of an
+;;; expression, with enough information to determine the number of
+;;; registers needs by the code for the expression.
+
+(defconstant dest-type-discard
+  ;; the result of the expression is not needed
+  'dest-type-discard)
+(defconstant dest-type-value
+  ;; the result of the expression should end up in a register
+  'dest-type-value)
+(defconstant dest-type-conditional
+  ;; the result of the expression is used to branch
+  'dest-type-conditional)
 
 (define (dest-type-discard? dest-type)
-  (eq? dest-type 'dest-type-discard))
+  (eq? dest-type dest-type-discard))
 (define (dest-type-value? dest-type)
-  (eq? dest-type 'dest-type-value))
+  (eq? dest-type dest-type-value))
 (define (dest-type-conditional? dest-type)
-  (eq? dest-type 'dest-type-conditional))
+  (eq? dest-type dest-type-conditional))
 
+;;; dests fully describe the destination of the result 
 
 (defconstant dest-discard false)
 
@@ -637,16 +655,17 @@
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted out))
                            (cons 'quoted quoted))))
 
+(define-codegen-sections (begin varrecs . body)
+  (dolist (varrec varrecs) (varrec-attr-set! varrec 'lambda-label false))
+  (codegen-sections-recurse form out))
+
 (define (assign-varrec-indices varrecs mode)
+  ;; assign slot indices to varrecs
   (let* ((index 0))
     (dolist (varrec varrecs)
       (varrec-attr-set! varrec 'index index)
       (varrec-attr-set! varrec 'mode mode)
       (set! index (1+ index)))))
-
-(define-codegen-sections (begin varrecs . body)
-  (dolist (varrec varrecs) (varrec-attr-set! varrec 'lambda-label false))
-  (codegen-sections-recurse form out))
 
 (define-codegen-sections (lambda attrs body)
   (let* ((label (gen-label))
@@ -657,6 +676,7 @@
     (dolist (varrec (attr-ref attrs 'params))
       (varrec-attr-set! varrec 'lambda-label false))
 
+    ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body out)
 
     (emit out ".text")
@@ -673,7 +693,8 @@
     (emit-function-prologue out)
     (emit-comment-form out body)
 
-    ;; need to do reg-use pass to "prime" forms for codegen pass
+    ;; we don't care about the number of registers used, but we still
+    ;; need to do the reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
     (codegen body (dest-value %funcres)
              function-in-frame-base function-out-frame-base
@@ -682,6 +703,8 @@
     (emit-function-epilogue out)))
 
 (define (wrap-lambda-body attrs body)
+  ;; wrap a lambda body with code required to check that the number of
+  ;; arguments matches the number of parameters, or to handle varargs
   (let* ((nparams (length (attr-ref attrs 'params)))
          (vararg (attr-ref attrs 'vararg)))
     (if vararg
@@ -704,6 +727,9 @@
 ;;; Begin
 
 (define (registerize-varrecs varrecs ru)
+  ;; this performs a very restricted ofrm of register allocation.  if
+  ;; we have registers that are otherwise unused, we assign them to
+  ;; variables
   (if (or (null? varrecs) (>= ru general-register-count))
       (begin
         (dolist (varrec varrecs)
@@ -776,6 +802,8 @@
 ;;; Operator support
 
 (define (operator-args-reg-use form)
+  ;; find the number of registers required for evaluation of the
+  ;; arguments of an operator
   (let* ((index-count 0)
          (args-ru (mapfor (arg (cddr form))
                     (let* ((index index-count))
@@ -809,6 +837,7 @@
     (if (null? trashy-args-ru) ru general-register-count)))
 
 (define (operator-args-codegen form frame-base regs out)
+  ;; generate the code to evaluate the arguments of an operator
   (let* ((trashy-args-ru (form-attr form 'trashy-args-ru))
          (non-trashy-args-ru (form-attr form 'non-trashy-args-ru))
          (args (cddr form)))
@@ -854,6 +883,7 @@
       (emit-frame-pop out frame-base (elt regs (cdr arg-ru))))))
 
 (defmarco (define-operator template outreg supplemental-regs . body)
+  ;; define how to generate code for an operator
   (let* ((body-ru (max (+ (length (cdr template)) (length supplemental-regs))))
          (name (car template))
          (params (cdr template)))
@@ -873,17 +903,24 @@
                                 in-frame-base out-frame-base))))))))
 
 (define (operator-args-reg-use-discarding form)
+  ;; find the number of registers required for evaluation of the
+  ;; arguments of an operator, when the operator itself has been
+  ;; eliminated
   (if (null? (cddr form)) ()
       (let* ((rus (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
         (reduce~ (car rus) (cdr rus) (function max)))))
 
 (define (operator-args-codegen-discarding form in-frame-base out-frame-base
                                           regs out)
+  ;; generate the code to evaluate the arguments of an operator, when
+  ;; the operator itself has been eliminated
   (dolist (arg (cddr form))
     (codegen arg dest-discard in-frame-base in-frame-base regs out))
   (emit-adjust-frame-base out in-frame-base out-frame-base))
 
 (defmarco (define-pure-operator template outreg supplemental-regs . body)
+  ;; define how to generate code for an operator that is free of
+  ;; side-effects
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
          (name (car template))
          (params (cdr template)))
@@ -909,6 +946,8 @@
                                       in-frame-base out-frame-base))))))))))
 
 (defmarco (define-cc-operator template cc supplemental-regs . body)
+  ;; define how to generate code for an operator that is free of
+  ;; side-effects and produces its result in a condition code
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
          (name (car template))
          (params (cdr template)))
@@ -1004,12 +1043,14 @@
 ;;; Strings and vectors
 
 (define (genericize-vec-op form name tag tag-bits scale)
+  ;; convert a vector-type-specific operator into a generic vec operator
   (rplaca form name)
   (rplaca (cdr form) (list (cons 'tag tag) (cons 'scale scale)
                            (cons 'tag-bits tag-bits)))
   (simplify-recurse form))
 
 (define (make-vec-copy-form src src-index dst dst-index len tag scale)
+  ;; generate code to perform a vector copy
   (let* ((si-name (gensym))
          (di-name (gensym))
          (len-name (gensym))
@@ -1039,6 +1080,8 @@
         (quote unspecified)))))
 
 (defmarco (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
+  ;; define how to convert from the operators on a specific vector
+  ;; type into generic vec operators
   (quasiquote (definitions
     (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
       (genericize-vec-op form 'make-vec (unquote tag) (unquote tag-bits)
