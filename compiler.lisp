@@ -15,6 +15,7 @@
   (eliminate-defines program)
   (collect-closures program)
   (introduce-boxes program)
+  (lambda-label program)
   (codegen-program program)
   ;(format~ true "~S~%" program)
   )
@@ -572,6 +573,30 @@
                                  (unquote-splicing box-init-forms)
                                  (unquote body)))))))
 
+;;; Lambda labelling:
+;;;
+;;; Assign the code label for each lambda, and where possible,
+;;; propogate it to the associated variable
+
+(define-trivial-walker lambda-label ())
+
+(define-lambda-label (begin varrecs . body)
+  (dolist (varrec varrecs)
+    (varrec-attr-set! varrec 'lambda-label false))
+  (lambda-label-forms body))
+
+(define-lambda-label (lambda attrs body)
+  (form-attr-set! form 'label (gen-label))
+  (dolist (varrec (attr-ref attrs 'params))
+    (varrec-attr-set! varrec 'lambda-label false))
+  (lambda-label-recurse form))
+
+(define-lambda-label (set! varrec val)
+  (lambda-label-recurse form)
+  (when (and (eq? 'lambda (car val))
+             (not (varrec-written? varrec)))
+    (varrec-attr-set! varrec 'lambda-label (form-attr val 'label))))
+
 ;;; Produce a comment form
 
 (define (comment-form-forms forms)
@@ -656,7 +681,6 @@
                            (cons 'quoted quoted))))
 
 (define-codegen-sections (begin varrecs . body)
-  (dolist (varrec varrecs) (varrec-attr-set! varrec 'lambda-label false))
   (codegen-sections-recurse form out))
 
 (define (assign-varrec-indices varrecs mode)
@@ -668,14 +692,7 @@
       (set! index (1+ index)))))
 
 (define-codegen-sections (lambda attrs body)
-  (let* ((label (gen-label))
-         (self-varrec (attr-ref attrs 'self)))
-    (form-attr-set! form 'label label)
-    (when (and self-varrec (not (varrec-written? self-varrec)))
-      (varrec-attr-set! (varrec-attr self-varrec 'origin) 'lambda-label label))
-    (dolist (varrec (attr-ref attrs 'params))
-      (varrec-attr-set! varrec 'lambda-label false))
-
+  (let* ((self-varrec (attr-ref attrs 'self)))
     ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body out)
 
@@ -689,7 +706,7 @@
       (unless (varrec-written? self-varrec)
         (varrec-attr-set! self-varrec 'mode 'self)))
 
-    (emit-label out label)
+    (emit-label out (attr-ref attrs 'label))
     (emit-function-prologue out)
     (emit-comment-form out body)
 
