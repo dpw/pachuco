@@ -282,6 +282,12 @@
       (rplacd penultimate (cadr penultimate))
       l)))
 
+(defmacro (list* l1 . l)
+  (define (aux l1 l)
+    (if (null? l) l1
+        (quasiquote (cons (unquote l1) (unquote (aux (car l) (cdr l)))))))
+  (aux l1 l))
+
 (define (copy-list l)
   (if (pair? l) (cons (car l) (copy-list (cdr l))) l))
 
