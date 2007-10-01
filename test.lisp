@@ -208,23 +208,6 @@ y)" '(x y))
     (assert-result (read f) '("hello" world))
     (assert-result (read f false) false)))
 
-(when-compiling
-  (define (time-function f)
-    (define count 0)
-    (define min false)
-    (while (< count 100)
-      (define start-t (raw-rdtsc))
-      (f)
-      (define end-t (raw-rdtsc))
-      (define delta (- end-t start-t))
-      (set! min (if (and min (< min delta)) min delta))
-      (set! count (1+ count)))
-
-    (formout stdout "Cycles: ~S~%" min)))
-
-(when-interpreting
-  (define (time-function f) (f)))
-
 (define (main)
-  (time-function tests)
+  (time (tests))
   (formout stdout "Done~%"))
