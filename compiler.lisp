@@ -325,11 +325,13 @@
 
 (define-trivial-walker simplify ())
 
-;;; Adjust lambdas so that they only take one body form.
-
 (define-simplify (lambda attrs . body)
+  ;; Adjust lambdas so that they only take one body form.
   (simplify-recurse form)
   (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
+
+;;; We currently conflate character and numbers.  So eliminate
+;;; character-related operators:
 
 (define-simplify (char-code attrs ch)
   (overwrite-form form ch)
@@ -340,7 +342,6 @@
   (simplify-recurse form))
 
 (define-simplify (character? attrs ch)
-  ;; we currently conflate characters and numbers
   (rplaca form 'number?)
   (simplify-recurse form))
 
@@ -504,9 +505,10 @@
 ;;; Introduce storage boxes
 ;;;
 ;;; We need storage boxes for variables that get written to *and* get
-;;; stashed into closures (read only variables can be stored directly
-;;; in closures).  So we rewrite all set!s and refs for such variables
-;;; to go via the storage boxes.
+;;; stashed into closures (read-only variables can be stored directly
+;;; in closures; written variables that don't put in closures can just
+;;; live on the stack).  So we rewrite all set!s and refs for such
+;;; variables to go via the storage boxes.
 ;;;
 ;;; For variables introduced by begin, we also need to allocate the
 ;;; storage boxes, but these always get initialized to unspecified, so
