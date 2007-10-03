@@ -383,11 +383,11 @@
 
 ;;; Variables
 
-(define-reg-use (set! varrec val)
+(define-reg-use ((set! define) varrec val)
   (max (reg-use val dest-type-value)
        (convert-value-reg-use dest-type)))
 
-(define-codegen (set! varrec val)
+(define-codegen ((set! define) varrec val)
   (if (and (dest-discard? dest) 
            (eq? 'register (varrec-attr varrec 'mode)))
       (begin

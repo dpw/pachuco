@@ -12,7 +12,6 @@
   (simplify program)
   (resolve-variables program)
   (classify-variables program)
-  (eliminate-defines program)
   (collect-closures program)
   (introduce-boxes program)
   (lambda-label program)
@@ -109,6 +108,11 @@
 ;;; which defines how to handle forms that don't match one of the
 ;;; handlers
 
+(define (multi-acons keys val rest)
+  (if (pair? keys)
+      (append (mapfor (key keys) (cons key val)) rest)
+      (acons keys val rest)))
+
 (defmarco (define-walker name implicit-vars)
   (let* ((form-name name)
          (recurse-name (compound-symbol name "-recurse"))
@@ -129,7 +133,7 @@
       (defmarco ((unquote define-name) template . body)
         (quasiquote
           (set! (unquote (unquote alist-name))
-                (acons '(unquote (car template))
+                (multi-acons '(unquote (car template))
                        (lambda (form (unquote-splicing (unquote implicit-vars)))
                          (bind (unquote (cdr template)) (cdr form)
                                (unquote-splicing body)))
@@ -330,15 +334,17 @@
   (simplify-recurse form)
   (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
 
+(define-simplify (define varrec . val)
+  ;; Normalize defines to always include a value
+  (if (null? val)
+      (rplacd (cdr form) (list (quoted-unspecified)))
+      (simplify (car val))))
+
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
 
-(define-simplify (char-code attrs ch)
+(define-simplify ((char-code code-char) attrs ch)
   (overwrite-form form ch)
-  (simplify-recurse form))
-
-(define-simplify (code-char attrs code)
-  (overwrite-form form code)
   (simplify-recurse form))
 
 (define-simplify (character? attrs ch)
@@ -362,77 +368,100 @@
   (rplaca (cdr form) (resolve-variable var frames))
   (resolve-variables-aux val frames))
 
-(define-resolve-variables-aux (define var . val)
+(define-resolve-variables-aux (define var val)
   (rplaca (cdr form) (resolve-variable var frames))
-  (resolve-variables-aux-recurse form frames))
+  (resolve-variables-aux val frames))
 
 (define-resolve-variables-aux (begin varrecs . body)
   (resolve-variables-aux-recurse form (cons varrecs frames)))
 
 (define-resolve-variables-aux (lambda attrs body)
-  (resolve-variables-aux-recurse form (cons (attr-ref attrs 'params) frames)))
+  (resolve-variables-aux body (cons (attr-ref attrs 'params) frames)))
 
 (define (resolve-variables form)
   (resolve-variables-aux form ()))
             
 ;;; Classify all variables into read-only and potentially read-write
 ;;;
+;;; I (0) - initial state
+;;; D (1) - defined
+;;; W (2) - defined, and written
+;;; E (3) - early access (encountered a potential access before the define)
+;;; ! (4) - error
+;;;
+;;;          I D W E !
+;;;
+;;; define   D ! ! E !
+;;; ref      E D W E !
+;;; set!     E W W E !
+
+
 ;;; A "written" boolean attribute is added to each varrec.
 
 (define-trivial-walker classify-variables ())
 
-(define (mark-variable varrec use)
+(define varrec-define-state-table (make-vector-from-list '(1 4 4 3 4)))
+(define varrec-ref-state-table    (make-vector-from-list '(3 1 2 3 4)))
+(define varrec-set!-state-table   (make-vector-from-list '(3 2 2 3 4)))
+
+(define (update-varrec-state varrec table)
   (varrec-attr-set! varrec 'state
-                    (if (> use (varrec-attr varrec 'state)) 0 2)))
- 
+                    (vector-ref table (varrec-attr varrec 'state))))
+
 (define-classify-variables (ref varrec)
-  (mark-variable varrec 1))
+  (update-varrec-state varrec varrec-ref-state-table))
 
 (define-classify-variables (set! varrec val)
   (classify-variables val)
-  (mark-variable varrec 0))
+  (update-varrec-state varrec varrec-set!-state-table))
 
-(define-classify-variables (define varrec . val)
-  (if (and (not (null? val)) (eq? 'lambda (caar val)))
-      (begin
-        (mark-variable varrec 2)
-        (classify-variables-recurse form)
-        (form-attr-set! (car val) 'self varrec))
-      (begin
-        (classify-variables-recurse form)
-        (mark-variable varrec 2))))
+(define (update-define-varrec-state varrec form)
+  (let* ((state (varrec-attr varrec 'state)))
+    (when (= state 3)
+      (rplaca form 'set!))
+    (varrec-attr-set! varrec 'state
+                      (vector-ref varrec-define-state-table state))))
+
+(define-classify-variables (define varrec val)
+  (labels ((update-varrec-state ()
+             (let* ((state (varrec-attr varrec 'state)))
+               (when (= state 3)
+                 (rplaca form 'set!))
+               (varrec-attr-set! varrec 'state
+                                (vector-ref varrec-define-state-table state)))))
+    (classify-variables val)
+    (if (eq? 'lambda (car val))
+        (begin (update-varrec-state)
+               (classify-variables val)
+               (form-attr-set! val 'self varrec))
+        (begin (classify-variables val)
+               (update-varrec-state)))))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'state init))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'written
-                      (= 2 (varrec-attr-remove varrec 'state)))))
+    (let* ((state (varrec-attr-remove varrec 'state))
+           (written false))
+      (cond ((= state 2) 
+             (set! written true))
+            ((= state 3)
+             (set! written true)
+             (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
+                                      (cddr form))))
+            ((= state 4)
+             (error "bad variable ~S" (car varrec))))
+      (varrec-attr-set! varrec 'written written))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs 1 form))
+  (classify-block-variables varrecs 0 form))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) 0 form))
+  (classify-block-variables (attr-ref attrs 'params) 1 form))
  
-;;; Now definition information is captured in the begins, replace
-;;; defines with set!s
-
 (define (varrec-written? varrec) (varrec-attr varrec 'written))
-
-(define-trivial-walker eliminate-defines ())
-
-(define-eliminate-defines (define varrec . val)
-  (rplaca form 'set!)
-  (when (null? val)
-    (if (varrec-written? varrec)
-        ;; we clear written vars at the start of the begin in the
-        ;; introduce-boxes phase, so these defines can be eliminated
-        (overwrite-form form (quoted-unspecified))
-        (rplacd (cdr form) (quoted-unspecified))))
-  (eliminate-defines-recurse form))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
@@ -463,7 +492,7 @@
 (define-collect-closures-aux (ref varrec)
   (rplaca (cdr form) (resolve-closure-var varrec depth closure-cell)))
 
-(define-collect-closures-aux (set! varrec val)
+(define-collect-closures-aux ((define set!) varrec val)
   (rplaca (cdr form) (resolve-closure-var varrec depth closure-cell))
   (collect-closures-aux val depth closure-cell))
 
@@ -539,26 +568,15 @@
                                                (unquote val)))))
   (introduce-boxes val))
 
-(define (initialize-var-form varrec)
-  (list 'set! varrec
-        (if (varrec-boxed? varrec)
-            (list 'make-box () (quoted-unspecified))
-            (quoted-unspecified))))
-
-(define-introduce-boxes (begin varrecs . body)
-  (introduce-boxes-recurse form)
-  (let* ((written-varrecs (filterfor (varrec varrecs) 
-                            (varrec-written? varrec))))
-    (unless (null? written-varrecs)
-      (rplacd (cdr form) (nconc (nmapfor (varrec written-varrecs)
-                                  (initialize-var-form varrec))
-                                body)))))
+(define-introduce-boxes (define varrec val)
+  (when (varrec-boxed? varrec)
+    (rplaca (cddr form) (list 'make-box () val)))
+  (introduce-boxes val))
 
 (define (init-boxed-param-form varrec temprec)
   (quasiquote (set! (unquote varrec) (make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
-  (introduce-boxes-recurse form)
   (let* ((box-varrecs ())
          (box-init-forms ()))
     (nmapfor (varrec (attr-ref attrs 'params))
@@ -573,7 +591,8 @@
       (rplaca (cddr form)
               (quasiquote (begin (unquote box-varrecs)
                                  (unquote-splicing box-init-forms)
-                                 (unquote body)))))))
+                                 (unquote body))))))
+  (introduce-boxes body))
 
 ;;; Lambda labelling:
 ;;;
@@ -591,10 +610,10 @@
   (form-attr-set! form 'label (gen-label))
   (dolist (varrec (attr-ref attrs 'params))
     (varrec-attr-set! varrec 'lambda-label false))
-  (lambda-label-recurse form))
+  (lambda-label body))
 
 (define-lambda-label (set! varrec val)
-  (lambda-label-recurse form)
+  (lambda-label val)
   (when (and (eq? 'lambda (car val))
              (not (varrec-written? varrec)))
     (varrec-attr-set! varrec 'lambda-label (form-attr val 'label))))

@@ -201,3 +201,7 @@
 
 (defun reduce~ (initial l f)
   (reduce f l :initial-value initial))
+
+(defun make-vector-from-list (l)
+  (make-array (length l) :initial-contents l))
+  
