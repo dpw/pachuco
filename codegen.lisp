@@ -387,7 +387,7 @@
   (max (reg-use val dest-type-value)
        (convert-value-reg-use dest-type)))
 
-(define-codegen ((set! define) varrec val)
+(define-codegen (set! varrec val)
   (if (and (dest-discard? dest) 
            (eq? 'register (varrec-attr varrec 'mode)))
       (begin
@@ -398,6 +398,14 @@
         (codegen val (dest-value reg) in-frame-base in-frame-base regs out)
         (emit-mov out reg (varrec-operand varrec in-frame-base))
         (emit-convert-value out reg dest in-frame-base out-frame-base))))
+
+(define-codegen (define varrec val)
+  (error "codegen for define"))
+
+(define (codegen-define varrec val frame-base regs out)
+  (let* ((reg (first regs)))
+    (codegen val (dest-value reg) frame-base frame-base regs out)
+    (emit-push out reg)))
 
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 

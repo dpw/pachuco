@@ -766,51 +766,36 @@
 
 ;;; Begin
 
-(define (registerize-varrecs varrecs ru)
-  ;; this performs a very restricted ofrm of register allocation.  if
-  ;; we have registers that are otherwise unused, we assign them to
-  ;; variables
-  (if (or (null? varrecs) (>= ru general-register-count))
-      (begin
-        (dolist (varrec varrecs)
-          (varrec-attr-set! varrec 'mode 'local))
-        ru)
-      (begin
-        (varrec-attr-set! (car varrecs) 'mode 'register)
-        (varrec-attr-set! (car varrecs) 'index ru)
-        (registerize-varrecs (cdr varrecs) (1+ ru)))))
-
 (define-reg-use (begin varrecs . body)
-  (labels ((find-max-subform-ru (max-ru forms)
-             (if (null? (cdr forms))
-                 (max max-ru (reg-use (car forms) dest-type))
-                 (find-max-subform-ru (max max-ru (reg-use (car forms)
-                                                           dest-type-discard))
-                                      (cdr forms)))))
-    (registerize-varrecs varrecs (find-max-subform-ru 0 body))))
+  (labels ((block-reg-use (form forms)
+             (if (null? forms)
+                 (list (reg-use form dest-type))
+                 (let* ((res (block-reg-use (car forms) (cdr forms))))
+                   (cons (max (reg-use form dest-type-discard) (car res))
+                         res)))))
+    (let* ((rus (block-reg-use (car body) (cdr body))))
+      (rplaca (cdr form) (cdr rus))
+      (car rus))))
 
-(define-codegen (begin varrecs . body)
-  (let* ((new-frame-base in-frame-base))
-    (dolist (varrec varrecs)
-      (if (eq? 'register (varrec-attr varrec 'mode))
-          (varrec-attr-set! varrec 'index
-                            (elt regs (varrec-attr varrec 'index)))
-          (begin
-            (varrec-attr-set! varrec 'index new-frame-base)
-            (set! new-frame-base (1+ new-frame-base)))))
-    
-    (unless (= new-frame-base in-frame-base)
-      (emit-allocate-locals out (- new-frame-base in-frame-base)))
-
-    (labels ((codegen-body-forms (forms)
-               (emit-comment-form out (car forms))
-               (if (null? (cdr forms))
-                   (codegen (car forms) dest new-frame-base out-frame-base regs
-                            out)
-                   (begin (codegen (car forms) dest-discard 
-                                   new-frame-base new-frame-base regs out)
-                          (codegen-body-forms (cdr forms))))))
-      (codegen-body-forms body))))
+(define-codegen (begin rus . body)
+  (labels ((block-codegen (form forms)
+             (emit-comment-form out form)
+             (emit-comment out "in-frame-base: ~D" in-frame-base)
+             (if (null? forms)
+                 (codegen (if (eq? 'define (car form)) (third form) form)
+                          dest in-frame-base out-frame-base regs out)
+                 (begin
+                    (if (eq? 'define (car form))
+                        (let* ((varrec (second form)))
+                          (varrec-attr-set! varrec 'mode 'local)
+                          (varrec-attr-set! varrec 'index in-frame-base)
+                          (codegen-define varrec (third form) in-frame-base
+                                          regs out)
+                          (set! in-frame-base (1+ in-frame-base)))
+                        (codegen form dest-discard in-frame-base in-frame-base
+                                 regs out))
+                    (block-codegen (car forms) (cdr forms))))))
+    (block-codegen (car body) (cdr body))))
 
 ;;; If
 
