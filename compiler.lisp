@@ -692,7 +692,9 @@
     (codegen-sections program out)
     (emit-program-prologue out)
     (reg-use program dest-type-discard)
-    (codegen program dest-discard 0 0 general-registers out)
+    (codegen program dest-discard
+             function-in-frame-base function-out-frame-base
+             general-registers out)
     (emit-program-epilogue out)))
 
 (define-trivial-walker codegen-sections (out))
