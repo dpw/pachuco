@@ -574,7 +574,7 @@
   (introduce-boxes val))
 
 (define (init-boxed-param-form varrec temprec)
-  (quasiquote (set! (unquote varrec) (make-box () (ref (unquote temprec))))))
+  (quasiquote (define (unquote varrec) (make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
   (let* ((box-varrecs ())
