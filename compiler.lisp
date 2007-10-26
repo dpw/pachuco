@@ -931,7 +931,7 @@
   ;; find the number of registers required for evaluation of the
   ;; arguments of an operator, when the operator itself has been
   ;; eliminated
-  (if (null? (cddr form)) ()
+  (if (null? (cddr form)) 0
       (let* ((rus (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
         (reduce~ (car rus) (cdr rus) (function max)))))
 
