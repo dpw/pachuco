@@ -415,15 +415,8 @@
   (classify-variables val)
   (update-varrec-state varrec varrec-set!-state-table))
 
-(define (update-define-varrec-state varrec form)
-  (let* ((state (varrec-attr varrec 'state)))
-    (when (= state 3)
-      (rplaca form 'set!))
-    (varrec-attr-set! varrec 'state
-                      (vector-ref varrec-define-state-table state))))
-
 (define-classify-variables (define varrec val)
-  (labels ((update-varrec-state ()
+  (labels ((update-define-varrec-state ()
              (let* ((state (varrec-attr varrec 'state)))
                (when (= state 3)
                  (rplaca form 'set!))
@@ -431,11 +424,11 @@
                                 (vector-ref varrec-define-state-table state)))))
     (classify-variables val)
     (if (eq? 'lambda (car val))
-        (begin (update-varrec-state)
+        (begin (update-define-varrec-state)
                (classify-variables val)
                (form-attr-set! val 'self varrec))
         (begin (classify-variables val)
-               (update-varrec-state)))))
+               (update-define-varrec-state)))))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
