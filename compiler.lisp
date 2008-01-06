@@ -613,10 +613,8 @@
 
 ;;; Produce a comment form
 
-(define (comment-form-forms forms)
-    (mapfor (form forms) (comment-form form)))
 (define (comment-form-recurse form)
-    (list* (car form) (comment-form-forms (cddr form))))
+  (list* (car form) (mapfor (subform (cddr form)) (comment-form subform))))
 (define-walker comment-form ())
 
 (define-comment-form (lambda attrs body)
