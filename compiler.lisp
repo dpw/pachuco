@@ -504,11 +504,15 @@
 (define-collect-closures-aux (lambda attrs body)
   (let* ((local-closure-cell (cons () ()))
          (self-closure-cell (cons () ())))
-    ;; if we have an unwritten self-varrec, exclude it from the closure
+    ;; if we have an unwritten self varrec, we don't put it in the
+    ;; closure.  instead we use a special self-closure attr.
     (let* ((self-varrec (attr-ref attrs 'self)))
-      (when (and self-varrec (not (varrec-attr self-varrec 'written)))
-        (attr-set! attrs 'self (resolve-closure-var self-varrec (1+ depth)
-                                                    self-closure-cell))))
+      (form-attr-set! form 'self-closure
+                      (if (and self-varrec
+                               (not (varrec-attr self-varrec 'written)))
+                          (resolve-closure-var self-varrec (1+ depth)
+                                               self-closure-cell)
+                          false)))
 
     (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
                            local-closure-cell)
@@ -717,8 +721,9 @@
 
     (when self-varrec
       (emit-comment out "~S" (car self-varrec))
-      (unless (varrec-written? self-varrec)
-        (varrec-attr-set! self-varrec 'mode 'self)))
+      (let* ((self-closure-varrec (attr-ref attrs 'self-closure)))
+        (when self-closure-varrec
+          (varrec-attr-set! self-closure-varrec 'mode 'self))))
 
     (emit-label out (attr-ref attrs 'label))
     (emit-function-prologue out)
