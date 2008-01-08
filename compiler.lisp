@@ -266,15 +266,15 @@
 ;;;
 ;;; params: The parameter list (undotted if it was dotted)
 ;;;
-;;; varags: true for varargs functions
+;;; vararg: the vararg variable symbol, or false
 ;;;
 ;;;  E.g.
 ;;;
 ;;; (lambda (x y) ...)
-;;; => (lambda ((params (x) (y)) (varargs . false)) ...)
+;;; => (lambda ((params (x) (y)) (vararg . false)) ...)
 ;;;
 ;;; (lambda (x . y) ...)
-;;;  => (lambda ((params (x) (y)) (varargs . true)) ...)
+;;;  => (lambda ((params (x)) (vararg . y)) ...)
 
 (define (normalize-lambda-params params)
   (let* ((dotted false))
