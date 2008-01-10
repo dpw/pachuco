@@ -797,12 +797,12 @@
   (let* ((nparams (length (attr-ref attrs 'params)))
          (vararg (attr-ref attrs 'vararg)))
     (if vararg
-        (list* 'begin (list (list vararg))
-               (quasiquote
-                 (define (unquote vararg)
-                   (call () (ref handle-varargs) (quote (unquote nparams))
-                         (arg-count ()) (raw-args-address ()))))
-               body)
+        (quasiquote
+          (begin (((unquote vararg)))
+            (define (unquote vararg)
+                (call () (ref handle-varargs) (quote (unquote nparams))
+                      (arg-count ()) (raw-args-address ())))
+            (unquote-splicing body)))
         (quasiquote
           (if () (check-arg-count ((nparams . (unquote nparams))))
               (begin () (unquote-splicing body))
