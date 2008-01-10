@@ -615,6 +615,59 @@
              (not (varrec-written? varrec)))
     (varrec-attr-set! varrec 'lambda-label (form-attr val 'label))))
 
+;;; Produce a debug form
+
+(define (debug-form-recurse form)
+  (list* (car form) (cadr form)
+         (mapfor (subform (cddr form)) (debug-form subform))))
+(define-walker debug-form ())
+
+(define (debug-substitute-varrec varrec)
+  (list (car varrec) (cadr varrec)))
+
+(define (debug-uniquify-varrec varrec)
+  (rplacd varrec
+          (cons (gensym)
+                (flatten*-mapfor (attr (cdr varrec))
+                  (let* ((key (car attr))
+                         (val (cdr attr)))
+                    (cond ((not val)
+                           ())
+                          ((or (eq? key 'source) (eq? key 'origin))
+                           (list (cons key (debug-substitute-varrec val))))
+                          (true
+                           (list attr))))))))
+
+(define (debug-uniquify-varrecs varrecs)
+  (mapfor (varrec varrecs) (debug-uniquify-varrec varrec)))
+
+(define-debug-form (begin varrecs . body)
+  (list* 'begin (debug-uniquify-varrecs varrecs)
+         (mapfor (subform body) (debug-form subform))))
+
+(define-debug-form (lambda attrs body)
+  (list 'lambda
+        (flatten*-mapfor (attr attrs)
+          (let* ((key (car attr))
+                 (val (cdr attr)))
+            (cond ((not val)
+                   ())
+                  ((or (eq? key 'params) (eq? key 'closure))
+                   (list (cons key (debug-uniquify-varrecs val))))
+                  ((eq? key 'self-closure)
+                   (list (cons key (debug-uniquify-varrec val))))
+                  ((eq? key 'self)
+                   (list (cons key (debug-substitute-varrec val))))
+                  (true
+                   (list attr)))))
+        (debug-form body)))
+
+(define-debug-form ((define set!) varrec val)
+  (list (car form) (debug-substitute-varrec varrec) (debug-form val)))
+
+(define-debug-form (ref varrec)
+  (list 'ref (debug-substitute-varrec varrec)))
+
 ;;; Produce a comment form
 
 (define (comment-form-recurse form)
