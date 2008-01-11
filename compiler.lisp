@@ -15,8 +15,8 @@
   (collect-closures program)
   (introduce-boxes program)
   (lambda-label program)
-  (codegen-program program)
-  ;(format~ true "~S~%" program)
+  ;(codegen-program program)
+  (format~ true "~S~%" (debug-form program))
   )
 
 (define keywords-1
@@ -50,7 +50,7 @@
 (define keywords-2 '(define lambda set! quote
                      c-call))
 
-(define internal-keywords '(ref call
+(define internal-keywords '(ref call return varargs-return
                             make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
@@ -798,17 +798,19 @@
          (vararg (attr-ref attrs 'vararg)))
     (if vararg
         (quasiquote
-          (begin (((unquote vararg)))
-            (define (unquote vararg)
-                (call () (ref handle-varargs) (quote (unquote nparams))
-                      (arg-count ()) (raw-args-address ())))
-            (unquote-splicing body)))
+          (varargs-return () (arg-count ())
+            (begin (((unquote vararg)))
+                   (define (unquote vararg)
+                       (call () (ref handle-varargs) (quote (unquote nparams))
+                             (arg-count ()) (raw-args-address ())))
+                   (unquote-splicing body))))
         (quasiquote
-          (if () (check-arg-count ((nparams . (unquote nparams))))
-              (begin () (unquote-splicing body))
-              (call () (ref arity-mismatch)
-                    (quote (unquote nparams))
-                    (arg-count ())))))))
+          (return ((nparams . (unquote nparams)))
+            (if () (check-arg-count ((nparams . (unquote nparams))))
+                (begin () (unquote-splicing body))
+                (call () (ref arity-mismatch)
+                      (quote (unquote nparams))
+                      (arg-count ()))))))))
 
 (define-trivial-walker reg-use (dest-type))
 (define-trivial-walker codegen (dest in-frame-base out-frame-base regs out))
@@ -1109,7 +1111,7 @@
           (emit-indirect-call out)))
 
     (emit-restore-%func out)
-    (emit-convert-value out %funcres dest new-frame-base out-frame-base)))
+    (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
 
 ;;; Strings and vectors
 
