@@ -256,11 +256,8 @@
 ;;; in-progress param N-1
 ;;; ...
 ;;;
-;;; Functions are always called with at least 1 param slot, to allow for
-;;; varargs functions
-;;;
 ;;; Functions are called with the closure in %func, arg-count in
-;;; %nargs.  They return with the result in a %funcres.
+;;; %nargs.  They return with the result in %funcres.
 
 (define (emit-allocate-locals out n)
   (emit-sub out (immediate (* value-size n)) %sp))
