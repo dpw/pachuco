@@ -127,6 +127,12 @@
 (define-insn-0 emit-pushf "pushf")
 (define-insn-0 emit-popf "popf")
 
+(define (emit-scale-number out scale oper)
+  (unless (= scale number-tag-bits)
+    (if (< scale number-tag-bits)
+        (emit-sar out (immediate (- number-tag-bits scale)) oper)
+        (emit-shl out (immediate (- scale number-tag-bits)) oper))))
+
 ;;; Branching, jumping, and output handling
 
 (define (make-asm-output) (list false ()))
@@ -301,7 +307,7 @@
 
 (define-codegen (return attrs body)
   (codegen body (dest-value %funcres) in-frame-base out-frame-base regs out)
-  (emit out "leave ; ret $~D" (attr-ref attrs 'nparams)))
+  (emit out "leave ; ret $~D" (* value-size (attr-ref attrs 'nparams))))
 
 (define-reg-use (varargs-return attrs body arg-count)
   (reg-use body dest-type-value)
@@ -314,8 +320,9 @@
          (retaddr (second ac-regs)))
     ;; comment this
     (codegen arg-count (dest-value ac) in-frame-base out-frame-base ac-regs out)
-    (emit-lea out (dispmem 0 1 %bp ac) ac)
-    (emit-mov out (dispmem 0 1 %bp) retaddr)
+    (emit-scale-number out value-scale ac)
+    (emit-lea out (dispmem 0 value-size %bp ac) ac)
+    (emit-mov out (dispmem 0 value-size %bp) retaddr)
     (emit-mov out (mem %bp) %bp)
     (emit-mov out ac %sp)
     (emit-mov out retaddr (mem ac))
@@ -603,12 +610,6 @@
         (emit-extend-sign-bit out %d)
         (emit-idiv out %c)
         (emit-convert-value out %d dest in-frame-base out-frame-base))))
-
-(define (emit-scale-number out scale oper)
-  (unless (= scale number-tag-bits)
-    (if (< scale number-tag-bits)
-        (emit-sar out (immediate (- number-tag-bits scale)) oper)
-        (emit-shl out (immediate (- scale number-tag-bits)) oper))))
 
 ;;; Strings and vectors
 
