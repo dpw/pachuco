@@ -318,13 +318,27 @@
   (let* ((ac-regs (remove %funcres regs))
          (ac (first ac-regs))
          (retaddr (second ac-regs)))
-    ;; comment this
+    ;; We need to clean up the stack before returning, but the return
+    ;; address is on the top.  And we can't simply pop the return
+    ;; address and later do an indirect branch to it, because that it
+    ;; bad for branch prediction.  So what we effectively do is copy
+    ;; the return address to the end of the argument area, move the
+    ;; stack pointer over the other arguments, and then do a ret.  We
+    ;; also have to restore the frame pointer.
+
+    ;; get the number of arguments
     (codegen arg-count (dest-value ac) in-frame-base out-frame-base ac-regs out)
     (emit-scale-number out value-scale ac)
+    ;; calculate the address of the end of the argument area
     (emit-lea out (dispmem 0 value-size %bp ac) ac)
+    ;; get the return address
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    ;; restore the frame pointer
     (emit-mov out (mem %bp) %bp)
+    ;; now we have all to information we need from the stack, move the
+    ;; stack pointer up
     (emit-mov out ac %sp)
+    ;; put the return address on the top of the stack
     (emit-mov out retaddr (mem ac))
     (emit out "ret")))
 
