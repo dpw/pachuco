@@ -785,11 +785,9 @@
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
-    (codegen body (dest-value %funcres)
+    (codegen body dest-discard
              function-in-frame-base function-out-frame-base
-             general-registers out)
-
-    (emit-function-epilogue out)))
+             general-registers out)))
 
 (define (wrap-lambda-body attrs body)
   ;; wrap a lambda body with code required to check that the number of
@@ -804,8 +802,8 @@
               (define (unquote vararg)
                       (call () (ref handle-varargs) (quote (unquote nparams))
                             (arg-count ()) (raw-args-address ())))
-              (varargs-return () (ref (unquote arg-count-var))
-                              (begin () (unquote-splicing body))))))
+              (varargs-return () (begin () (unquote-splicing body))
+                              (ref (unquote arg-count-var))))))
         (quasiquote
           (return ((nparams . (unquote nparams)))
             (if () (check-arg-count ((nparams . (unquote nparams))))

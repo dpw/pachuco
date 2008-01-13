@@ -296,8 +296,30 @@
   (emit-mov out %sp %bp)
   (emit-push out %func))
 
-(define (emit-function-epilogue out)
-  (emit out "leave ; ret"))
+(define-reg-use (return attrs body)
+  (reg-use body dest-type-value))
+
+(define-codegen (return attrs body)
+  (codegen body (dest-value %funcres) in-frame-base out-frame-base regs out)
+  (emit out "leave ; ret $~D" (attr-ref attrs 'nparams)))
+
+(define-reg-use (varargs-return attrs body arg-count)
+  (reg-use body dest-type-value)
+  (reg-use arg-count dest-type-value))
+
+(define-codegen (varargs-return attrs body arg-count)
+  (codegen body (dest-value %funcres) in-frame-base in-frame-base regs out)
+  (let* ((ac-regs (remove %funcres regs))
+         (ac (first ac-regs))
+         (retaddr (second ac-regs)))
+    ;; comment this
+    (codegen arg-count (dest-value ac) in-frame-base out-frame-base ac-regs out)
+    (emit-lea out (dispmem 0 1 %bp ac) ac)
+    (emit-mov out (dispmem 0 1 %bp) retaddr)
+    (emit-mov out (mem %bp) %bp)
+    (emit-mov out ac %sp)
+    (emit-mov out retaddr (mem ac))
+    (emit out "ret")))
 
 (define (emit-restore-%func out)
   (emit-mov out (dispmem value-size 0 %bp) %func))
