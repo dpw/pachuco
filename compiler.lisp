@@ -42,9 +42,8 @@
 
     fixnum->raw raw->fixnum
 
-    raw-args-address
-    raw-apply-with-args raw-apply-jump
-    raw-arg-set! raw-arg-ref
+    raw-args-base raw-arg-set! raw-arg-ref raw-apply-with-args raw-apply-jump
+
     raw-rdtsc))
 
 (define keywords-2 '(define lambda set! quote
@@ -801,7 +800,7 @@
               (define (unquote arg-count-var) (arg-count ()))
               (define (unquote vararg)
                       (call () (ref handle-varargs) (quote (unquote nparams))
-                            (arg-count ()) (raw-args-address ())))
+                            (arg-count ()) (raw-args-base ())))
               (varargs-return () (begin () (unquote-splicing body))
                               (ref (unquote arg-count-var))))))
         (quasiquote

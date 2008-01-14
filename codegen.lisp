@@ -473,8 +473,57 @@
 (define-pure-operator (arg-count) result ()
   (emit-mov out %nargs result))
 
-(define-pure-operator (raw-args-address) result ()
+(define-pure-operator (raw-args-base) result ()
   (emit-lea out (param-slot 0) result))
+
+(define-operator (raw-arg-set! args-base index val) val ()
+  (emit-scale-number out value-scale index)
+  (emit-mov out val (dispmem 0 0 args-base index)))
+
+(define-pure-operator (raw-arg-ref args-base index) result ()
+  (emit-scale-number out value-scale index)
+  (emit-mov out (dispmem 0 0 args-base index) result))
+
+;;; Apply support
+
+(define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
+  (reg-use nargs dest-type-value)
+  ;; raw-apply-with-args is only intended for restricted
+  ;; circumstances, so we make this assumption:
+  (unless (< (reg-use bodyfunc dest-type-value) general-register-count)
+    (error "all registers needed for ~S" bodyfunc))
+  general-register-count)
+
+(define-codegen (raw-apply-with-args attrs nargs bodyfunc)
+  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
+           general-registers out)
+  (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
+           (remove %nargs general-registers) out)
+  (emit-push out %nargs)
+  (emit-scale-number out value-scale %nargs)
+  (emit-sub out %nargs %sp)
+  (emit-clear out %nargs)
+  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
+  (emit-add out (param-slot in-frame-base) %sp)
+  (emit-add out (immediate value-size) %sp)
+  (emit-restore-%func out)
+  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
+
+(define-reg-use (raw-apply-jump attrs func nargs)
+  ;; raw-apply-call is only intended for restricted circumstances, so
+  ;; we make this assumption:
+  (unless (< (reg-use func dest-type-value) general-register-count)
+    (error "all registers needed for ~S" func))
+  (reg-use func dest-type-value)
+  general-register-count)
+
+(define-codegen (raw-apply-jump attrs func nargs)
+  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
+           general-registers out)
+  (codegen func (dest-value %func) in-frame-base in-frame-base
+           (remove %nargs general-registers) out)
+  ;; Don't need to adjust frame base, because leave will handle it
+  (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
 
 ;;; Comparisons
 
@@ -701,52 +750,3 @@
         (emit-not out reg 2)
         (emit-and out reg (mem %sp) 2)))
   (emit-popf out))
-
-;;; Apply support
-
-(define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
-  (reg-use nargs dest-type-value)
-  ;; raw-apply-with-args is only intended for restricted
-  ;; circumstances, so we make this assumption:
-  (unless (< (reg-use bodyfunc dest-type-value) general-register-count)
-    (error "all registers needed for ~S" bodyfunc))
-  general-register-count)
-
-(define-codegen (raw-apply-with-args attrs nargs bodyfunc)
-  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
-           general-registers out)
-  (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
-           (remove %nargs general-registers) out)
-  (emit-push out %nargs)
-  (emit-scale-number out value-scale %nargs)
-  (emit-sub out %nargs %sp)
-  (emit-clear out %nargs)
-  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  (emit-add out (param-slot in-frame-base) %sp)
-  (emit-add out (immediate value-size) %sp)
-  (emit-restore-%func out)
-  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
-
-(define-reg-use (raw-apply-jump attrs func nargs)
-  ;; raw-apply-call is only intended for restricted circumstances, so
-  ;; we make this assumption:
-  (unless (< (reg-use func dest-type-value) general-register-count)
-    (error "all registers needed for ~S" func))
-  (reg-use func dest-type-value)
-  general-register-count)
-
-(define-codegen (raw-apply-jump attrs func nargs)
-  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
-           general-registers out)
-  (codegen func (dest-value %func) in-frame-base in-frame-base
-           (remove %nargs general-registers) out)
-  ;; Don't need to adjust frame base, because leave will handle it
-  (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
-
-(define-operator (raw-arg-set! args-base index val) val ()
-  (emit-scale-number out value-scale index)
-  (emit-mov out val (dispmem 0 0 args-base index)))
-
-(define-pure-operator (raw-arg-ref args-base index) result ()
-  (emit-scale-number out value-scale index)
-  (emit-mov out (dispmem 0 0 args-base index) result))

@@ -946,7 +946,7 @@
     (define args-len (args-length args))
     (raw-apply-with-args args-len
       (lambda ()
-        (copy-args args (raw-args-address) 0)
+        (copy-args args (raw-args-base) 0)
         (raw-apply-jump func args-len))))
 
   (define gensym-counter 0)
