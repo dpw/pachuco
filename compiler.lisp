@@ -15,8 +15,8 @@
   (collect-closures program)
   (introduce-boxes program)
   (lambda-label program)
-  ;(codegen-program program)
-  (format~ true "~S~%" (debug-form program))
+  (codegen-program program)
+  ;(format~ true "~S~%" (debug-form program))
   )
 
 (define keywords-1
