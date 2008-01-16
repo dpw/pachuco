@@ -487,6 +487,7 @@
 ;;; Apply support
 
 (define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
+  XXX ; fix
   (reg-use nargs dest-type-value)
   ;; raw-apply-with-args is only intended for restricted
   ;; circumstances, so we make this assumption:
@@ -494,20 +495,24 @@
     (error "all registers needed for ~S" bodyfunc))
   general-register-count)
 
-(define-codegen (raw-apply-with-args attrs nargs bodyfunc)
-  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
-           general-registers out)
-  (codegen bodyfunc (dest-value %func) in-frame-base in-frame-base
-           (remove %nargs general-registers) out)
-  (emit-push out %nargs)
-  (emit-scale-number out value-scale %nargs)
-  (emit-sub out %nargs %sp)
-  (emit-clear out %nargs)
-  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))
-  (emit-add out (param-slot in-frame-base) %sp)
-  (emit-add out (immediate value-size) %sp)
-  (emit-restore-%func out)
-  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
+(define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
+                                         bodyfunc)
+  (operator-args-codegen form in-frame-base regs out)
+  (bind (before-arg-count after-arg-count bodyfunc . others) regs
+    ;; calculate how far up to move %sp
+    (emit-sub out after-arg-count before-arg-count)
+    (emit-mov out bodyfunc %func)
+    (emit-clear out %nargs)
+    ;; load the return address
+    (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    (emit-scale-number out value-scale before-arg-count)
+    ;; work out the new value for %sp based on %bp, but don't put it
+    ;; in %sp until we have restored the frame pointer
+    (emit-lea out (dispmem 0 value-size %bp before-arg-count) before-arg-count)
+    (emit-mov out (mem %bp) %bp)
+    (emit-mov out retaddr (mem before-arg-count))
+    (emit-mov out before-arg-count %sp)
+    (emit out "jmp *~A" (value-sized (dispmem function-tag 0 bodyfunc)))))
 
 (define-reg-use (raw-apply-jump attrs func nargs)
   ;; raw-apply-call is only intended for restricted circumstances, so

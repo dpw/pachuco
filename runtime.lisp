@@ -944,7 +944,7 @@
 
     (set! args (cons arg1 args))
     (define args-len (args-length args))
-    (raw-apply-with-args args-len
+    (raw-jump-with-arg-space raw-arg-count args-len
       (lambda ()
         (copy-args args (raw-args-base) 0)
         (raw-apply-jump func args-len))))
