@@ -927,9 +927,9 @@
     (make-varargs-list nargs ()))
 
   (define (apply func arg1 . args)
-    (define (args-length args)
+    (define (count-args args)
       (if (null? (cdr args)) (length (car args))
-          (1+ (args-length (cdr args)))))
+          (1+ (count-args (cdr args)))))
 
     (define (copy-final-args args args-base index)
       (unless (null? args)
@@ -943,11 +943,11 @@
             (copy-args (cdr args) args-base (1+ index)))))
 
     (set! args (cons arg1 args))
-    (define args-len (args-length args))
-    (raw-jump-with-arg-space raw-arg-count args-len
+    (define arg-count (count-args args))
+    (raw-jump-with-arg-space raw-arg-count arg-count
       (lambda ()
         (copy-args args (raw-args-base) 0)
-        (raw-apply-jump func args-len))))
+        (raw-apply-jump func arg-count))))
 
   (define gensym-counter 0)
   (define (gensym)

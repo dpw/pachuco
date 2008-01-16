@@ -486,23 +486,17 @@
 
 ;;; Apply support
 
-(define-reg-use (raw-apply-with-args attrs nargs bodyfunc)
-  XXX ; fix
-  (reg-use nargs dest-type-value)
-  ;; raw-apply-with-args is only intended for restricted
-  ;; circumstances, so we make this assumption:
-  (unless (< (reg-use bodyfunc dest-type-value) general-register-count)
-    (error "all registers needed for ~S" bodyfunc))
-  general-register-count)
+(define-reg-use (raw-jump-with-arg-space attrs before-arg-count after-arg-count
+                                         bodyfunc)
+  (operator-args-reg-use form))
 
 (define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
                                          bodyfunc)
   (operator-args-codegen form in-frame-base regs out)
-  (bind (before-arg-count after-arg-count bodyfunc . others) regs
+  (bind (before-arg-count after-arg-count bodyfunc retaddr . others) regs
     ;; calculate how far up to move %sp
     (emit-sub out after-arg-count before-arg-count)
     (emit-mov out bodyfunc %func)
-    (emit-clear out %nargs)
     ;; load the return address
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
     (emit-scale-number out value-scale before-arg-count)
@@ -512,23 +506,19 @@
     (emit-mov out (mem %bp) %bp)
     (emit-mov out retaddr (mem before-arg-count))
     (emit-mov out before-arg-count %sp)
+    (emit-clear out %nargs)
     (emit out "jmp *~A" (value-sized (dispmem function-tag 0 bodyfunc)))))
 
-(define-reg-use (raw-apply-jump attrs func nargs)
-  ;; raw-apply-call is only intended for restricted circumstances, so
-  ;; we make this assumption:
-  (unless (< (reg-use func dest-type-value) general-register-count)
-    (error "all registers needed for ~S" func))
-  (reg-use func dest-type-value)
-  general-register-count)
+(define-reg-use (raw-apply-jump attrs func arg-count)
+  (operator-args-reg-use form))
 
-(define-codegen (raw-apply-jump attrs func nargs)
-  (codegen nargs (dest-value %nargs) in-frame-base in-frame-base
-           general-registers out)
-  (codegen func (dest-value %func) in-frame-base in-frame-base
-           (remove %nargs general-registers) out)
-  ;; Don't need to adjust frame base, because leave will handle it
-  (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func))))
+(define-codegen (raw-apply-jump attrs func arg-count)
+  (let* ((regs-without-%nargs (remove %nargs regs))
+         (func (first regs-without-%nargs)))
+    (operator-args-codegen form in-frame-base
+                           (list* func %nargs (cddr regs-without-%nargs)) out)
+    (emit-mov out func %func)
+    (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func)))))
 
 ;;; Comparisons
 
