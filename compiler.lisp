@@ -331,7 +331,10 @@
 (define-trivial-walker simplify ())
 
 (define-walker propogate (operator))
+
 (define (propogate-recurse form operator)
+  ;; merge the operator into the form
+  (overwrite-form form (append operator (list (cons (car form) (cdr form)))))
   (dolist (subform (cddr form)) (simplify subform)))
 
 (define-simplify (lambda attrs . body)
@@ -370,6 +373,7 @@
   (propogate-recurse-last (car body) (cdr body) operator))
 
 (define-simplify (return attrs body)
+  (overwrite-form form body)
   (propogate body (list 'return attrs)))
 
 ;;; We currently conflate character and numbers.  So eliminate
