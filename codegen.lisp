@@ -303,36 +303,37 @@
   (emit-push out %func))
 
 (define-reg-use (return attrs body)
-  (reg-use body dest-type-value))
+  (reg-use body dest-type-value)
+  0)
 
 (define-codegen (return attrs body)
-  (codegen body (dest-value %funcres) in-frame-base out-frame-base regs out)
+  (codegen body (dest-value %funcres) in-frame-base out-frame-base
+           general-registers out)
   (emit out "leave ; ret $~D" (* value-size (attr-ref attrs 'nparams))))
 
-(define-reg-use (varargs-return attrs body arg-count)
-  (reg-use body dest-type-value)
-  (reg-use arg-count dest-type-value))
+(define-reg-use (varargs-return attrs arg-count body)
+  (operator-args-reg-use form)
+  0)
 
-(define-codegen (varargs-return attrs body arg-count)
-  (codegen body (dest-value %funcres) in-frame-base in-frame-base regs out)
-  (let* ((ac-regs (remove %funcres regs))
-         (ac (first ac-regs))
-         (retaddr (second ac-regs)))
+(define-codegen (varargs-return attrs arg-count body)
+  (let* ((regs-without-%funcres (remove %funcres general-registers))
+         (ac (first regs-without-%funcres))
+         (retaddr (second regs-without-%funcres)))
+    (operator-args-codegen form in-frame-base
+                           (list* ac %funcres (cdr regs-without-%funcres)) out)
     ;; We need to clean up the stack before returning, but the return
     ;; address is on the top.  And we can't simply pop the return
-    ;; address and later do an indirect branch to it, because that it
+    ;; address and later do an indirect branch to it, because that is
     ;; bad for branch prediction.  So what we effectively do is copy
     ;; the return address to the end of the argument area, move the
     ;; stack pointer over the other arguments, and then do a ret.  We
     ;; also have to restore the frame pointer.
 
-    ;; get the number of arguments
-    (codegen arg-count (dest-value ac) in-frame-base out-frame-base ac-regs out)
     (emit-scale-number out value-scale ac)
-    ;; calculate the address of the end of the argument area
-    (emit-lea out (dispmem 0 value-size %bp ac) ac)
     ;; get the return address
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    ;; calculate the address of the end of the argument area
+    (emit-lea out (dispmem 0 value-size %bp ac) ac)
     ;; restore the frame pointer
     (emit-mov out (mem %bp) %bp)
     ;; now we have all to information we need from the stack, move the

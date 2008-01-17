@@ -837,8 +837,8 @@
                  (define (unquote vararg)
                      (call () (ref handle-varargs) (quote (unquote nparams))
                            (ref raw-arg-count) (raw-args-base ())))
-                 (varargs-return () (begin () (unquote-splicing body))
-                                 (ref raw-arg-count))))
+                 (varargs-return () (ref raw-arg-count)
+                                 (begin () (unquote-splicing body)))))
         (quasiquote
           (return ((nparams . (unquote nparams)))
             (if () (check-arg-count ((nparams . (unquote nparams))))
