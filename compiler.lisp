@@ -333,8 +333,10 @@
 (define-walker propogate (operator))
 
 (define (propogate-recurse form operator)
-  ;; merge the operator into the form
-  (overwrite-form form (append operator (list (cons (car form) (cdr form)))))
+  ;; merge the operator into the form.  we copy operator here to make sure
+  ;; the parts of the source tree don't share structure
+  (overwrite-form form (append (copy-tree operator)
+                               (list (cons (car form) (cdr form)))))
   (dolist (subform (cddr form)) (simplify subform)))
 
 (define-simplify (lambda attrs . body)
@@ -375,6 +377,10 @@
 (define-simplify (return attrs body)
   (overwrite-form form body)
   (propogate body (list 'return attrs)))
+
+(define-simplify (varargs-return attrs arg-count body)
+  (overwrite-form form body)
+  (propogate body (list 'varargs-return attrs arg-count)))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
