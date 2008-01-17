@@ -325,52 +325,20 @@
     (unless (null? (car cell))
       (error "what do you expect me to do with ~S?" (car cell)))))
 
-;;; This phase is for miscellaneous simplifications and source
-;;; rearrangements
+;;; This phase is for miscellaneous simplifications
 
 (define-trivial-walker simplify ())
 
-(define-walker propogate (operator))
-(define (propogate-recurse form operator)
-  (dolist (subform (cddr form)) (simplify subform)))
-
 (define-simplify (lambda attrs . body)
-  ;; Adjust lambdas so that they only take one body form, wrapped in
-  ;; the argument handling code
-  (rplacd (cdr form) (list (wrap-lambda-body attrs body)))
-  (simplify-recurse form))
+  ;; Adjust lambdas so that they only take one body form.
+  (simplify-recurse form)
+  (rplacd (cdr form) (list (wrap-lambda-body attrs body))))
 
 (define-simplify (define varrec . val)
   ;; Normalize defines to always include a value
   (if (null? val)
       (rplacd (cdr form) (list (quoted-unspecified)))
       (simplify (car val))))
-
-(define-simplify (if attrs test then . else)
-  (when (null? else)
-    (rplacd (cdddr form) (list (quoted-unspecified))))
-  (simplify-recurse form))
-
-(define-propogate (if attrs test then . else)
-  (when (null? else)
-    (set! else (list (quoted-unspecified)))
-    (rplacd (cdddr form) else))
-  (simplify test)
-  (propogate then operator)
-  (propogate (car else) operator))
-
-(define (propogate-recurse-last form rest operator)
-  (if (null? rest)
-      (propogate form operator)
-      (begin
-        (simplify form)
-        (propogate-recurse-last (car rest) (cdr rest) operator))))
-
-(define-propogate (begin attrs . body)
-  (propogate-recurse-last (car body) (cdr body) operator))
-
-(define-simplify (return attrs body)
-  (propogate body (list 'return attrs)))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
@@ -877,6 +845,11 @@
     (block-codegen (car body) (cdr body))))
 
 ;;; If
+
+(define-simplify (if attrs test then . else)
+  (when (null? else)
+    (rplacd (cdddr form) (list (quoted-unspecified))))
+  (simplify-recurse form))
 
 (define-reg-use (if attrs test then else)
   (max (reg-use test dest-type-conditional)
