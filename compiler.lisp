@@ -51,6 +51,7 @@
                      c-call))
 
 (define internal-keywords '(ref call return varargs-return
+                            tail-call varargs-tail-call
                             make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
@@ -364,6 +365,14 @@
   (propogate then operator)
   (propogate (car else) operator))
 
+(define-simplify (return attrs body)
+  (overwrite-form form body)
+  (propogate body (list 'return attrs)))
+
+(define-simplify (varargs-return attrs arg-count body)
+  (overwrite-form form body)
+  (propogate body (list 'varargs-return attrs arg-count)))
+
 (define (propogate-recurse-last form rest operator)
   (if (null? rest)
       (propogate form operator)
@@ -374,13 +383,13 @@
 (define-propogate (begin attrs . body)
   (propogate-recurse-last (car body) (cdr body) operator))
 
-(define-simplify (return attrs body)
-  (overwrite-form form body)
-  (propogate body (list 'return attrs)))
-
-(define-simplify (varargs-return attrs arg-count body)
-  (overwrite-form form body)
-  (propogate body (list 'varargs-return attrs arg-count)))
+(define-propogate (call attrs . args)
+  (if (eq? 'return (first operator))
+      (begin
+        (overwrite-form form (list* 'tail-call (append (second operator) attrs)
+                                    args))
+        (simplify form))
+      (propogate-recurse form operator)))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
