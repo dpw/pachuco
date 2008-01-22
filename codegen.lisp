@@ -346,11 +346,10 @@
 (define (emit-restore-%func out)
   (emit-mov out (dispmem value-size 0 %bp) %func))
 
-(define (emit-indirect-call out)
-  (emit out "call *~A" (value-sized (dispmem function-tag 0 %func))))
-
-(define (emit-call out label)
-  (emit out "call ~A" label))
+(define (emit-indirect-call out label)
+  (if label
+      (emit out "call ~A" label)
+      (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))))
 
 (define (emit-alloc-function out result-reg label slot-count)
   (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)

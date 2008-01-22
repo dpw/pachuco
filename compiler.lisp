@@ -1133,12 +1133,35 @@
       (emit-closure-slot-set out (first regs) (car varrec-ref) (second regs)))
     (emit-convert-value out (first regs) dest in-frame-base out-frame-base)))
 
-(define-reg-use (call attrs . args) general-register-count)
+(define-reg-use (call attrs . args)
+  (reg-use-recurse form)
+  general-register-count)
 
 (define-codegen (call attrs func . args)
   (let* ((new-frame-base in-frame-base))
     (dolist (arg (reverse args))
-      (reg-use arg dest-type-value)
+      (codegen arg (dest-value (first general-registers))
+               new-frame-base new-frame-base general-registers out)
+      (emit-frame-push out new-frame-base (first general-registers)))
+    
+    (reg-use func dest-type-value)
+    (codegen func (dest-value %func)
+             new-frame-base new-frame-base general-registers out)
+    (emit-mov out (immediate (fixnum-representation (length args)))
+              %nargs)
+    (emit-call out 
+               (and (eq? 'ref (first func))
+                    (varrec-origin-attr (second func) 'lambda-label)))
+    (emit-restore-%func out)
+    (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
+
+(define-reg-use (tail-call attrs . args) 0)
+  (reg-use-recurse form)
+  general-register-count)
+
+(define-codegen (tail-call attrs func . args)
+  (let* ((new-frame-base in-frame-base))
+    (dolist (arg (reverse args))
       (codegen arg (dest-value (first general-registers))
                new-frame-base new-frame-base general-registers out)
       (emit-frame-push out new-frame-base (first general-registers)))
@@ -1157,6 +1180,7 @@
 
     (emit-restore-%func out)
     (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
+
 
 ;;; Strings and vectors
 
