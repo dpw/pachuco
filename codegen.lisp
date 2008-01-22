@@ -294,6 +294,15 @@
 
 ;;; Functions
 
+(define (emit-alloc-function out result-reg label slot-count)
+  (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
+  (emit-align-%alloc out function-tag-bits)
+  (emit-mov out (immediate label) (dispmem 0 0 %alloc))
+  (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
+
+(define (emit-closure-slot-set out func-reg varrec val-reg)
+  (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
+
 (define function-in-frame-base 1)
 (define function-out-frame-base 0)
 
@@ -301,6 +310,14 @@
   (emit-push out %bp)
   (emit-mov out %sp %bp)
   (emit-push out %func))
+
+(define (emit-call-or-jump out insn label)
+  (if label
+      (emit out "~A ~A" insn label)
+      (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func)))))
+
+(define (emit-call out label)
+  (emit-call-or-jump out "call" label))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -343,22 +360,34 @@
     (emit-mov out retaddr (mem ac))
     (emit out "ret")))
 
+(define (emit-tail-call out in-arg-count out-arg-count label)
+  (let* ((in-arg-top (+ 2 in-arg-count)) ;; relative to %bp
+         (out-arg-base (* value-size (- in-arg-top out-arg-count)))
+         (tmp (first general-registers))
+         (retaddr (second general-registers))
+         (savedfp (third general-registers)))
+    ;; save the return address and caller frame pointer
+    (emit-mov out (mem %bp) savedfp)
+    (emit-mov out (dispmem 0 value-size %bp) retaddr)
+
+    ;; copy the arguments into their place
+    (labels ((copy-args (arg-count)
+               (set! arg-count (1- arg-count))
+               (let* ((offset (* value-size arg-count)))
+                 (emit-mov out (dispmem 0 offset %sp) tmp)
+                 (emit-mov out tmp (dispmem 0 (+ out-arg-base offset) %bp)))
+               (when (> arg-count 0) (copy-args arg-count))))
+      (copy-args out-arg-count))
+
+    ;; set %sp to its final value, and set everything up for the call
+    (emit-lea out (dispmem value-size out-arg-base %bp) %sp)
+    (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
+    (emit-mov out retaddr (mem %sp))
+    (emit-mov out savedfp %bp)
+    (emit-call-or-jump out "jmp" label)))
+
 (define (emit-restore-%func out)
   (emit-mov out (dispmem value-size 0 %bp) %func))
-
-(define (emit-indirect-call out label)
-  (if label
-      (emit out "call ~A" label)
-      (emit out "call *~A" (value-sized (dispmem function-tag 0 %func)))))
-
-(define (emit-alloc-function out result-reg label slot-count)
-  (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
-  (emit-align-%alloc out function-tag-bits)
-  (emit-mov out (immediate label) (dispmem 0 0 %alloc))
-  (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
-
-(define (emit-closure-slot-set out func-reg varrec val-reg)
-  (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
 
 ;;; Literals
 

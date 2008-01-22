@@ -1134,7 +1134,7 @@
     (emit-convert-value out (first regs) dest in-frame-base out-frame-base)))
 
 (define-reg-use (call attrs . args)
-  (reg-use-recurse form)
+  (reg-use-recurse form dest-type-value)
   general-register-count)
 
 (define-codegen (call attrs func . args)
@@ -1144,7 +1144,6 @@
                new-frame-base new-frame-base general-registers out)
       (emit-frame-push out new-frame-base (first general-registers)))
     
-    (reg-use func dest-type-value)
     (codegen func (dest-value %func)
              new-frame-base new-frame-base general-registers out)
     (emit-mov out (immediate (fixnum-representation (length args)))
@@ -1155,8 +1154,8 @@
     (emit-restore-%func out)
     (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
 
-(define-reg-use (tail-call attrs . args) 0)
-  (reg-use-recurse form)
+(define-reg-use (tail-call attrs . args)
+  (reg-use-recurse form dest-type-value)
   general-register-count)
 
 (define-codegen (tail-call attrs func . args)
@@ -1166,21 +1165,11 @@
                new-frame-base new-frame-base general-registers out)
       (emit-frame-push out new-frame-base (first general-registers)))
     
-    (reg-use func dest-type-value)
     (codegen func (dest-value %func)
              new-frame-base new-frame-base general-registers out)
-    (emit-mov out (immediate (fixnum-representation (length args)))
-              %nargs)
-
-    (let* ((label (and (eq? 'ref (first func))
-                       (varrec-origin-attr (second func) 'lambda-label))))
-      (if label
-          (emit-call out label)
-          (emit-indirect-call out)))
-
-    (emit-restore-%func out)
-    (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
-
+    (emit-tail-call out (attr-ref attrs 'nparams) (length args)
+               (and (eq? 'ref (first func))
+                    (varrec-origin-attr (second func) 'lambda-label)))))
 
 ;;; Strings and vectors
 
