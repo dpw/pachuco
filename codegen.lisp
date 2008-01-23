@@ -311,13 +311,15 @@
   (emit-mov out %sp %bp)
   (emit-push out %func))
 
-(define (emit-call-or-jump out insn label)
-  (if label
-      (emit out "~A ~A" insn label)
-      (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func)))))
+(define (emit-call-or-jump out insn func-varrec)
+  (let* ((label (and func-varrec
+                     (varrec-origin-attr func-varrec 'lambda-label))))
+    (if label
+        (emit out "~A ~A # ~A" insn label (first func-varrec))
+        (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func))))))
 
-(define (emit-call out label)
-  (emit-call-or-jump out "call" label))
+(define (emit-call out func-varrec)
+  (emit-call-or-jump out "call" func-varrec))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -360,7 +362,7 @@
     (emit-mov out retaddr (mem ac))
     (emit out "ret")))
 
-(define (emit-tail-call out in-arg-count out-arg-count label)
+(define (emit-tail-call out in-arg-count out-arg-count func-varrec)
   (let* ((in-arg-top (+ 2 in-arg-count)) ;; relative to %bp
          (out-arg-base (* value-size (- in-arg-top out-arg-count)))
          (tmp (first general-registers))
@@ -384,7 +386,7 @@
     (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
     (emit-mov out retaddr (mem %sp))
     (emit-mov out savedfp %bp)
-    (emit-call-or-jump out "jmp" label)))
+    (emit-call-or-jump out "jmp" func-varrec)))
 
 (define (emit-restore-%func out)
   (emit-mov out (dispmem value-size 0 %bp) %func))

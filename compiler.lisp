@@ -1148,9 +1148,7 @@
              new-frame-base new-frame-base general-registers out)
     (emit-mov out (immediate (fixnum-representation (length args)))
               %nargs)
-    (emit-call out 
-               (and (eq? 'ref (first func))
-                    (varrec-origin-attr (second func) 'lambda-label)))
+    (emit-call out (and (eq? 'ref (first func)) (second func)))
     (emit-restore-%func out)
     (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
 
@@ -1168,8 +1166,7 @@
     (codegen func (dest-value %func)
              new-frame-base new-frame-base general-registers out)
     (emit-tail-call out (attr-ref attrs 'nparams) (length args)
-               (and (eq? 'ref (first func))
-                    (varrec-origin-attr (second func) 'lambda-label)))))
+                    (and (eq? 'ref (first func)) (second func)))))
 
 ;;; Strings and vectors
 
