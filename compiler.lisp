@@ -660,7 +660,7 @@
     (varrec-attr-set! varrec 'lambda-label false))
   (lambda-label body))
 
-(define-lambda-label (set! varrec val)
+(define-lambda-label (define varrec val)
   (lambda-label val)
   (when (and (eq? 'lambda (car val))
              (not (varrec-written? varrec)))
