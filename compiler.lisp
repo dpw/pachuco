@@ -334,10 +334,8 @@
 (define-walker propogate (operator))
 
 (define (propogate-recurse form operator)
-  ;; merge the operator into the form.  we copy operator here to make sure
-  ;; the parts of the source tree don't share structure
-  (overwrite-form form (append (copy-tree operator)
-                               (list (cons (car form) (cdr form)))))
+  ;; merge the operator into the form.
+  (overwrite-form form (append operator (list (cons (car form) (cdr form)))))
   (dolist (subform (cddr form)) (simplify subform)))
 
 (define-simplify (lambda attrs . body)
@@ -362,8 +360,9 @@
     (set! else (list (quoted-unspecified)))
     (rplacd (cdddr form) else))
   (simplify test)
+  ;; we need to avoid aliasing operator, so one of these needs to copy
   (propogate then operator)
-  (propogate (car else) operator))
+  (propogate (car else) (copy-tree operator)))
 
 (define-simplify (return attrs body)
   (overwrite-form form body)
@@ -392,7 +391,7 @@
     (if tc
       (begin
         (overwrite-form form (list* (cdr tc) (append (second operator) attrs)
-                                    (append (copy-tree (cddr operator)) args)))
+                                    (append (cddr operator) args)))
         (simplify form))
       (propogate-recurse form operator))))
 
