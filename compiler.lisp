@@ -383,13 +383,18 @@
 (define-propogate (begin attrs . body)
   (propogate-recurse-last (car body) (cdr body) operator))
 
+(define tail-call-types
+  (list (cons 'return 'tail-call)
+        (cons 'varargs-return 'varargs-tail-call)))
+
 (define-propogate (call attrs . args)
-  (if (eq? 'return (first operator))
+  (let* ((tc (assoc (first operator) tail-call-types)))
+    (if tc
       (begin
-        (overwrite-form form (list* 'tail-call (append (second operator) attrs)
-                                    args))
+        (overwrite-form form (list* (cdr tc) (append (second operator) attrs)
+                                    (append (copy-tree (cddr operator)) args)))
         (simplify form))
-      (propogate-recurse form operator)))
+      (propogate-recurse form operator))))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
@@ -1133,7 +1138,7 @@
       (emit-closure-slot-set out (first regs) (car varrec-ref) (second regs)))
     (emit-convert-value out (first regs) dest in-frame-base out-frame-base)))
 
-(define-reg-use (call attrs . args)
+(define-reg-use ((call tail-call varargs-tail-call) attrs . args)
   (reg-use-recurse form dest-type-value)
   general-register-count)
 
@@ -1151,10 +1156,6 @@
     (emit-call out (and (eq? 'ref (first func)) (second func)))
     (emit-restore-%func out)
     (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
-
-(define-reg-use (tail-call attrs . args)
-  (reg-use-recurse form dest-type-value)
-  general-register-count)
 
 (define-codegen (tail-call attrs func . args)
   (let* ((new-frame-base in-frame-base))
