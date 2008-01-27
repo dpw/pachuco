@@ -399,6 +399,7 @@
     ;; access %func
     (codegen arg-count (dest-value out-arg-reg) new-frame-base new-frame-base
              general-registers out)
+    (emit-scale-number out value-scale out-arg-reg)
     (emit-lea out (dispmem 0 (* value-size (- 1 out-arg-count)) %bp out-arg-reg)
               out-arg-reg)
     (codegen-tail-call out func out-arg-count out-arg-reg 0
