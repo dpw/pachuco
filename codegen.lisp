@@ -385,11 +385,19 @@
 
 (define-codegen (tail-call attrs func . args)
   (codegen-call-args out func args in-frame-base)
-  (let* ((out-arg-count (length args)))
-    (codegen-tail-call out func out-arg-count %bp
-                       (* value-size (+ 1 (attr-ref attrs 'nparams)
-                                        (- out-arg-count)))
-                       general-registers)))
+  (let* ((in-arg-count (attr-ref attrs 'nparams))
+         (out-arg-count (length args)))
+    (if (= in-arg-count out-arg-count)
+        (begin 
+          (copy-tail-call-args out-arg-count %bp value-size
+                               (first general-registers) out)
+          (emit-mov out (immediate (fixnum-representation out-arg-count))
+                    %nargs)
+          (emit out "leave")
+          (emit-call-or-jump out "jmp" func))
+        (codegen-tail-call out func out-arg-count %bp
+                           (* value-size (+ 1 in-arg-count (- out-arg-count)))
+                           general-registers))))
 
 (define-codegen (varargs-tail-call attrs arg-count func . args)
   (let* ((new-frame-base (codegen-call-args out func args in-frame-base))
@@ -406,23 +414,14 @@
                        (cdr general-registers))))
 
 (define (codegen-tail-call out func out-arg-count out-arg-reg out-arg-base regs)
-  (let* ((tmp (first regs))
+  (let* ((tmpreg (first regs))
          (retaddr (second regs))
          (savedfp (third regs)))
     ;; save the return address and caller frame pointer
     (emit-mov out (mem %bp) savedfp)
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
-
-    ;; copy the arguments into their place
-    (labels ((copy-args (arg-count)
-               (set! arg-count (1- arg-count))
-               (let* ((offset (* value-size arg-count)))
-                 (emit-mov out (dispmem 0 offset %sp) tmp)
-                 (emit-mov out tmp (dispmem 0 (+ value-size out-arg-base offset)
-                                            out-arg-reg)))
-               (when (> arg-count 0) (copy-args arg-count))))
-      (copy-args out-arg-count))
-    
+    ;; copy arguments into the correct place
+    (copy-tail-call-args out-arg-count out-arg-reg out-arg-base tmpreg out)
     ;; set %sp to its final value, and set everything up for the call
     (if (= 0 out-arg-base)
         (emit-mov out out-arg-reg %sp)
@@ -431,6 +430,15 @@
     (emit-mov out retaddr (mem %sp))
     (emit-mov out savedfp %bp)
     (emit-call-or-jump out "jmp" func)))
+
+(define (copy-tail-call-args arg-count arg-reg arg-base tmpreg out)
+  (when (> arg-count 0)
+    (set! arg-count (1- arg-count))
+    (let* ((offset (* value-size arg-count)))
+      (emit-mov out (dispmem 0 offset %sp) tmpreg)
+      (emit-mov out tmpreg
+                (dispmem 0 (+ value-size arg-base offset) arg-reg)))
+    (copy-tail-call-args arg-count arg-reg arg-base tmpreg out)))
 
 ;;; Literals
 
