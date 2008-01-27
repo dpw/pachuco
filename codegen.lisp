@@ -311,16 +311,6 @@
   (emit-mov out %sp %bp)
   (emit-push out %func))
 
-(define (emit-call-or-jump out insn func-varrec)
-  (let* ((label (and func-varrec
-                     (varrec-origin-attr func-varrec 'lambda-label))))
-    (if label
-        (emit out "~A ~A # ~A" insn label (first func-varrec))
-        (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func))))))
-
-(define (emit-call out func-varrec)
-  (emit-call-or-jump out "call" func-varrec))
-
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
   0)
@@ -362,12 +352,62 @@
     (emit-mov out retaddr (mem ac))
     (emit out "ret")))
 
-(define (emit-tail-call out in-arg-count out-arg-count func-varrec)
-  (let* ((in-arg-top (+ 2 in-arg-count)) ;; relative to %bp
-         (out-arg-base (* value-size (- in-arg-top out-arg-count)))
-         (tmp (first general-registers))
-         (retaddr (second general-registers))
-         (savedfp (third general-registers)))
+(define (emit-call-or-jump out insn func)
+  (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
+         (label (and func-varrec
+                     (varrec-origin-attr func-varrec 'lambda-label))))
+    (if label
+        (emit out "~A ~A # ~A" insn label (first func-varrec))
+        (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func))))))
+
+(define-reg-use ((call tail-call varargs-tail-call) attrs . args)
+  (reg-use-recurse form dest-type-value)
+  general-register-count)
+
+(define (codegen-call-args out func args in-frame-base)
+  (dolist (arg (reverse args))
+    (codegen arg (dest-value (first general-registers))
+             in-frame-base in-frame-base general-registers out)
+    (emit-frame-push out in-frame-base (first general-registers)))
+  (codegen func (dest-value %func)
+           in-frame-base in-frame-base general-registers out)
+  in-frame-base)
+
+(define-codegen (call attrs func . args)
+  (codegen-call-args out func args in-frame-base)
+  (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
+  (emit-call-or-jump out "call" func)
+  (emit-restore-%func out)
+  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
+
+(define (emit-restore-%func out)
+  (emit-mov out (dispmem value-size 0 %bp) %func))
+
+(define-codegen (tail-call attrs func . args)
+  (codegen-call-args out func args in-frame-base)
+  (let* ((out-arg-count (length args)))
+    (codegen-tail-call out func out-arg-count %bp
+                       (* value-size (+ 1 (attr-ref attrs 'nparams)
+                                        (- out-arg-count)))
+                       general-registers)))
+
+(define-codegen (varargs-tail-call attrs arg-count func . args)
+  (let* ((new-frame-base (codegen-call-args out func args in-frame-base))
+         (out-arg-reg (first general-registers))
+         (out-arg-count (length args)))
+    ;; here we assume that the arg-count is just a ref, and so won't
+    ;; access %func
+    (codegen arg-count (dest-value out-arg-reg) new-frame-base new-frame-base
+             general-registers out)
+    (emit-lea out (dispmem 0 (* value-size (- 1 out-arg-count)) %bp out-arg-reg)
+              out-arg-reg)
+    (codegen-tail-call out func out-arg-count out-arg-reg 0
+                       (cdr general-registers))))
+
+(define (codegen-tail-call out func out-arg-count out-arg-reg out-arg-base regs)
+  (let* ((tmp (first regs))
+         (retaddr (second regs))
+         (savedfp (third regs)))
     ;; save the return address and caller frame pointer
     (emit-mov out (mem %bp) savedfp)
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
@@ -377,19 +417,19 @@
                (set! arg-count (1- arg-count))
                (let* ((offset (* value-size arg-count)))
                  (emit-mov out (dispmem 0 offset %sp) tmp)
-                 (emit-mov out tmp (dispmem 0 (+ out-arg-base offset) %bp)))
+                 (emit-mov out tmp (dispmem 0 (+ value-size out-arg-base offset)
+                                            out-arg-reg)))
                (when (> arg-count 0) (copy-args arg-count))))
       (copy-args out-arg-count))
-
+    
     ;; set %sp to its final value, and set everything up for the call
-    (emit-lea out (dispmem value-size out-arg-base %bp) %sp)
+    (if (= 0 out-arg-base)
+        (emit-mov out out-arg-reg %sp)
+        (emit-lea out (dispmem 0 out-arg-base out-arg-reg) %sp))
     (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
     (emit-mov out retaddr (mem %sp))
     (emit-mov out savedfp %bp)
-    (emit-call-or-jump out "jmp" func-varrec)))
-
-(define (emit-restore-%func out)
-  (emit-mov out (dispmem value-size 0 %bp) %func))
+    (emit-call-or-jump out "jmp" func)))
 
 ;;; Literals
 

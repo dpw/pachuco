@@ -1115,7 +1115,7 @@
               (true
                (error "can't handle dest ~S" dest))))))))
 
-;;; Functions
+;;; Lambda
 
 (define-reg-use (lambda attrs body)
   (let* ((closure (attr-ref attrs 'closure)))
@@ -1136,37 +1136,6 @@
                in-frame-base in-frame-base (cdr regs) out)
       (emit-closure-slot-set out (first regs) (car varrec-ref) (second regs)))
     (emit-convert-value out (first regs) dest in-frame-base out-frame-base)))
-
-(define-reg-use ((call tail-call varargs-tail-call) attrs . args)
-  (reg-use-recurse form dest-type-value)
-  general-register-count)
-
-(define-codegen (call attrs func . args)
-  (let* ((new-frame-base in-frame-base))
-    (dolist (arg (reverse args))
-      (codegen arg (dest-value (first general-registers))
-               new-frame-base new-frame-base general-registers out)
-      (emit-frame-push out new-frame-base (first general-registers)))
-    
-    (codegen func (dest-value %func)
-             new-frame-base new-frame-base general-registers out)
-    (emit-mov out (immediate (fixnum-representation (length args)))
-              %nargs)
-    (emit-call out (and (eq? 'ref (first func)) (second func)))
-    (emit-restore-%func out)
-    (emit-convert-value out %funcres dest in-frame-base out-frame-base)))
-
-(define-codegen (tail-call attrs func . args)
-  (let* ((new-frame-base in-frame-base))
-    (dolist (arg (reverse args))
-      (codegen arg (dest-value (first general-registers))
-               new-frame-base new-frame-base general-registers out)
-      (emit-frame-push out new-frame-base (first general-registers)))
-    
-    (codegen func (dest-value %func)
-             new-frame-base new-frame-base general-registers out)
-    (emit-tail-call out (attr-ref attrs 'nparams) (length args)
-                    (and (eq? 'ref (first func)) (second func)))))
 
 ;;; Strings and vectors
 
