@@ -882,7 +882,6 @@
 (define-codegen (begin varrecs . body)
   (labels ((block-codegen (form forms)
              (emit-comment-form out form)
-             (emit-comment out "in-frame-base: ~D" in-frame-base)
              (if (null? forms)
                  (codegen (if (eq? 'define (car form)) (third form) form)
                           dest in-frame-base out-frame-base regs out)
