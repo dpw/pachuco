@@ -426,9 +426,12 @@
     (if (= 0 out-arg-base)
         (emit-mov out out-arg-reg %sp)
         (emit-lea out (dispmem 0 out-arg-base out-arg-reg) %sp))
-    (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
     (emit-mov out retaddr (mem %sp))
     (emit-mov out savedfp %bp)
+    ;; setting up %nargs must be the last thing we do, since %nargs is
+    ;; in general-regs and so might be the same as one of our temp
+    ;; regs
+    (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
     (emit-call-or-jump out "jmp" func)))
 
 (define (copy-tail-call-args arg-count arg-reg arg-base tmpreg out)
