@@ -239,10 +239,12 @@
 
 ;;; Heap allocation
 
-(define (emit-align-%alloc out tag-bits . scale)
+(define (emit-alloc out tag-bits size allocreg . scale)
+  (emit-sub out size %alloc)
   (set! scale (if (null? scale) value-scale (car scale)))
   (unless (= tag-bits scale)
-    (emit-and out (immediate (- (ash 1 tag-bits))) %alloc)))
+    (emit-and out (immediate (- (ash 1 tag-bits))) %alloc))
+  (emit-mov out %alloc allocreg))
 
 ;;; Stack handling
 
@@ -295,10 +297,10 @@
 ;;; Functions
 
 (define (emit-alloc-function out result-reg label slot-count)
-  (emit-sub out (immediate (* value-size (1+ slot-count))) %alloc)
-  (emit-align-%alloc out function-tag-bits)
-  (emit-mov out (immediate label) (dispmem 0 0 %alloc))
-  (emit-lea out (dispmem 0 function-tag %alloc) result-reg))
+  (emit-alloc out function-tag-bits (immediate (* value-size (1+ slot-count)))
+              result-reg)
+  (emit-mov out (immediate label) (mem result-reg))
+  (emit-add out function-tag result-reg))
 
 (define (emit-closure-slot-set out func-reg varrec val-reg)
   (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
@@ -621,12 +623,11 @@
 
 (define-tag-check pair? pair-tag pair-tag-bits)
 
-(define-pure-operator (cons a d) result ()
-  (emit-sub out (immediate (* 2 value-size)) %alloc)
-  (emit-align-%alloc out pair-tag-bits)
-  (emit-mov out a (dispmem 0 0 %alloc))
-  (emit-mov out d (dispmem 0 value-size %alloc))
-  (emit-lea out (dispmem 0 pair-tag %alloc) result))
+(define-pure-operator (cons a d) result (alloc)
+  (emit-alloc out pair-tag-bits (immediate (* 2 value-size)) alloc)
+  (emit-mov out a (mem alloc))
+  (emit-mov out d (dispmem 0 value-size alloc))
+  (emit-lea out (dispmem 0 pair-tag alloc) result))
 
 (define-pure-operator (car a) result ()
   (emit-mov out (dispmem pair-tag 0 a) result))
@@ -642,11 +643,10 @@
 
 ;;; Boxes
 
-(define-pure-operator (make-box val) result ()
-  (emit-sub out (immediate value-size) %alloc)
-  (emit-align-%alloc out box-tag-bits)
-  (emit-mov out val (dispmem 0 0 %alloc))
-  (emit-lea out (dispmem 0 box-tag %alloc) result))
+(define-pure-operator (make-box val) result (alloc)
+  (emit-alloc out box-tag-bits (immediate value-size) alloc)
+  (emit-mov out val (mem alloc))
+  (emit-lea out (dispmem 0 box-tag alloc) result))
 
 (define-operator (box-set! box val) val ()
   (emit-mov out val (dispmem box-tag 0 box)))
@@ -667,11 +667,10 @@
 (define-pure-operator (symbol-name sym) result ()
   (emit-mov out (dispmem atom-tag 0 sym) result))
 
-(define-pure-operator (primitive-make-symbol str) result ()
-  (emit-sub out (immediate value-size) %alloc)
-  (emit-align-%alloc out atom-tag-bits)
-  (emit-mov out str (dispmem 0 0 %alloc))
-  (emit-lea out (dispmem 0 atom-tag %alloc) result))
+(define-pure-operator (primitive-make-symbol str) result (alloc)
+  (emit-alloc out atom-tag-bits (immediate value-size) alloc)
+  (emit-mov out str (mem alloc))
+  (emit-lea out (dispmem 0 atom-tag alloc) result))
 
 ;;;  Numbers
 
@@ -757,25 +756,16 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define-pure-operator (make-vec len) result (raw-len)
+(define-pure-operator (make-vec len) result (saved-len)
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
-    (if (= scale number-tag-bits)
-      (begin
-        (emit-sub out (immediate value-size) %alloc)
-        (emit-sub out len %alloc)
-        (emit-align-%alloc out tag-bits scale)
-        (emit-mov out len (dispmem 0 0 %alloc))
-        (emit-lea out (dispmem 0 tag %alloc) result))
-      (begin
-        (emit-mov out len raw-len)
-        (emit-scale-number out scale raw-len)
-        (emit-sub out (immediate value-size) %alloc)
-        (emit-sub out raw-len %alloc)
-        (emit-align-%alloc out tag-bits scale)
-        (emit-mov out len (dispmem 0 0 %alloc))
-        (emit-lea out (dispmem 0 tag %alloc) result)))))
+    (emit-mov out len saved-len)
+    (emit-scale-number out scale len)
+    (emit-add out (immediate value-size) len)
+    (emit-alloc out tag-bits len result scale)
+    (emit-mov out saved-len (mem result))
+    (emit-add out tag result)))
 
 (define-pure-operator (vec-length vec) result ()
   (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
