@@ -62,7 +62,6 @@
 (define general-registers (list %a %b %c %d %si %di))
 (define general-register-count (length general-registers))
 
-(define %alloc %r14)
 (define %func %r15)
 (define %funcres (first general-registers))
 

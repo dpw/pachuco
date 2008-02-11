@@ -240,11 +240,12 @@
 ;;; Heap allocation
 
 (define (emit-alloc out tag-bits size allocreg . scale)
-  (emit-sub out size %alloc)
+  (emit-mov out "heap_alloc" allocreg)
+  (emit-sub out size allocreg)
   (set! scale (if (null? scale) value-scale (car scale)))
   (unless (= tag-bits scale)
-    (emit-and out (immediate (- (ash 1 tag-bits))) %alloc))
-  (emit-mov out %alloc allocreg))
+    (emit-and out (immediate (- (ash 1 tag-bits))) allocreg))
+  (emit-mov out allocreg "heap_alloc"))
 
 ;;; Stack handling
 
@@ -756,16 +757,16 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define-pure-operator (make-vec len) result (saved-len)
+(define-pure-operator (make-vec len) result (alloc saved-len)
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
     (emit-mov out len saved-len)
     (emit-scale-number out scale len)
     (emit-add out (immediate value-size) len)
-    (emit-alloc out tag-bits len result scale)
-    (emit-mov out saved-len (mem result))
-    (emit-add out tag result)))
+    (emit-alloc out tag-bits len alloc scale)
+    (emit-mov out saved-len (mem alloc))
+    (emit-lea out (dispmem 0 tag alloc) result)))
 
 (define-pure-operator (vec-length vec) result ()
   (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
@@ -787,6 +788,24 @@
          (scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
     (emit-mov out val (dispmem tag value-size vec index) scale)))
+
+(define-reg-use (vec-copy attrs src-addr dst-addr len)
+  (operator-args-reg-use form)
+  general-register-count)
+
+(define-codegen (vec-copy attrs src-addr dst-addr len)
+  (unless (dest-discard? dest)
+    (error "vec-copy result not discarded"))
+  (let* ((tag (attr-ref attrs 'tag))
+         (scale (attr-ref attrs 'scale)))
+    (operator-args-codegen form in-frame-base
+                     (move-regs-to-front '(%si %di %c) general-registers)
+                     out)
+    (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
+    (emit-sar out (immediate number-tag-bits) %c)
+    (emit-rep-movs out scale)
+    (emit-adjust-frame-base out in-frame-base out-frame-base)))
+
 
 ;;; Misc. runtime
 

@@ -56,11 +56,7 @@
 (define-register %sp "%spl" "%sp" "%esp")
 (define-register %bp "%bpl" "%bp" "%ebp")
 
-;;; Use RBX as the allocation pointer, since there are no relevant
-;;; instructions that clobber it implicitly.
-(define %alloc %b)
-
-(define general-registers (list %a %c %d %di))
+(define general-registers (list %a %b %c %d %di))
 (define general-register-count (length general-registers))
 
 (define %func %si)
