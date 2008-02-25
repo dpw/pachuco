@@ -531,7 +531,7 @@
                                     (cdddr varrec))))
           (varrec-attr-set! varrec 'closure-stack
                             (acons depth local-varrec closure-stack))
-          (varrec-attr-set! varrec 'boxed (varrec-attr varrec 'written))
+          (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
           (rplaca closure-cell (cons local-varrec (car closure-cell)))
           local-varrec))))
 
@@ -563,8 +563,7 @@
     ;; closure.  instead we use a special self-closure attr.
     (let* ((self-varrec (attr-ref attrs 'self)))
       (form-attr-set! form 'self-closure
-                      (if (and self-varrec
-                               (not (varrec-attr self-varrec 'written)))
+                      (if (and self-varrec (not (varrec-written? self-varrec)))
                           (resolve-closure-var self-varrec (1+ depth)
                                                self-closure-cell)
                           false)))
