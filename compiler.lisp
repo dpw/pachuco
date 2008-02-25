@@ -439,25 +439,26 @@
 ;;; Classify all variables into read-only and potentially read-write
 ;;;
 ;;; I (0) - initial state
-;;; D (1) - defined
-;;; W (2) - defined, and written
-;;; E (3) - early access (encountered a potential access before the define)
-;;; ! (4) - error
+;;; r (1) - defined (and possibly read)
+;;; w (2) - defined, and written
+;;; R (3) - early read (encountered a potential read before the define)
+;;; W (4) - early write (encountered a potential write before the define)
+;;; ! (5) - error
 ;;;
-;;;          I D W E !
+;;;          I r w R W !
 ;;;
-;;; define   D ! ! E !
-;;; ref      E D W E !
-;;; set!     E W W E !
+;;; define   r ! ! R W !
+;;; ref      R r w R W !
+;;; set!     W w w W W !
 
 
 ;;; A "written" boolean attribute is added to each varrec.
 
 (define-trivial-walker classify-variables ())
 
-(define varrec-define-state-table (make-vector-from-list '(1 4 4 3 4)))
-(define varrec-ref-state-table    (make-vector-from-list '(3 1 2 3 4)))
-(define varrec-set!-state-table   (make-vector-from-list '(3 2 2 3 4)))
+(define varrec-define-state-table (make-vector-from-list '(1 5 5 3 4 5)))
+(define varrec-ref-state-table    (make-vector-from-list '(3 1 2 3 4 5)))
+(define varrec-set!-state-table   (make-vector-from-list '(4 2 2 4 4 5)))
 
 (define (update-varrec-state varrec table)
   (varrec-attr-set! varrec 'state
@@ -470,11 +471,13 @@
   (classify-variables val)
   (update-varrec-state varrec varrec-set!-state-table))
 
+(define (early-access-state? state)
+  (or (= state 3) (= state 4)))
+
 (define-classify-variables (define varrec val)
   (labels ((update-define-varrec-state ()
              (let* ((state (varrec-attr varrec 'state)))
-               (when (= state 3)
-                 (rplaca form 'set!))
+               (when (early-access-state? state) (rplaca form 'set!))
                (varrec-attr-set! varrec 'state
                                 (vector-ref varrec-define-state-table state)))))
     (classify-variables val)
@@ -494,11 +497,11 @@
            (written false))
       (cond ((= state 2) 
              (set! written true))
-            ((= state 3)
-             (set! written true)
+            ((early-access-state? state)
+             (set! written (if (= 3 state) 'early-read true))
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form))))
-            ((= state 4)
+            ((= state 5)
              (error "bad variable ~S" (car varrec))))
       (varrec-attr-set! varrec 'written written))))
 
@@ -509,7 +512,8 @@
   (form-attr-set! form 'self false)
   (classify-block-variables (attr-ref attrs 'params) 1 form))
  
-(define (varrec-written? varrec) (varrec-attr varrec 'written))
+(define (varrec-quasi-written? varrec) (varrec-attr varrec 'written))
+(define (varrec-written? varrec) (eq? true (varrec-attr varrec 'written)))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
@@ -531,7 +535,7 @@
                                     (cdddr varrec))))
           (varrec-attr-set! varrec 'closure-stack
                             (acons depth local-varrec closure-stack))
-          (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
+          (varrec-attr-set! varrec 'boxed (varrec-quasi-written? varrec))
           (rplaca closure-cell (cons local-varrec (car closure-cell)))
           local-varrec))))
 
@@ -563,7 +567,8 @@
     ;; closure.  instead we use a special self-closure attr.
     (let* ((self-varrec (attr-ref attrs 'self)))
       (form-attr-set! form 'self-closure
-                      (if (and self-varrec (not (varrec-written? self-varrec)))
+                      (if (and self-varrec
+                               (not (varrec-quasi-written? self-varrec)))
                           (resolve-closure-var self-varrec (1+ depth)
                                                self-closure-cell)
                           false)))
@@ -665,8 +670,7 @@
 
 (define-lambda-label (define varrec val)
   (lambda-label val)
-  (when (and (eq? 'lambda (car val))
-             (not (varrec-written? varrec)))
+  (when (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
     (varrec-attr-set! varrec 'lambda-label (form-attr val 'label))))
 
 ;;; Produce a debug form
