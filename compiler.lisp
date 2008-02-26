@@ -438,27 +438,33 @@
             
 ;;; Classify all variables into read-only and potentially read-write
 ;;;
-;;; I (0) - initial state
-;;; r (1) - defined (and possibly read)
-;;; w (2) - defined, and written
-;;; R (3) - early read (encountered a potential read before the define)
-;;; W (4) - early write (encountered a potential write before the define)
-;;; ! (5) - error
+;;; I (4) - initial state
+;;; r (5) - read before a define
+;;; F (3) - an early-use function (reads before its define)
+;;; E (2) - an early-use (reads and/or writes before define)
+;;; W (1) - written (after definition)
+;;; R (0) - read (after definition)
+;;; ! (6) - error
 ;;;
-;;;          I r w R W !
+;;;               R W E F I r !
+;;;                           
+;;; define        ! W E ! R E !
+;;; define lambda ! W E ! R F !
+;;; ref           R W E F r r !
+;;; set!          W W E E E E !
 ;;;
-;;; define   r ! ! R W !
-;;; ref      R r w R W !
-;;; set!     W w w W W !
-
-
-;;; A "written" boolean attribute is added to each varrec.
+;;; An "acccess" attribute is added to each varrec, indicating whether
+;;; the access style is read-only, written, or early-function.
 
 (define-trivial-walker classify-variables ())
 
-(define varrec-define-state-table (make-vector-from-list '(1 5 5 3 4 5)))
-(define varrec-ref-state-table    (make-vector-from-list '(3 1 2 3 4 5)))
-(define varrec-set!-state-table   (make-vector-from-list '(4 2 2 4 4 5)))
+(define varrec-define-state-table (make-vector-from-list '(6 1 2 6 0 2 6)))
+(define varrec-define-lambda-state-table
+                                  (make-vector-from-list '(6 1 2 6 0 3 6)))
+(define varrec-ref-state-table    (make-vector-from-list '(0 1 2 3 5 5 6)))
+(define varrec-set!-state-table   (make-vector-from-list '(1 1 2 2 2 2 6)))
+(define varrec-access-table
+    (make-vector-from-list '(read-only written written early-function)))
 
 (define (update-varrec-state varrec table)
   (varrec-attr-set! varrec 'state
@@ -471,49 +477,41 @@
   (classify-variables val)
   (update-varrec-state varrec varrec-set!-state-table))
 
-(define (early-access-state? state)
-  (or (= state 3) (= state 4)))
-
 (define-classify-variables (define varrec val)
-  (labels ((update-define-varrec-state ()
-             (let* ((state (varrec-attr varrec 'state)))
-               (when (early-access-state? state) (rplaca form 'set!))
-               (varrec-attr-set! varrec 'state
-                                (vector-ref varrec-define-state-table state)))))
-    (classify-variables val)
-    (if (eq? 'lambda (car val))
-        (begin (update-define-varrec-state)
-               (classify-variables val)
-               (form-attr-set! val 'self varrec))
-        (begin (classify-variables val)
-               (update-define-varrec-state)))))
+  (classify-variables val)
+  (let* ((state (varrec-attr varrec 'state))
+         (state-table (if (eq? 'lambda (car val))
+                          (begin
+                            (form-attr-set! val 'self varrec)
+                            varrec-define-lambda-state-table)
+                          varrec-define-state-table)))
+    (when (or (= state 2) (= state 5)) (rplaca form 'set!))
+    (varrec-attr-set! varrec 'state (vector-ref state-table state))))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'state init))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
-    (let* ((state (varrec-attr-remove varrec 'state))
-           (written false))
-      (cond ((= state 2) 
-             (set! written true))
-            ((early-access-state? state)
-             (set! written (if (= 3 state) 'early-read true))
+    (let* ((state (varrec-attr-remove varrec 'state)))
+      (cond ((= state 6) (error "bad variable ~S" (car varrec)))
+            ((or (= state 2) (= state 3))
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
-                                      (cddr form))))
-            ((= state 5)
-             (error "bad variable ~S" (car varrec))))
-      (varrec-attr-set! varrec 'written written))))
+                                      (cddr form)))))
+      (varrec-attr-set! varrec 'access
+                        (vector-ref varrec-access-table state)))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs 0 form))
+  (classify-block-variables varrecs 4 form))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) 1 form))
- 
-(define (varrec-quasi-written? varrec) (varrec-attr varrec 'written))
-(define (varrec-written? varrec) (eq? true (varrec-attr varrec 'written)))
+  (classify-block-variables (attr-ref attrs 'params) 0 form))
+
+(define (varrec-quasi-written? varrec)
+  (not (eq? 'read-only (varrec-attr varrec 'access))))
+(define (varrec-written? varrec)
+  (eq? 'written (varrec-attr varrec 'access)))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
