@@ -807,9 +807,6 @@
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted out))
                            (cons 'quoted quoted))))
 
-(define-codegen-sections (begin varrecs . body)
-  (codegen-sections-recurse form out))
-
 (define (assign-varrec-indices varrecs mode)
   ;; assign slot indices to varrecs
   (let* ((index 0))
