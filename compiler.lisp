@@ -649,10 +649,10 @@
                                  (unquote body))))))
   (introduce-boxes body))
 
-;;; Lambda labelling:
+;;; Decompose lambdas into alloc-closure and fill-closure.
 ;;;
-;;; Assign the code label for each lambda, and where possible,
-;;; propogate it to the associated variable
+;;; Also, assign a label for the code for each lambda, and where
+;;; possible, propogate it to the associated variable
 
 (define-trivial-walker decompose-lambdas ())
 
