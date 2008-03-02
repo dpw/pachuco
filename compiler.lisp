@@ -14,7 +14,7 @@
   (classify-variables program)
   (collect-closures program)
   (introduce-boxes program)
-  (lambda-label program)
+  (decompose-lambdas program)
   (codegen-program program)
   ;(format~ true "~S~%" (debug-form program))
   )
@@ -52,6 +52,7 @@
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
+                            alloc-closure fill-closure
                             make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
@@ -653,29 +654,50 @@
 ;;; Assign the code label for each lambda, and where possible,
 ;;; propogate it to the associated variable
 
-(define-trivial-walker lambda-label ())
+(define-trivial-walker decompose-lambdas ())
 
-(define-lambda-label (begin varrecs . body)
+(define-decompose-lambdas (begin varrecs . body)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'lambda-label false))
-  (lambda-label-forms body))
+  (decompose-lambdas-forms body))
 
-(define-lambda-label (lambda attrs body)
-  (form-attr-set! form 'label (gen-label))
+(define (decompose-lambda form attrs body)
   (dolist (varrec (attr-ref attrs 'params))
     (varrec-attr-set! varrec 'lambda-label false))
-  (lambda-label body))
+  (decompose-lambdas body)
 
-(define-lambda-label (define varrec val)
-  (lambda-label val)
-  (when (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-    (varrec-attr-set! varrec 'lambda-label (form-attr val 'label))))
+  ;; turn (lambda attrs body) into
+  ;; (fill-closure attrs (alloc-closure n) refs)
+  (let* ((label (gen-label))
+         (closure (attr-ref attrs 'closure)))
+    (overwrite-form form
+      (quasiquote
+        (fill-closure ((unquote-splicing attrs)
+                        (label . (unquote label))
+                        (body (unquote-splicing body)))
+          (alloc-closure ((size . (unquote (length closure)))))
+          (unquote-splicing
+            (mapfor (varrec closure)
+              (list 'ref (varrec-attr varrec 'source)))))))
+    label))
+
+(define-decompose-lambdas (lambda attrs body)
+  (decompose-lambda form attrs body))
+
+(define-decompose-lambdas (define varrec val)
+  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
+      (varrec-attr-set! varrec 'lambda-label
+                        (decompose-lambda val (second val) (third val)))
+      (decompose-lambdas val)))
 
 ;;; Produce a debug form
 
+(define (debug-forms forms)
+  (mapfor (form forms) (debug-form form)))
+
 (define (debug-form-recurse form)
-  (list* (car form) (cadr form)
-         (mapfor (subform (cddr form)) (debug-form subform))))
+  (list* (car form) (cadr form) (debug-forms (cddr form))))
+
 (define-walker debug-form ())
 
 (define (debug-substitute-varrec varrec)
@@ -698,25 +720,30 @@
   (mapfor (varrec varrecs) (debug-uniquify-varrec varrec)))
 
 (define-debug-form (begin varrecs . body)
-  (list* 'begin (debug-uniquify-varrecs varrecs)
-         (mapfor (subform body) (debug-form subform))))
+  (list* 'begin (debug-uniquify-varrecs varrecs) (debug-forms body)))
+
+(define (debug-lambda-attrs attrs)
+  (flatten*-mapfor (attr attrs)
+    (let* ((key (car attr))
+           (val (cdr attr)))
+      (cond ((not val)
+             ())
+            ((or (eq? key 'params) (eq? key 'closure))
+             (list (cons key (debug-uniquify-varrecs val))))
+            ((eq? key 'self-closure)
+             (list (cons key (debug-uniquify-varrec val))))
+            ((eq? key 'self)
+             (list (cons key (debug-substitute-varrec val))))
+            ((eq? key 'body)
+             (list (cons key (debug-form val))))
+            (true
+             (list attr))))))
 
 (define-debug-form (lambda attrs body)
-  (list 'lambda
-        (flatten*-mapfor (attr attrs)
-          (let* ((key (car attr))
-                 (val (cdr attr)))
-            (cond ((not val)
-                   ())
-                  ((or (eq? key 'params) (eq? key 'closure))
-                   (list (cons key (debug-uniquify-varrecs val))))
-                  ((eq? key 'self-closure)
-                   (list (cons key (debug-uniquify-varrec val))))
-                  ((eq? key 'self)
-                   (list (cons key (debug-substitute-varrec val))))
-                  (true
-                   (list attr)))))
-        (debug-form body)))
+  (list 'lambda (debug-lambda-attrs attrs) (debug-form body)))
+
+(define-debug-form (fill-closure attrs . args)
+  (list* 'fill-closure (debug-lambda-attrs attrs) (debug-forms args)))
 
 (define-debug-form ((define set!) varrec val)
   (list (car form) (debug-substitute-varrec varrec) (debug-form val)))
@@ -815,8 +842,9 @@
       (varrec-attr-set! varrec 'mode mode)
       (set! index (1+ index)))))
 
-(define-codegen-sections (lambda attrs body)
-  (let* ((self-varrec (attr-ref attrs 'self)))
+(define-codegen-sections (fill-closure attrs . args)
+  (let* ((self-varrec (attr-ref attrs 'self))
+         (body (attr-ref attrs 'body)))
     ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body out)
 
@@ -1111,28 +1139,6 @@
                                        in-frame-base out-frame-base))))
               (true
                (error "can't handle dest ~S" dest))))))))
-
-;;; Lambda
-
-(define-reg-use (lambda attrs body)
-  (let* ((closure (attr-ref attrs 'closure)))
-    (unless (null? closure) 
-      (nmapfor (varrec closure)
-        (cons varrec (list 'ref (varrec-attr varrec 'source))))
-      (let* ((closure-ref-rus (mapfor (varrec-ref closure)
-                                (reg-use (cdr varrec-ref) dest-type-value))))
-        (1+ (reduce~ (car closure-ref-rus) (cdr closure-ref-rus)
-                     (function max)))))))
-
-(define-codegen (lambda attrs body)
-  (let* ((closure (attr-ref attrs 'closure)))
-    (emit-alloc-function out (first regs) (attr-ref attrs 'label)
-                         (length closure))
-    (dolist (varrec-ref (attr-ref attrs 'closure))
-      (codegen (cdr varrec-ref) (dest-value (second regs))
-               in-frame-base in-frame-base (cdr regs) out)
-      (emit-closure-slot-set out (first regs) (car varrec-ref) (second regs)))
-    (emit-convert-value out (first regs) dest in-frame-base out-frame-base)))
 
 ;;; Strings and vectors
 

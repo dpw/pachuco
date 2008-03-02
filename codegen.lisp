@@ -276,8 +276,8 @@
     (emit-add out (immediate (* value-size (- in-frame-base out-frame-base)))
               %sp)))
 
-(define (closure-slot func index)
-  (dispmem function-tag (* value-size (1+ index)) func))
+(define (closure-slot closure index)
+  (dispmem function-tag (* value-size (1+ index)) closure))
 
 (define (param-slot index)
   (dispmem 0 (* value-size (+ 2 index)) %bp))
@@ -297,14 +297,31 @@
 
 ;;; Functions
 
-(define (emit-alloc-function out result-reg label slot-count)
-  (emit-alloc out function-tag-bits (immediate (* value-size (1+ slot-count)))
-              result-reg)
-  (emit-mov out (immediate label) (mem result-reg))
-  (emit-add out function-tag result-reg))
+(define-pure-operator (alloc-closure) result ()
+  (emit-alloc out function-tag-bits
+              (immediate (* value-size (1+ (attr-ref attrs 'size))))
+              result)
+  (emit-add out function-tag result))
 
-(define (emit-closure-slot-set out func-reg varrec val-reg)
-  (emit-mov out val-reg (closure-slot func-reg (varrec-attr varrec 'index))))
+(define-reg-use (fill-closure attrs closure . refs)
+  (let* ((ref-rus (mapfor (ref refs) (reg-use ref dest-type-value))))
+    (max (reg-use closure dest-type-value)
+         (1+ (reduce~ (car ref-rus) (cdr ref-rus) (function max))))))
+
+(define-codegen (fill-closure attrs closure . refs)
+  (let* ((closure-reg (first regs))
+         (ref-reg (second regs))
+         (index 0))
+    (codegen closure (dest-value closure-reg) in-frame-base in-frame-base regs
+             out)
+    (emit-mov out (immediate (attr-ref attrs 'label))
+              (dispmem function-tag 0 closure-reg))
+    (dolist (ref refs)
+      (codegen ref (dest-value ref-reg) in-frame-base in-frame-base (cdr regs)
+               out)
+      (emit-mov out ref-reg (closure-slot closure-reg index))
+      (set! index (1+ index)))
+    (emit-convert-value out closure-reg dest in-frame-base out-frame-base)))
 
 (define function-in-frame-base 1)
 (define function-out-frame-base 0)
