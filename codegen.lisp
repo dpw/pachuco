@@ -375,10 +375,12 @@
 (define (emit-call-or-jump out insn func)
   (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
          (label (and func-varrec
-                     (varrec-origin-attr func-varrec 'lambda-label))))
+                     (varrec-origin-attr func-varrec 'lambda-label)))
+         (comment (comment-form func)))
     (if label
-        (emit out "~A ~A # ~A" insn label (first func-varrec))
-        (emit out "~A *~A" insn (value-sized (dispmem function-tag 0 %func))))))
+        (emit out "~A ~A # ~S" insn label comment)
+        (emit out "~A *~A # ~S" insn
+              (value-sized (dispmem function-tag 0 %func)) comment))))
 
 (define-reg-use ((call tail-call varargs-tail-call) attrs . args)
   (reg-use-recurse form dest-type-value)
