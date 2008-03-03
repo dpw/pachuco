@@ -667,18 +667,22 @@
                     (make-alloc-closure closure))))
 
 (define-decompose-lambdas (define varrec val)
-  (if (varrec-early-function? varrec)
-      (decompose-define-lambda form varrec val begin)
+  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
+      (let* ((attrs (second val))
+             (body (third val))
+             (closure (attr-ref attrs 'closure)))
+        (varrec-attr-set! varrec 'lambda-label
+          (if (varrec-early-function? varrec)
+              (decompose-define-lambda form varrec attrs closure body begin) 
+              (decompose-lambda val attrs closure body begin
+                                (make-alloc-closure closure)))))
       (decompose-lambdas val begin)))
 
-(define (decompose-define-lambda form varrec val begin)
-  (let* ((closure (attr-ref (second val) 'closure)))
-    (rplacd (cdr begin)
-            (cons (list 'define varrec (make-alloc-closure closure))
-                  (cddr begin)))
-    (varrec-attr-set! varrec 'lambda-label
-                      (decompose-lambda form (second val) closure (third val)
-                                        begin (list 'ref varrec)))))
+(define (decompose-define-lambda form varrec attrs closure body begin)
+  (rplacd (cdr begin)
+          (cons (list 'define varrec (make-alloc-closure closure))
+                (cddr begin)))
+  (decompose-lambda form attrs closure body begin (list 'ref varrec)))
 
 (define (decompose-lambda form attrs closure body begin closure-form)
   (dolist (varrec (attr-ref attrs 'params))
