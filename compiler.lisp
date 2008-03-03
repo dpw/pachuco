@@ -188,14 +188,16 @@
   (attr-ref (second form) attr))
 
 (define (form-attr-set! form attr val)
-  (rplaca (cdr form) (attr-set! (second form) attr val)))
+  (rplaca (cdr form) (attr-set! (second form) attr val))
+  val)
 
 
 (define (varrec-attr varrec attr)
   (attr-ref (cdr varrec) attr))
 
 (define (varrec-attr-set! varrec attr val)
-  (rplacd varrec (attr-set! (cdr varrec) attr val)))
+  (rplacd varrec (attr-set! (cdr varrec) attr val))
+  val)
 
 (define (varrec-attr-remove varrec attr)
   (attr-remove varrec attr))
@@ -479,15 +481,13 @@
   (update-varrec-state varrec varrec-set!-state-table))
 
 (define-classify-variables (define varrec val)
-  (classify-variables val)
-  (let* ((state-table (if (eq? 'lambda (car val))
-                          (begin
-                            (form-attr-set! val 'self varrec)
-                            varrec-define-lambda-state-table)
-                          varrec-define-state-table))
-         (state (vector-ref state-table (varrec-attr varrec 'state))))
+  (let* ((lambda? (eq? 'lambda (car val)))
+         (state (update-varrec-state varrec (if lambda?
+                                                varrec-define-lambda-state-table
+                                                varrec-define-state-table))))
+    (classify-variables val)
     (when (= state 2) (rplaca form 'set!))
-    (varrec-attr-set! varrec 'state state)))
+    (when lambda? (form-attr-set! val 'self varrec))))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
@@ -511,6 +511,8 @@
 
 (define (varrec-written? varrec)
   (eq? 'written (varrec-attr varrec 'access)))
+(define (varrec-early-function? varrec)
+  (eq? 'early-function (varrec-attr varrec 'access)))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
@@ -665,7 +667,7 @@
                     (make-alloc-closure closure))))
 
 (define-decompose-lambdas (define varrec val)
-  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
+  (if (varrec-early-function? varrec)
       (decompose-define-lambda form varrec val begin)
       (decompose-lambdas val begin)))
 
