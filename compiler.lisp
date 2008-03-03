@@ -14,7 +14,7 @@
   (classify-variables program)
   (collect-closures program)
   (introduce-boxes program)
-  (decompose-lambdas program)
+  (decompose-lambdas program false)
   (codegen-program program)
   ;(format~ true "~S~%" (debug-form program))
   )
@@ -480,14 +480,14 @@
 
 (define-classify-variables (define varrec val)
   (classify-variables val)
-  (let* ((state (varrec-attr varrec 'state))
-         (state-table (if (eq? 'lambda (car val))
+  (let* ((state-table (if (eq? 'lambda (car val))
                           (begin
                             (form-attr-set! val 'self varrec)
                             varrec-define-lambda-state-table)
-                          varrec-define-state-table)))
-    (when (or (= state 2) (= state 5)) (rplaca form 'set!))
-    (varrec-attr-set! varrec 'state (vector-ref state-table state))))
+                          varrec-define-state-table))
+         (state (vector-ref state-table (varrec-attr varrec 'state))))
+    (when (= state 2) (rplaca form 'set!))
+    (varrec-attr-set! varrec 'state state)))
 
 (define (classify-block-variables varrecs init form)
   (dolist (varrec varrecs)
@@ -496,7 +496,7 @@
   (dolist (varrec varrecs)
     (let* ((state (varrec-attr-remove varrec 'state)))
       (cond ((= state 6) (error "bad variable ~S" (car varrec)))
-            ((or (= state 2) (= state 3))
+            ((= state 2)
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form)))))
       (varrec-attr-set! varrec 'access
@@ -509,8 +509,6 @@
   (form-attr-set! form 'self false)
   (classify-block-variables (attr-ref attrs 'params) 0 form))
 
-(define (varrec-quasi-written? varrec)
-  (not (eq? 'read-only (varrec-attr varrec 'access))))
 (define (varrec-written? varrec)
   (eq? 'written (varrec-attr varrec 'access)))
 
@@ -534,7 +532,7 @@
                                     (cdddr varrec))))
           (varrec-attr-set! varrec 'closure-stack
                             (acons depth local-varrec closure-stack))
-          (varrec-attr-set! varrec 'boxed (varrec-quasi-written? varrec))
+          (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
           (rplaca closure-cell (cons local-varrec (car closure-cell)))
           local-varrec))))
 
@@ -567,7 +565,7 @@
     (let* ((self-varrec (attr-ref attrs 'self)))
       (form-attr-set! form 'self-closure
                       (if (and self-varrec
-                               (not (varrec-quasi-written? self-varrec)))
+                               (not (varrec-written? self-varrec)))
                           (resolve-closure-var self-varrec (1+ depth)
                                                self-closure-cell)
                           false)))
@@ -654,41 +652,53 @@
 ;;; Also, assign a label for the code for each lambda, and where
 ;;; possible, propogate it to the associated variable
 
-(define-trivial-walker decompose-lambdas ())
+(define-trivial-walker decompose-lambdas (begin))
 
 (define-decompose-lambdas (begin varrecs . body)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'lambda-label false))
-  (decompose-lambdas-forms body))
+  (decompose-lambdas-forms body form))
 
-(define (decompose-lambda form attrs body)
+(define-decompose-lambdas (lambda attrs body)
+  (let* ((closure (attr-ref attrs 'closure)))
+    (decompose-lambda form attrs closure body begin
+                    (make-alloc-closure closure))))
+
+(define-decompose-lambdas (define varrec val)
+  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
+      (decompose-define-lambda form varrec val begin)
+      (decompose-lambdas val begin)))
+
+(define (decompose-define-lambda form varrec val begin)
+  (let* ((closure (attr-ref (second val) 'closure)))
+    (rplacd (cdr begin)
+            (cons (list 'define varrec (make-alloc-closure closure))
+                  (cddr begin)))
+    (varrec-attr-set! varrec 'lambda-label
+                      (decompose-lambda form (second val) closure (third val)
+                                        begin (list 'ref varrec)))))
+
+(define (decompose-lambda form attrs closure body begin closure-form)
   (dolist (varrec (attr-ref attrs 'params))
     (varrec-attr-set! varrec 'lambda-label false))
-  (decompose-lambdas body)
+  (decompose-lambdas body begin)
 
   ;; turn (lambda attrs body) into
   ;; (fill-closure attrs (alloc-closure n) refs)
-  (let* ((label (gen-label))
-         (closure (attr-ref attrs 'closure)))
+  (let* ((label (gen-label)))
     (overwrite-form form
       (quasiquote
         (fill-closure ((unquote-splicing attrs)
                         (label . (unquote label))
                         (body (unquote-splicing body)))
-          (alloc-closure ((size . (unquote (length closure)))))
+          (unquote closure-form)
           (unquote-splicing
             (mapfor (varrec closure)
               (list 'ref (varrec-attr varrec 'source)))))))
     label))
 
-(define-decompose-lambdas (lambda attrs body)
-  (decompose-lambda form attrs body))
-
-(define-decompose-lambdas (define varrec val)
-  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-      (varrec-attr-set! varrec 'lambda-label
-                        (decompose-lambda val (second val) (third val)))
-      (decompose-lambdas val)))
+(define (make-alloc-closure closure)
+  (quasiquote (alloc-closure ((size . (unquote (length closure)))))))
 
 ;;; Produce a debug form
 
