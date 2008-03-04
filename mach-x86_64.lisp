@@ -9,8 +9,8 @@
 (defconstant number-tag #b000)
 (defconstant number-tag-bits 3)
 
-(defconstant function-tag #b001)
-(defconstant function-tag-bits 3)
+(defconstant closure-tag #b001)
+(defconstant closure-tag-bits 3)
 
 (defconstant box-tag #b010)
 (defconstant box-tag-bits 3)
@@ -62,7 +62,7 @@
 (define general-registers (list %a %b %c %d %si %di))
 (define general-register-count (length general-registers))
 
-(define %func %r15)
+(define %closure %r15)
 (define %funcres (first general-registers))
 
 ;;; %nargs is use to pass the number of arguments to functions.  We

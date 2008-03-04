@@ -257,7 +257,7 @@
 ;;; param 0
 ;;; Return address
 ;;; Saved %bp <--- %bp (and (+ %sp (* frame-base value-size)))
-;;; %func
+;;; %closure
 ;;; Local var 0
 ;;; ...
 ;;; Local var N
@@ -265,7 +265,7 @@
 ;;; in-progress param N-1
 ;;; ...
 ;;;
-;;; Functions are called with the closure in %func, arg-count in
+;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
 (define (emit-allocate-locals out n)
@@ -277,7 +277,7 @@
               %sp)))
 
 (define (closure-slot closure index)
-  (dispmem function-tag (* value-size (1+ index)) closure))
+  (dispmem closure-tag (* value-size (1+ index)) closure))
 
 (define (param-slot index)
   (dispmem 0 (* value-size (+ 2 index)) %bp))
@@ -287,21 +287,21 @@
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode)))
-    (if (eq? mode 'self) %func
+    (if (eq? mode 'self) %closure
         (let* ((index (varrec-attr varrec 'index)))
-          (cond ((eq? mode 'closure) (closure-slot %func index))
+          (cond ((eq? mode 'closure) (closure-slot %closure index))
                 ((eq? mode 'param) (param-slot index))
                 ((eq? mode 'local) (local-slot index))
                 ((eq? mode 'register) index)
                 (true (error "strange variable mode ~S" mode)))))))
 
-;;; Functions
+;;; Functions and closures
 
 (define-pure-operator (alloc-closure) result ()
-  (emit-alloc out function-tag-bits
+  (emit-alloc out closure-tag-bits
               (immediate (* value-size (1+ (attr-ref attrs 'size))))
               result)
-  (emit-add out function-tag result))
+  (emit-add out closure-tag result))
 
 (define-reg-use (fill-closure attrs closure . refs)
   (let* ((ref-rus (mapfor (ref refs) (reg-use ref dest-type-value))))
@@ -315,7 +315,7 @@
     (codegen closure (dest-value closure-reg) in-frame-base in-frame-base regs
              out)
     (emit-mov out (immediate (attr-ref attrs 'label))
-              (dispmem function-tag 0 closure-reg))
+              (dispmem closure-tag 0 closure-reg))
     (dolist (ref refs)
       (codegen ref (dest-value ref-reg) in-frame-base in-frame-base (cdr regs)
                out)
@@ -329,7 +329,7 @@
 (define (emit-function-prologue out)
   (emit-push out %bp)
   (emit-mov out %sp %bp)
-  (emit-push out %func))
+  (emit-push out %closure))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -380,7 +380,7 @@
     (if label
         (emit out "~A ~A # ~S" insn label comment)
         (emit out "~A *~A # ~S" insn
-              (value-sized (dispmem function-tag 0 %func)) comment))))
+              (value-sized (dispmem closure-tag 0 %closure)) comment))))
 
 (define-reg-use ((call tail-call varargs-tail-call) attrs . args)
   (reg-use-recurse form dest-type-value)
@@ -391,7 +391,7 @@
     (codegen arg (dest-value (first general-registers))
              in-frame-base in-frame-base general-registers out)
     (emit-frame-push out in-frame-base (first general-registers)))
-  (codegen func (dest-value %func)
+  (codegen func (dest-value %closure)
            in-frame-base in-frame-base general-registers out)
   in-frame-base)
 
@@ -399,11 +399,11 @@
   (codegen-call-args out func args in-frame-base)
   (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
   (emit-call-or-jump out "call" func)
-  (emit-restore-%func out)
+  (emit-restore-%closure out)
   (emit-convert-value out %funcres dest in-frame-base out-frame-base))
 
-(define (emit-restore-%func out)
-  (emit-mov out (dispmem value-size 0 %bp) %func))
+(define (emit-restore-%closure out)
+  (emit-mov out (dispmem value-size 0 %bp) %closure))
 
 (define-codegen (tail-call attrs func . args)
   (codegen-call-args out func args in-frame-base)
@@ -426,7 +426,7 @@
          (out-arg-reg (first general-registers))
          (out-arg-count (length args)))
     ;; here we assume that the arg-count is just a ref, and so won't
-    ;; access %func
+    ;; access %closure
     (codegen arg-count (dest-value out-arg-reg) new-frame-base new-frame-base
              general-registers out)
     (emit-scale-number out value-scale out-arg-reg)
@@ -567,7 +567,7 @@
       (emit-and out (immediate (low-bits-mask (unquote tag-bits))) val 0)
       (emit-cmp out (immediate (unquote tag)) val 0))))
 
-(define-tag-check function? function-tag function-tag-bits)
+(define-tag-check function? closure-tag closure-tag-bits)
 
 ;;; Function call-related internals
 
@@ -601,7 +601,7 @@
   (bind (before-arg-count after-arg-count bodyfunc retaddr . others) regs
     ;; calculate how far up to move %sp
     (emit-sub out after-arg-count before-arg-count)
-    (emit-mov out bodyfunc %func)
+    (emit-mov out bodyfunc %closure)
     ;; load the return address
     (emit-mov out (dispmem 0 value-size %bp) retaddr)
     (emit-scale-number out value-scale before-arg-count)
@@ -612,7 +612,7 @@
     (emit-mov out retaddr (mem before-arg-count))
     (emit-mov out before-arg-count %sp)
     (emit-clear out %nargs)
-    (emit out "jmp *~A" (value-sized (dispmem function-tag 0 bodyfunc)))))
+    (emit out "jmp *~A" (value-sized (dispmem closure-tag 0 bodyfunc)))))
 
 (define-reg-use (raw-apply-jump attrs func arg-count)
   (operator-args-reg-use form))
@@ -622,8 +622,8 @@
          (func (first regs-without-%nargs)))
     (operator-args-codegen form in-frame-base
                            (list* func %nargs (cddr regs-without-%nargs)) out)
-    (emit-mov out func %func)
-    (emit out "leave ; jmp *~A" (value-sized (dispmem function-tag 0 %func)))))
+    (emit-mov out func %closure)
+    (emit out "leave ; jmp *~A" (value-sized (dispmem closure-tag 0 %closure)))))
 
 ;;; Comparisons
 

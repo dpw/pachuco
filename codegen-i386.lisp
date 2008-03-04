@@ -12,7 +12,7 @@
   (emit-mov out %sp %bp)
   (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
   (emit-set-ac-flag out true)
-  (emit-mov out (immediate function-tag) %func)
+  (emit-mov out (immediate closure-tag) %closure)
   (emit-function-prologue out))
 
 (define (emit-program-epilogue out)
@@ -44,7 +44,7 @@
     (emit-set-ac-flag out false)
     (emit out "call ~A" (attr-ref attrs 'c-function-name))
     (emit-set-ac-flag out true)
-    (unless (c-callee-saved %func) (emit-restore-%func out))
+    (unless (c-callee-saved %closure) (emit-restore-%closure out))
     (emit-convert-value out %a dest in-frame-base out-frame-base)))
 
 ;;; Cycle counter access
