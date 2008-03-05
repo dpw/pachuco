@@ -48,16 +48,3 @@
   (emit-set-ac-flag out true)
   (unless (c-callee-saved %closure) (emit-restore-%closure out))
   (emit-convert-value out %a dest in-frame-base out-frame-base))
-
-;;; Cycle counter access
-
-(define-reg-use (raw-rdtsc attrs)
-  (if (dest-type-discard? dest-type) 0 general-register-count))
-
-(define-codegen (raw-rdtsc attrs)
-  (unless (dest-discard? dest)
-    (emit out "rdtsc")
-    (emit-shl out (immediate (+ 32 number-tag-bits)) %d)
-    (emit-shl out (immediate number-tag-bits) %a)
-    (emit-or out %d %a))
-  (emit-convert-value out %a dest in-frame-base out-frame-base))

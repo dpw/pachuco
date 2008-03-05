@@ -209,5 +209,4 @@ y)" '(x y))
     (assert-result (read f false) false)))
 
 (define (main)
-  (time (tests))
-  (formout stdout "Done~%"))
+  (tests))

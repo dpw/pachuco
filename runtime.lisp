@@ -1294,21 +1294,6 @@
       (unquote-splicing body)
       (close-file (unquote fd)))))
 
-;;; Timing
-
-(when-compiling
-  (define (time-function f)
-    (define start-t (raw-rdtsc))
-    (f)
-    (define end-t (raw-rdtsc))
-    (formout stderr "Cycles: ~S~%" (- end-t start-t))))
-
-(when-interpreting
-  (define (time-function f) (f)))
-
-(defmacro (time . body)
-  (quasiquote (time-function (lambda () (unquote-splicing body)))))
-
 ;;; CL compatibility
 
 (defmacro (let* bindings . body)

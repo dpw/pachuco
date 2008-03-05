@@ -43,9 +43,7 @@
     fixnum->raw raw->fixnum
 
     raw-args-base raw-arg-set! raw-arg-ref raw-jump-with-arg-space
-    raw-apply-jump
-
-    raw-rdtsc))
+    raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
                      c-call))
