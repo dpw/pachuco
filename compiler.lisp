@@ -1202,19 +1202,24 @@
 
       (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
         (genericize-vec-op form 'make-vec (unquote type-attrs)))
+
       (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)
         (genericize-vec-op form 'vec-length (unquote type-attrs)))
+
       (define-simplify ((unquote (compound-symbol "raw-" name "-address"))
                         attrs vec index)
         (genericize-vec-op form 'vec-address (unquote type-attrs)))
+
       (define-simplify ((unquote (compound-symbol "raw-" name "-ref"))
                         attrs vec index)
         (genericize-vec-op form 'raw-vec-ref (unquote type-attrs))
         (overwrite-form form ((unquote from-vec-rep) (copy-list form))))
+
       (define-simplify ((unquote (compound-symbol "raw-" name "-set!"))
                         attrs vec index val)
         (rplaca (cddddr form) ((unquote to-vec-rep) val))
         (genericize-vec-op form 'raw-vec-set! (unquote type-attrs)))
+
       (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
                         attrs src src-index dst dst-index len)
         (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
@@ -1227,16 +1232,38 @@
 (define-vector-type vector vector-tag vector-tag-bits value-scale
                     identity identity)
 
-;;; Raw memory access
+;;; Raw accesss to memory
 
-(define raw-vec-type-attrs
-  (list (cons 'tag 0) (cons 'tag-bits 0) (cons 'scale value-scale)
-        (cons 'header-size 0)))
+(define raw-base-type-attrs 
+  (list (cons 'tag 0) (cons 'tag-bits 0) (cons 'header-size 0)))
 
-(define-simplify (raw-vec-set! attrs addr index val)
-  (rplaca (cdr form) raw-vec-type-attrs)
-  (simplify-recurse form))
+(defmarco (define-raw-type name scale)
+  (let* ((type-attrs (compound-symbol name "-type-attrs")))
+    ;; define how to convert from the operators on a specific raw type
+    ;; into generic raw operators
+    (quasiquote (definitions
+      (define (unquote type-attrs)
+        (list* (cons 'scale (unquote scale)) raw-base-type-attrs))
 
-(define-simplify (raw-vec-ref attrs addr index)
-  (rplaca (cdr form) raw-vec-type-attrs)
-  (simplify-recurse form))
+      (define-simplify ((unquote (compound-symbol name "-vec-ref"))
+                        attrs addr index)
+        (rplaca (cdr form) (unquote type-attrs))
+        (simplify-recurse form))
+
+      (define-simplify ((unquote (compound-symbol name "-vec-set!"))
+                        attrs addr index val)
+        (rplaca (cdr form) (unquote type-attrs))
+        (simplify-recurse form))
+
+      (define-simplify ((unquote (compound-symbol name "-ref"))
+                        attrs addr)
+        (rplaca (cdr form) (unquote type-attrs))
+        (simplify-recurse form))
+
+      (define-simplify ((unquote (compound-symbol name "-set!"))
+                        attrs addr val)
+        (rplaca (cdr form) (unquote type-attrs))
+        (simplify-recurse form))))))
+
+(define-raw-type "raw" value-scale)    ; memory as value-sized words
+(define-raw-type "raw-1" 0)            ; memory as bytes

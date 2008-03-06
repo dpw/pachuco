@@ -819,6 +819,13 @@
     (emit-rep-movs out scale)
     (emit-adjust-frame-base out in-frame-base out-frame-base)))
 
+;;; Raw memory access
+
+(define-pure-operator (raw-ref addr) result ()
+  (emit-movzx out (mem addr) result (attr-ref attrs 'scale)))
+
+(define-operator (raw-set! addr val) val ()
+  (emit-mov out val (mem addr) (attr-ref attrs 'scale)))
 
 ;;; Misc. runtime
 
