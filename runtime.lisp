@@ -445,7 +445,7 @@
     (or (findfor (sym interned-symbols)
                  (string-equal? str (symbol-name sym)))
         (begin
-          (define sym (primitive-make-symbol str))
+          (define sym (raw-make-symbol str))
           (set! interned-symbols (cons sym interned-symbols))
           sym))))
 
@@ -465,17 +465,17 @@
 
 (define (string-ref str index)
   (check-string-index str index)
-  (primitive-string-ref str index))
+  (raw-string-ref str index))
 
 (define (string-set! str index ch)
   (check-string-index str index)
-  (primitive-string-set! str index ch)
+  (raw-string-set! str index ch)
   ch)
 
 (define (string-copy src src-offset dest dest-offset len)
   (check-string-range src src-offset len)
   (check-string-range dest dest-offset len)
-  (primitive-string-copy src src-offset dest dest-offset len))
+  (raw-string-copy src src-offset dest dest-offset len))
 
 ;;; Vectors
 
@@ -493,17 +493,17 @@
 
 (define (vector-ref vec index)
   (check-vector-index vec index)
-  (primitive-vector-ref vec index))
+  (raw-vector-ref vec index))
 
 (define (vector-set! vec index val)
   (check-vector-index vec index)
-  (primitive-vector-set! vec index val)
+  (raw-vector-set! vec index val)
   val)
 
 (define (vector-copy src src-offset dest dest-offset len)
   (check-vector-range src src-offset len)
   (check-vector-range dest dest-offset len)
-  (primitive-vector-copy src src-offset dest dest-offset len))
+  (raw-vector-copy src src-offset dest dest-offset len))
 
 (define (vector-set-range! vec index len val)
   (while (/= len 0)

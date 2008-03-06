@@ -687,7 +687,7 @@
 (define-pure-operator (symbol-name sym) result ()
   (emit-mov out (dispmem atom-tag 0 sym) result))
 
-(define-pure-operator (primitive-make-symbol str) result (alloc)
+(define-pure-operator (raw-make-symbol str) result (alloc)
   (emit-alloc out atom-tag-bits (immediate value-size) alloc)
   (emit-mov out str (mem alloc))
   (emit-lea out (dispmem 0 atom-tag alloc) result))

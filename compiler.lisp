@@ -26,7 +26,7 @@
     
     eq? function?
     
-    symbol? symbol-name primitive-make-symbol
+    symbol? symbol-name raw-make-symbol
     
     pair? car cdr cons rplaca rplacd
     
@@ -35,10 +35,10 @@
     character? char-code code-char
 
     string? make-string string-length raw-string-address
-    primitive-string-ref primitive-string-set! primitive-string-copy
+    raw-string-ref raw-string-set! raw-string-copy
     
     vector? make-vector vector-length raw-vector-address
-    primitive-vector-ref primitive-vector-set! primitive-vector-copy
+    raw-vector-ref raw-vector-set! raw-vector-copy
 
     fixnum->raw raw->fixnum
 
@@ -1207,17 +1207,17 @@
                       attrs vec index)
       (genericize-vec-op form 'raw-vec-address (unquote tag) (unquote tag-bits)
                          (unquote scale)))
-    (define-simplify ((unquote (compound-symbol "primitive-" name "-ref"))
+    (define-simplify ((unquote (compound-symbol "raw-" name "-ref"))
                       attrs vec index)
       (genericize-vec-op form 'vec-ref (unquote tag) (unquote tag-bits)
                          (unquote scale))
       (overwrite-form form ((unquote from-vec-rep) (copy-list form))))
-    (define-simplify ((unquote (compound-symbol "primitive-" name "-set!"))
+    (define-simplify ((unquote (compound-symbol "raw-" name "-set!"))
                       attrs vec index val)
       (rplaca (cddddr form) ((unquote to-vec-rep) val))
       (genericize-vec-op form 'vec-set! (unquote tag) (unquote tag-bits)
                          (unquote scale)))
-    (define-simplify ((unquote (compound-symbol "primitive-" name "-copy"))
+    (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
                       attrs src src-index dst dst-index len)
       (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
                                                (unquote tag) (unquote scale)))
