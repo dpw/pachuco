@@ -39,11 +39,11 @@
     
     vector? make-vector vector-length raw-vector-address
     raw-vector-ref raw-vector-set! raw-vector-copy
+    raw-vec-set! raw-vec-ref
 
     fixnum->raw raw->fixnum
 
-    raw-args-base raw-arg-set! raw-arg-ref raw-jump-with-arg-space
-    raw-apply-jump))
+    raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
                      c-call))
@@ -54,8 +54,8 @@
                             make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
-                            make-vec vec-length raw-vec-address
-                            vec-ref vec-set! vec-copy))
+                            make-vec vec-length vec-address
+                            vec-copy))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 
@@ -1175,19 +1175,19 @@
         (if () (> () (ref (unquote si-name)) (ref (unquote di-name)))
             (vec-copy ((forward . (unquote true))
                        (unquote-splicing attrs))
-                      (raw-vec-address (unquote attrs) (unquote (copy-tree src))
-                                       (ref (unquote si-name)))
-                      (raw-vec-address (unquote attrs) (unquote (copy-tree dst))
-                                       (ref (unquote di-name)))
+                      (vec-address (unquote attrs) (unquote (copy-tree src))
+                                   (ref (unquote si-name)))
+                      (vec-address (unquote attrs) (unquote (copy-tree dst))
+                                   (ref (unquote di-name)))
                       (ref (unquote len-name)))
             (vec-copy ((forward . (unquote false))
                        (unquote-splicing attrs))
-                      (raw-vec-address (unquote attrs) (unquote (copy-tree src))
-                                       (+ () (ref (unquote si-name))
-                                          (ref (unquote len-name)) (quote -1)))
-                      (raw-vec-address (unquote attrs) (unquote (copy-tree dst))
-                                       (+ () (ref (unquote di-name))
-                                          (ref (unquote len-name)) (quote -1)))
+                      (vec-address (unquote attrs) (unquote (copy-tree src))
+                                   (+ () (ref (unquote si-name))
+                                      (ref (unquote len-name)) (quote -1)))
+                      (vec-address (unquote attrs) (unquote (copy-tree dst))
+                                   (+ () (ref (unquote di-name))
+                                      (ref (unquote len-name)) (quote -1)))
                       (ref (unquote len-name))))
         (quote unspecified)))))
 
@@ -1198,7 +1198,7 @@
     (quasiquote (definitions
       (define (unquote type-attrs)
         (list (cons 'tag (unquote tag)) (cons 'tag-bits (unquote tag-bits))
-              (cons 'scale (unquote scale))))
+              (cons 'scale (unquote scale)) (cons 'header-size value-size)))
 
       (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
         (genericize-vec-op form 'make-vec (unquote type-attrs)))
@@ -1206,15 +1206,15 @@
         (genericize-vec-op form 'vec-length (unquote type-attrs)))
       (define-simplify ((unquote (compound-symbol "raw-" name "-address"))
                         attrs vec index)
-        (genericize-vec-op form 'raw-vec-address (unquote type-attrs)))
+        (genericize-vec-op form 'vec-address (unquote type-attrs)))
       (define-simplify ((unquote (compound-symbol "raw-" name "-ref"))
                         attrs vec index)
-        (genericize-vec-op form 'vec-ref (unquote type-attrs))
+        (genericize-vec-op form 'raw-vec-ref (unquote type-attrs))
         (overwrite-form form ((unquote from-vec-rep) (copy-list form))))
       (define-simplify ((unquote (compound-symbol "raw-" name "-set!"))
                         attrs vec index val)
         (rplaca (cddddr form) ((unquote to-vec-rep) val))
-        (genericize-vec-op form 'vec-set! (unquote type-attrs)))
+        (genericize-vec-op form 'raw-vec-set! (unquote type-attrs)))
       (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
                         attrs src src-index dst dst-index len)
         (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
@@ -1226,3 +1226,17 @@
                     (lambda (form) (list 'fixnum->raw () form)))
 (define-vector-type vector vector-tag vector-tag-bits value-scale
                     identity identity)
+
+;;; Raw memory access
+
+(define raw-vec-type-attrs
+  (list (cons 'tag 0) (cons 'tag-bits 0) (cons 'scale value-scale)
+        (cons 'header-size 0)))
+
+(define-simplify (raw-vec-set! attrs addr index val)
+  (rplaca (cdr form) raw-vec-type-attrs)
+  (simplify-recurse form))
+
+(define-simplify (raw-vec-ref attrs addr index)
+  (rplaca (cdr form) raw-vec-type-attrs)
+  (simplify-recurse form))

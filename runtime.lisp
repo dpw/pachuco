@@ -921,7 +921,7 @@
     (define (make-varargs-list nargs l)
       (if (/= nargs nparams)
           (make-varargs-list (1- nargs)
-                             (cons (raw-arg-ref args-base (1- nargs)) l))
+                             (cons (raw-vec-ref args-base (1- nargs)) l))
           l))
 
     (make-varargs-list nargs ()))
@@ -933,13 +933,13 @@
 
     (define (copy-final-args args args-base index)
       (unless (null? args)
-        (raw-arg-set! args-base index (car args))
+        (raw-vec-set! args-base index (car args))
         (copy-final-args (cdr args) args-base (1+ index))))
       
     (define (copy-args args args-base index)
       (if (null? (cdr args)) (copy-final-args (car args) args-base index)
           (begin
-            (raw-arg-set! args-base index (car args))
+            (raw-vec-set! args-base index (car args))
             (copy-args (cdr args) args-base (1+ index)))))
 
     (set! args (cons arg1 args))

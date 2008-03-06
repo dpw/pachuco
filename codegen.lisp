@@ -581,14 +581,6 @@
 (define-pure-operator (raw-args-base) result ()
   (emit-lea out (param-slot 0) result))
 
-(define-operator (raw-arg-set! args-base index val) val ()
-  (emit-scale-number out value-scale index)
-  (emit-mov out val (dispmem 0 0 args-base index)))
-
-(define-pure-operator (raw-arg-ref args-base index) result ()
-  (emit-scale-number out value-scale index)
-  (emit-mov out (dispmem 0 0 args-base index) result))
-
 ;;; Apply support
 
 (define-reg-use (raw-jump-with-arg-space attrs before-arg-count after-arg-count
@@ -790,23 +782,25 @@
 (define-pure-operator (vec-length vec) result ()
   (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
 
-(define-pure-operator (raw-vec-address vec index) result ()
+(define-pure-operator (vec-address vec index) result ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
     (emit-lea out (dispmem tag value-size vec index) result)))
 
-(define-pure-operator (vec-ref vec index) result ()
-  (let* ((tag (attr-ref attrs 'tag))
-         (scale (attr-ref attrs 'scale)))
+(define-pure-operator (raw-vec-ref vec index) result ()
+  (let* ((scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
-    (emit-movzx out (dispmem tag value-size vec index) result scale)))
+    (emit-movzx out (dispmem (attr-ref attrs 'tag) (attr-ref attrs 'header-size)
+                             vec index)
+                result scale)))
 
-(define-operator (vec-set! vec index val) val ()
-  (let* ((tag (attr-ref attrs 'tag))
-         (scale (attr-ref attrs 'scale)))
+(define-operator (raw-vec-set! vec index val) val ()
+  (let* ((scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
-    (emit-mov out val (dispmem tag value-size vec index) scale)))
+    (emit-mov out val (dispmem (attr-ref attrs 'tag)
+                               (attr-ref attrs 'header-size) vec index)
+              scale)))
 
 (define-reg-use (vec-copy attrs src-addr dst-addr len)
   (operator-args-reg-use form)
