@@ -1156,19 +1156,17 @@
 
 ;;; Strings and vectors
 
-(define (genericize-vec-op form name tag tag-bits scale)
+(define (genericize-vec-op form name attrs)
   ;; convert a vector-type-specific operator into a generic vec operator
   (rplaca form name)
-  (rplaca (cdr form) (list (cons 'tag tag) (cons 'scale scale)
-                           (cons 'tag-bits tag-bits)))
+  (rplaca (cdr form) attrs)
   (simplify-recurse form))
 
-(define (make-vec-copy-form src src-index dst dst-index len tag scale)
+(define (make-vec-copy-form src src-index dst dst-index len attrs)
   ;; generate code to perform a vector copy
   (let* ((si-name (gensym))
          (di-name (gensym))
-         (len-name (gensym))
-         (attrs (list (cons 'tag tag) (cons 'scale scale))))
+         (len-name (gensym)))
     (quasiquote
       (begin (((unquote si-name)) ((unquote di-name)) ((unquote len-name)))
         (define (unquote si-name) (unquote src-index))
@@ -1194,34 +1192,34 @@
         (quote unspecified)))))
 
 (defmarco (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
-  ;; define how to convert from the operators on a specific vector
-  ;; type into generic vec operators
-  (quasiquote (definitions
-    (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
-      (genericize-vec-op form 'make-vec (unquote tag) (unquote tag-bits)
-                         (unquote scale)))
-    (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)
-      (genericize-vec-op form 'vec-length (unquote tag) (unquote tag-bits)
-                         (unquote scale)))
-    (define-simplify ((unquote (compound-symbol "raw-" name "-address"))
-                      attrs vec index)
-      (genericize-vec-op form 'raw-vec-address (unquote tag) (unquote tag-bits)
-                         (unquote scale)))
-    (define-simplify ((unquote (compound-symbol "raw-" name "-ref"))
-                      attrs vec index)
-      (genericize-vec-op form 'vec-ref (unquote tag) (unquote tag-bits)
-                         (unquote scale))
-      (overwrite-form form ((unquote from-vec-rep) (copy-list form))))
-    (define-simplify ((unquote (compound-symbol "raw-" name "-set!"))
-                      attrs vec index val)
-      (rplaca (cddddr form) ((unquote to-vec-rep) val))
-      (genericize-vec-op form 'vec-set! (unquote tag) (unquote tag-bits)
-                         (unquote scale)))
-    (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
-                      attrs src src-index dst dst-index len)
-      (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
-                                               (unquote tag) (unquote scale)))
-      (simplify form)))))
+  (let* ((type-attrs (compound-symbol name "-type-attrs")))
+    ;; define how to convert from the operators on a specific vector
+    ;; type into generic vec operators
+    (quasiquote (definitions
+      (define (unquote type-attrs)
+        (list (cons 'tag (unquote tag)) (cons 'tag-bits (unquote tag-bits))
+              (cons 'scale (unquote scale))))
+
+      (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
+        (genericize-vec-op form 'make-vec (unquote type-attrs)))
+      (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)
+        (genericize-vec-op form 'vec-length (unquote type-attrs)))
+      (define-simplify ((unquote (compound-symbol "raw-" name "-address"))
+                        attrs vec index)
+        (genericize-vec-op form 'raw-vec-address (unquote type-attrs)))
+      (define-simplify ((unquote (compound-symbol "raw-" name "-ref"))
+                        attrs vec index)
+        (genericize-vec-op form 'vec-ref (unquote type-attrs))
+        (overwrite-form form ((unquote from-vec-rep) (copy-list form))))
+      (define-simplify ((unquote (compound-symbol "raw-" name "-set!"))
+                        attrs vec index val)
+        (rplaca (cddddr form) ((unquote to-vec-rep) val))
+        (genericize-vec-op form 'vec-set! (unquote type-attrs)))
+      (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
+                        attrs src src-index dst dst-index len)
+        (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
+                                                 (unquote type-attrs)))
+        (simplify form))))))
 
 (define-vector-type string string-tag string-tag-bits 0
                     (lambda (form) (list 'raw->fixnum () form))
