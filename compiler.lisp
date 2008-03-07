@@ -39,7 +39,8 @@
     
     vector? make-vector vector-length raw-vector-address
     raw-vector-ref raw-vector-set! raw-vector-copy
-    raw-vec-set! raw-vec-ref
+    raw-vec-set! raw-vec-ref raw-ref raw-set!
+    raw-1-vec-set! raw-1-vec-ref raw-1-ref raw-1-set!
 
     fixnum->raw raw->fixnum
 
@@ -1247,21 +1248,25 @@
 
       (define-simplify ((unquote (compound-symbol name "-vec-ref"))
                         attrs addr index)
+        (rplaca form 'raw-vec-ref)
         (rplaca (cdr form) (unquote type-attrs))
         (simplify-recurse form))
 
       (define-simplify ((unquote (compound-symbol name "-vec-set!"))
                         attrs addr index val)
+        (rplaca form 'raw-vec-set!)
         (rplaca (cdr form) (unquote type-attrs))
         (simplify-recurse form))
 
       (define-simplify ((unquote (compound-symbol name "-ref"))
                         attrs addr)
+        (rplaca form 'raw-ref)
         (rplaca (cdr form) (unquote type-attrs))
         (simplify-recurse form))
 
       (define-simplify ((unquote (compound-symbol name "-set!"))
                         attrs addr val)
+        (rplaca form 'raw-set!)
         (rplaca (cdr form) (unquote type-attrs))
         (simplify-recurse form))))))
 
