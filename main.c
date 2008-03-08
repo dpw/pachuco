@@ -26,21 +26,21 @@ inline uint64_t rdtsc()
 
 void run_lisp(void *heap)
 {
-	unsigned long heap_end = (unsigned long)heap + HEAP_SIZE;
+        unsigned long heap_end = (unsigned long)heap + HEAP_SIZE;
         heap_alloc = heap_end;
         uint64_t start = rdtsc();
-	lisp();
+        lisp();
         uint64_t end = rdtsc();
-	fprintf(stderr, "[%ld bytes allocated ; %" PRIu64 " cycles]\n",
+        fprintf(stderr, "[%ld bytes allocated ; %" PRIu64 " cycles]\n",
                 heap_end - heap_alloc, end - start);
 }
 
 int main(void)
 {
-	void *heap = mmap(NULL, HEAP_SIZE, PROT_READ|PROT_WRITE,
-			  MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-	if (heap == MAP_FAILED)
-		perror("mmap heap");
+        void *heap = mmap(NULL, HEAP_SIZE, PROT_READ|PROT_WRITE,
+                          MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        if (heap == MAP_FAILED)
+                perror("mmap heap");
 
         char *iterations = getenv("BENCHMARK_ITERATIONS");
         if (iterations == NULL) {
@@ -52,5 +52,5 @@ int main(void)
                         run_lisp(heap);
         }
 
-	return 0;
+        return 0;
 }
