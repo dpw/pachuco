@@ -47,7 +47,7 @@
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call))
+                     c-call c-global))
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
