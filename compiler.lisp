@@ -39,8 +39,8 @@
     
     vector? make-vector vector-length raw-vector-address
     raw-vector-ref raw-vector-set! raw-vector-copy
-    raw-vec-set! raw-vec-ref raw-ref raw-set!
-    raw-1-vec-set! raw-1-vec-ref raw-1-ref raw-1-set!
+    raw-vec-set! raw-vec-ref raw-ref raw-set! raw-copy
+    raw-1-vec-set! raw-1-vec-ref raw-1-ref raw-1-set! raw-1-copy
 
     fixnum->raw raw->fixnum
 
@@ -56,7 +56,7 @@
                             check-arg-count arg-count
                             negate
                             make-vec vec-length vec-address
-                            vec-copy))
+                            copy-mem))
 
 (define all-keywords (append keywords-2 internal-keywords keywords-1))
 
@@ -1156,34 +1156,12 @@
   (rplaca (cdr form) attrs)
   (simplify-recurse form))
 
-(define (make-vec-copy-form src src-index dst dst-index len attrs)
-  ;; generate code to perform a vector copy
-  (let* ((si-name (gensym))
-         (di-name (gensym))
-         (len-name (gensym)))
-    (quasiquote
-      (begin (((unquote si-name)) ((unquote di-name)) ((unquote len-name)))
-        (define (unquote si-name) (unquote src-index))
-        (define (unquote di-name) (unquote dst-index))
-        (define (unquote len-name) (unquote len))
-        (if () (> () (ref (unquote si-name)) (ref (unquote di-name)))
-            (vec-copy ((forward . (unquote true))
-                       (unquote-splicing attrs))
-                      (vec-address (unquote attrs) (unquote (copy-tree src))
-                                   (ref (unquote si-name)))
-                      (vec-address (unquote attrs) (unquote (copy-tree dst))
-                                   (ref (unquote di-name)))
-                      (ref (unquote len-name)))
-            (vec-copy ((forward . (unquote false))
-                       (unquote-splicing attrs))
-                      (vec-address (unquote attrs) (unquote (copy-tree src))
-                                   (+ () (ref (unquote si-name))
-                                      (ref (unquote len-name)) (quote -1)))
-                      (vec-address (unquote attrs) (unquote (copy-tree dst))
-                                   (+ () (ref (unquote di-name))
-                                      (ref (unquote len-name)) (quote -1)))
-                      (ref (unquote len-name))))
-        (quote unspecified)))))
+(define (make-vec-copy-form src src-index dest dest-index len attrs)
+  (quasiquote
+    (copy-mem (unquote attrs)
+              (vec-address (unquote attrs) (unquote src) (unquote src-index))
+              (vec-address (unquote attrs) (unquote dest) (unquote dest-index))
+              (unquote len))))
 
 (defmarco (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
   (let* ((type-attrs (compound-symbol name "-type-attrs")))
@@ -1215,9 +1193,9 @@
         (genericize-vec-op form 'raw-vec-set! (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
-                        attrs src src-index dst dst-index len)
-        (overwrite-form form (make-vec-copy-form src src-index dst dst-index len
-                                                 (unquote type-attrs)))
+                        attrs src src-index dest dest-index len)
+        (overwrite-form form (make-vec-copy-form src src-index dest dest-index
+                                                 len (unquote type-attrs)))
         (simplify form))))))
 
 (define-vector-type string string-tag string-tag-bits 0
@@ -1261,7 +1239,13 @@
                         attrs addr val)
         (rplaca form 'raw-set!)
         (rplaca (cdr form) (unquote type-attrs))
-        (simplify-recurse form))))))
+        (simplify-recurse form))
+
+      (define-simplify ((unquote (compound-symbol name "-copy"))
+                        attrs src-addr dest-addr len)
+        (rplaca form 'copy-mem)
+        (rplaca (cdr form) (unquote type-attrs))
+        (simplify form))))))
 
 (define-raw-type "raw" value-scale)    ; memory as value-sized words
 (define-raw-type "raw-1" 0)            ; memory as bytes

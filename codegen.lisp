@@ -786,7 +786,8 @@
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
-    (emit-lea out (dispmem tag value-size vec index) result)))
+    (emit-lea out (dispmem tag (attr-ref attrs 'header-size) vec index)
+              result)))
 
 (define-pure-operator (raw-vec-ref vec index) result ()
   (let* ((scale (attr-ref attrs 'scale)))
@@ -802,19 +803,50 @@
                                (attr-ref attrs 'header-size) vec index)
               scale)))
 
-(define-reg-use (vec-copy attrs src-addr dst-addr len)
+(define-simplify (copy-mem attrs src-addr dest-addr len)
+  ;; this is an utter hack: we use the presence of the forward attr
+  ;; to decide if we already simplified this copy-mem
+  (unless (eq? 'forward (caar attrs))
+    (overwrite-form form
+      (let* ((sa-name (gensym))
+             (da-name (gensym))
+             (len-name (gensym)))
+        (quasiquote
+          (begin (((unquote sa-name)) ((unquote da-name)) ((unquote len-name)))
+            (define (unquote sa-name) (unquote src-addr))
+            (define (unquote da-name) (unquote dest-addr))
+            (define (unquote len-name) (unquote len))
+            (if () (> () (ref (unquote sa-name)) (ref (unquote da-name)))
+                (copy-mem ((forward . (unquote true)) (unquote-splicing attrs))
+                          (ref (unquote sa-name)) (ref (unquote da-name))
+                          (ref (unquote len-name)))
+                (copy-mem ((forward . (unquote false)) (unquote-splicing attrs))
+                          (ref (unquote sa-name)) (ref (unquote da-name))
+                          (ref (unquote len-name))))
+            (quote unspecified)))))
+    (simplify form)))
+
+(define-reg-use (copy-mem attrs src-addr dest-addr len)
   (operator-args-reg-use form)
   general-register-count)
 
-(define-codegen (vec-copy attrs src-addr dst-addr len)
+(define-codegen (copy-mem attrs src-addr dest-addr len)
   (unless (dest-discard? dest)
-    (error "vec-copy result not discarded"))
+    (error "mem-copy result not discarded"))
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
     (operator-args-codegen form in-frame-base
                      (move-regs-to-front '(%si %di %c) general-registers)
                      out)
-    (emit out "~A" (if (attr-ref attrs 'forward) "cld" "std"))
+    (if (attr-ref attrs 'forward)
+        (emit out "cld")
+        (begin
+          ;; when coping backwards, we need to offset src-addr and dest-addr
+          (emit out "std")
+          (emit-mov out %c %a)
+          (emit-scale-number out scale %a)
+          (emit-lea out (dispmem (ash 1 scale) 0 %si %a) %si)
+          (emit-lea out (dispmem (ash 1 scale) 0 %di %a) %di)))
     (emit-sar out (immediate number-tag-bits) %c)
     (emit-rep-movs out scale)
     (emit-adjust-frame-base out in-frame-base out-frame-base)))
