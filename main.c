@@ -8,6 +8,7 @@
 unsigned long heap_alloc;
 
 extern void lisp();
+char **lisp_argv;
 
 inline uint64_t rdtsc()
 {
@@ -35,8 +36,9 @@ void run_lisp(void *heap)
                 heap_end - heap_alloc, end - start);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+        lisp_argv = argv;
         void *heap = mmap(NULL, HEAP_SIZE, PROT_READ|PROT_WRITE,
                           MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (heap == MAP_FAILED)
