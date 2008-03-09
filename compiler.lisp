@@ -333,13 +333,6 @@
 
 (define-trivial-walker simplify ())
 
-(define-walker propogate (operator))
-
-(define (propogate-recurse form operator)
-  ;; merge the operator into the form.
-  (overwrite-form form (append operator (list (cons (car form) (cdr form)))))
-  (dolist (subform (cddr form)) (simplify subform)))
-
 (define-simplify (lambda attrs . body)
   ;; Adjust lambdas so that they only take one body form, wrapped in
   ;; the argument handling code
@@ -357,32 +350,34 @@
     (rplacd (cdddr form) (list (quoted-unspecified))))
   (simplify-recurse form))
 
-(define-propogate (if attrs test then . else)
-  (when (null? else)
-    (set! else (list (quoted-unspecified)))
-    (rplacd (cdddr form) else))
-  (simplify test)
-  ;; we need to avoid aliasing operator, so one of these needs to copy
-  (propogate then operator)
-  (propogate (car else) (copy-tree operator)))
+(define-walker propogate (operator))
+
+(define (propogate-recurse form operator)
+  ;; merge the operator into the form.
+  (overwrite-form form (append operator (list (cons (car form) (cdr form))))))
 
 (define-simplify (return attrs body)
+  (simplify body)
   (overwrite-form form body)
   (propogate body (list 'return attrs)))
 
 (define-simplify (varargs-return attrs arg-count body)
+  (simplify body)
   (overwrite-form form body)
   (propogate body (list 'varargs-return attrs arg-count)))
 
 (define (propogate-recurse-last form rest operator)
   (if (null? rest)
       (propogate form operator)
-      (begin
-        (simplify form)
-        (propogate-recurse-last (car rest) (cdr rest) operator))))
+      (propogate-recurse-last (car rest) (cdr rest) operator)))
 
 (define-propogate (begin attrs . body)
   (propogate-recurse-last (car body) (cdr body) operator))
+
+(define-propogate (if attrs test then else)
+  ;; we need to avoid aliasing operator, so one of these needs to copy
+  (propogate then operator)
+  (propogate else (copy-tree operator)))
 
 (define tail-call-types
   (list (cons 'return 'tail-call)
@@ -391,10 +386,8 @@
 (define-propogate (call attrs . args)
   (let* ((tc (assoc (first operator) tail-call-types)))
     (if tc
-      (begin
-        (overwrite-form form (list* (cdr tc) (append (second operator) attrs)
-                                    (append (cddr operator) args)))
-        (simplify form))
+      (overwrite-form form (list* (cdr tc) (append (second operator) attrs)
+                                  (append (cddr operator) args)))
       (propogate-recurse form operator))))
 
 ;;; We currently conflate character and numbers.  So eliminate
