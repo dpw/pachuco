@@ -671,7 +671,7 @@
 (define-cc-operator (symbol? val) "e" ()
   (let* ((l (gen-label)))
     (emit-cmp out (immediate lowest-symbol-representation) val)
-    (emit-jcc out "l" l)
+    (emit-jcc out "b" l)
     (emit-and out (immediate (low-bits-mask atom-tag-bits)) val 0)
     (emit-cmp out (immediate atom-tag) val 0)
     (emit-label out l)))
