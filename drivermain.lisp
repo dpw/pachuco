@@ -1,10 +1,12 @@
-;;; The runtime does not yet support command line arguments.  So this
-;;; main function reads what action to perform from stdin, and then
-;;; calls into the driver.lisp functions to do it.
+;;; Process command line arguments, and call into the driver.lisp
+;;; functions to perform the specified action.
 
 (define (main)
-  (define command (read stdin))
-  (define files (read stdin))
-  (cond ((eq? command 'expand) (do-expand-files files))
-        ((eq? command 'interpret) (do-interpret-files files (read stdin)))
-        ((eq? command 'compile) (do-compile-files files (read stdin)))))
+  (define command (second (command-line)))
+  (define files (cddr (command-line)))
+  (cond ((string-equal? command "expand")
+         (do-expand-files files))
+        ((string-equal? command "interpret")
+         (do-interpret-files files '(main)))
+        ((string-equal? command "compile")
+         (do-compile-files files '(main)))))

@@ -48,17 +48,14 @@ stage1: main.o stage1.s
 	gcc $(CFLAGS) $^ -o $@
 
 
-stage1_interp=echo "interpret $(call listify,$(1)) (main)" | ./stage1
-stage1_compile=echo "compile $(call listify,$(1)) (main)" | ./stage1
-
 stage1-interp: stage1 $(TEST_SOURCES)
-	$(call stage1_interp,$(TEST_SOURCES))
+	./stage1 interpret $(TEST_SOURCES)
 
 stage1-compile: stage1 $(TEST_SOURCES)
-	$(call stage1_compile,$(TEST_SOURCES))
+	./stage1 compile $(TEST_SOURCES)
 
 stage1-test.s: stage1 $(TEST_SOURCES)
-	$(call stage1_compile,$(TEST_SOURCES)) >$@
+	./stage1 compile $(TEST_SOURCES) >$@
 
 stage1-test: main.o stage1-test.s
 	gcc $(CFLAGS) $^ -o $@
@@ -68,23 +65,20 @@ stage1-test-run: stage1-test
 
 
 stage2.s: stage1 $(SL_COMPILER_SOURCES)
-	$(call stage1_compile,$(SL_COMPILER_SOURCES)) >$@
+	./stage1 compile $(SL_COMPILER_SOURCES) >$@
 
 stage2: main.o stage2.s
 	gcc $(CFLAGS) $^ -o $@
 
 
-stage2_interp=echo "interpret $(call listify,$(1)) (main)" | ./stage2
-stage2_compile=echo "compile $(call listify,$(1)) (main)" | ./stage2
-
 stage2-interp: stage2 $(TEST_SOURCES)
-	$(call stage2_interp,$(TEST_SOURCES))
+	./stage2 interpret $(TEST_SOURCES)
 
 stage2-compile: stage2 $(TEST_SOURCES)
-	$(call stage2_compile,$(TEST_SOURCES))
+	./stage2 compile $(TEST_SOURCES)
 
 stage2-test.s: stage2 $(TEST_SOURCES)
-	$(call stage2_compile,$(TEST_SOURCES)) >$@
+	./stage2 compile $(TEST_SOURCES) >$@
 
 stage2-test: main.o stage2-test.s
 	gcc $(CFLAGS) $^ -o $@
@@ -94,7 +88,7 @@ stage2-test-run: stage2-test
 
 
 stage3.s: stage2 $(SL_COMPILER_SOURCES)
-	$(call stage2_compile,$(SL_COMPILER_SOURCES)) >$@
+	./stage2 compile $(SL_COMPILER_SOURCES) >$@
 
 compare-stage3: stage2.s stage3.s
 	cmp -s stage2.s stage3.s
@@ -102,4 +96,3 @@ compare-stage3: stage2.s stage3.s
 
 clean:
 	rm -f *.s *.o stage0-test stage1 stage1-test stage2 stage2-test
-
