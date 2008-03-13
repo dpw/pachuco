@@ -18,7 +18,13 @@
                     (lambda (keyword args env) (unquote-splicing body)))))
       (push a interpreter-builtin-body-forms))))
 
-(define (make-initial-interpreter-env) (list ()))
+(define interpreter-builtin-vars ())
+
+(defmarco (define-interpreter-builtin-var name val)
+  (quasiquote
+    (push (cons '(unquote name) (unquote val)) interpreter-builtin-vars)))
+
+(define (make-initial-interpreter-env) (list interpreter-builtin-vars))
 
 (define (eval-form-aux form env builtin-forms)
   (cond ((pair? form)
@@ -167,14 +173,13 @@
 (define-interpreter-builtin-op raw-vector-set! vector-set!)
 (define-interpreter-builtin-op raw-vector-copy vector-copy)
 
-(define-interpreter-builtin-op stdout)
-(define-interpreter-builtin-op stderr)
-(define-interpreter-builtin-op stdin-reader)
+(define-interpreter-builtin-op raw-write-substring)
+(define-interpreter-builtin-var raw-stdout raw-stdout)
+(define-interpreter-builtin-var raw-stderr raw-stderr)
+(define-interpreter-builtin-op raw-read-substring)
+(define-interpreter-builtin-var raw-stdin raw-stdin)
 (define-interpreter-builtin-op open-file-for-reading)
 (define-interpreter-builtin-op close-file)
-(define-interpreter-builtin-op make-file-reader (f)
-  (let* ((reader (make-file-reader f)))
-    (lambda (args) (apply reader args))))
 
 (define-interpreter-builtin-op apply (func . args)
   (funcall func (apply (function list*) args)))

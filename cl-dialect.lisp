@@ -105,23 +105,22 @@
 
 ;;; IO
 
-(defun stdout (str offset len)
-  (write-sequence str *standard-output* :start offset :end (+ offset len)))
-(defun stderr (str offset len)
-  (write-sequence str *error-output* :start offset :end (+ offset len)))
-(defun stdin-reader (str offset len)
-  (let ((pos (read-sequence str *standard-input* :start offset
-                                                 :end (+ offset len))))
-    (- pos offset)))
+(defvar raw-stdout *standard-output*)
+(defvar raw-stderr *error-output*)
+(defvar raw-stdin *standard-input*)
+
+(defun raw-write-substring (fd str pos len)
+  (write-sequence str fd :start pos :end (+ pos len)))
+
+(defun raw-read-substring (fd str pos len)
+  (let ((newpos (read-sequence str fd :start pos :end (+ pos len))))
+    (- newpos pos)))
 
 (defun open-file-for-reading (pathname)
   (open pathname))
+
 (defun close-file (f)
   (close f))
-(defun make-file-reader (f)
-  (lambda (str offset len)
-    (let ((pos (read-sequence str f :start offset :end (+ offset len))))
-      (- pos offset))))
 
 ;; Quasiquote
 

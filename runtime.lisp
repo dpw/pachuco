@@ -165,11 +165,7 @@
 (reify (vector-length a))
 
 (when-interpreting
-  ;; The interpreter defined stdout and stderr as builtins, so we need
-  ;; to provide function forms
-  (reify (stdout a b c))
-  (reify (stderr a b c))
-  (reify (stdin-reader a b c))
+  ;; Provide function forms for some interpreter builtins
   (reify (intern a))
 
   ;; Gensym is an interesting case.  We need it early on for macros.
@@ -513,13 +509,6 @@
 
 ;;; I/O
 
-(define (make-c-string str)
-  (define len (string-length str))
-  (define c-str (make-string (1+ len)))
-  (string-copy str 0 c-str 0 len)
-  (string-set! c-str len (code-char 0))
-  (raw-string-address c-str 0))
-
 (when-compiling
   (define (check-syscall-result name res)
     (when (< res 0)
@@ -538,17 +527,19 @@
                                     (raw-string-address str offset)
                                     (fixnum->raw len)))))
 
-  (define-syscall-read-write syscall-read "read")
-  (define-syscall-read-write syscall-write "write")
+  (define-syscall-read-write raw-write-substring "write")
+  (define raw-stdout 1)
+  (define raw-stderr 2)
 
-  (define (stdout str offset len)
-    (syscall-write 1 str offset len))
+  (define-syscall-read-write raw-read-substring "read")
+  (define raw-stdin 0)
 
-  (define (stderr str offset len)
-    (syscall-write 2 str offset len))
-
-  (define (stdin-reader str offset len)
-    (syscall-read 0 str offset len))
+  (define (make-c-string str)
+    (define len (string-length str))
+    (define c-str (make-string (1+ len)))
+    (string-copy str 0 c-str 0 len)
+    (string-set! c-str len (code-char 0))
+    (raw-string-address c-str 0))
 
   (define (syscall-open pathname flags mode)
     (checked-syscall "open" (make-c-string pathname)
@@ -563,10 +554,19 @@
     (syscall-open pathname 0 0))
 
   (define (close-file fd)
-    (syscall-close fd))
+    (syscall-close fd)))
 
-  (define (make-file-reader fd)
-    (lambda (str offset len) (syscall-read fd str offset len))))
+(define (write-string ostr str)
+  (ostr str 0 (string-length str)))
+
+(define (write-substring ostr str pos len)
+  (ostr str pos len))
+
+(define (make-fd-ostream fd)
+  (lambda (str pos len) (raw-write-substring fd str pos len)))
+
+(define stdout (make-fd-ostream raw-stdout))
+(define stderr (make-fd-ostream raw-stderr))
 
 ;;; Lists
 
@@ -674,14 +674,6 @@
          (and (string? b) (string-equal? a b)))
         (true (eq? a b))))
 
-;;; IO
-
-(define (write-substring writer str pos len)
-  (writer str pos len))
-
-(define (write-string writer str)
-  (writer str 0 (string-length str)))
-
 ;;; String buffers
 
 (define (make-string-buffer)
@@ -712,7 +704,7 @@
   (string-set! (cdr strbuf) buf-pos ch)
   (rplaca strbuf (1+ buf-pos)))
 
-(define (string-buffer-writer strbuf)
+(define (string-buffer-ostream strbuf)
   (lambda (str pos len) (string-buffer-write strbuf str pos len)))
 
 (define (string-buffer-to-string strbuf)
@@ -898,7 +890,7 @@
 
 (define (format-list control args)
   (define buf (make-string-buffer))
-  (formout-list (string-buffer-writer buf) control args)
+  (formout-list (string-buffer-ostream buf) control args)
   (string-buffer-to-string buf))
 
 (define (format control . args)
@@ -961,8 +953,10 @@
 ;;; - The buffer
 ;;; - The reader function to get more data (false if no more data)
 
-(define (make-reader-istream reader)
-  (make-vector-from-list (list 0 0 (make-string 100) reader)))
+(define (make-fd-istream fd)
+  (make-vector-from-list (list 0 0 (make-string 100) fd)))
+
+(define stdin (make-fd-istream raw-stdin))
 
 (define (make-string-istream str)
   (make-vector-from-list (list 0 (string-length str) str false)))
@@ -979,8 +973,8 @@
         (when (> pos 0)
           (string-copy buf pos buf 0 len))
         (vector-set! istr 0 0)
-        (define readlen ((vector-ref istr 3) buf len
-                                             (- (string-length buf) len)))
+        (define readlen (raw-read-substring (vector-ref istr 3) buf len
+                                            (- (string-length buf) len)))
         (vector-set! istr 1 (+ len readlen))
         (if (> readlen 0) true
             (begin
@@ -1021,8 +1015,6 @@
          ;; therefore smaller than the buffer size
          (peek-char istr offset))
         (true false)))
-
-(define stdin (make-reader-istream stdin-reader))
 
 ;;; Reader
 
@@ -1289,8 +1281,7 @@
     (begin
       (define (unquote fd)
               (open-file-for-reading (unquote (cadr var-pathname))))
-      (define (unquote (car var-pathname))
-              (make-reader-istream (make-file-reader (unquote fd))))
+      (define (unquote (car var-pathname)) (make-fd-istream (unquote fd)))
       (unquote-splicing body)
       (close-file (unquote fd)))))
 

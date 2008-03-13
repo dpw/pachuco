@@ -209,4 +209,5 @@ y)" '(x y))
     (assert-result (read f false) false)))
 
 (define (main)
-  (tests))
+  (tests)
+  (format~ true "Tests done~%"))
