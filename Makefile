@@ -17,8 +17,8 @@ SL_COMPILER_SOURCES=runtime.lisp $(COMPILER_SOURCES) drivermain.lisp
 
 listify=( $(foreach f,$(1),\"$(f)\") )
 cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-expand-files '$(call listify,$(1))) (quit))"
-cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-interpret-files '$(call listify,$(1)) '(main)) (quit))"
-cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-compile-files '$(call listify,$(1)) '(main)) (quit))"
+cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-interpret-files '$(call listify,$(1)) '(runtime-main)) (quit))"
+cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-compile-files '$(call listify,$(1)) '(runtime-main)) (quit))"
 
 all: stage2-test-run compare-stage3
 

@@ -210,4 +210,4 @@ y)" '(x y))
 
 (define (main)
   (tests)
-  (format~ true "Tests done~%"))
+  (formout stdout "Tests done~%"))

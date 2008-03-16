@@ -7,6 +7,6 @@
   (cond ((string-equal? command "expand")
          (do-expand-files files))
         ((string-equal? command "interpret")
-         (do-interpret-files files '(main)))
+         (do-interpret-files files '(runtime-main)))
         ((string-equal? command "compile")
-         (do-compile-files files '(main)))))
+         (do-compile-files files '(runtime-main)))))

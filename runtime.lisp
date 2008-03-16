@@ -507,6 +507,16 @@
     (set! index (1+ index))
     (set! len (1- len))))
 
+(define (make-vector-from-list l)
+  (define (copy-list-to-vector l vec pos)
+    (unless (null? l)
+      (vector-set! vec pos (car l))
+      (copy-list-to-vector (cdr l) vec (1+ pos))))
+
+  (define vec (make-vector (length l)))
+  (copy-list-to-vector l vec 0)
+  vec)
+
 ;;; I/O
 
 (when-compiling
@@ -556,17 +566,100 @@
   (define (close-file fd)
     (syscall-close fd)))
 
-(define (write-string ostr str)
-  (ostr str 0 (string-length str)))
+
+;;; Output streams
+
+;;; ostreams are represented as a vector of 4 elements:
+
+;;; - Write position in the buffer
+;;; - The buffer
+;;; - The output FD, or false for a buffer
+;;;
+;;; The position must always be before the end of the buffer.  This
+;;; means that a buffer of length 1 gives us unbuffered output.
+
+(define (make-fd-ostream fd size)
+  (make-vector-from-list (list 0 (make-string size) fd)))
+
+(define (make-buffer-ostream) 
+  (make-fd-ostream false 100))
+
+(define (buffer-ostream-to-string ostr)
+  (define buf-pos (vector-ref ostr 0))
+  (define str (make-string buf-pos))
+  (string-copy (vector-ref ostr 1) 0 str 0 buf-pos)
+  str)
 
 (define (write-substring ostr str pos len)
-  (ostr str pos len))
+  (define buf-pos (vector-ref ostr 0))
+  (define buf-pos-after (+ buf-pos len))
+  (define buf (vector-ref ostr 1))
 
-(define (make-fd-ostream fd)
-  (lambda (str pos len) (raw-write-substring fd str pos len)))
+  (if (< buf-pos-after (string-length buf))
+      (string-copy str pos buf buf-pos len)
+      (begin
+        ;; new data won't fit
+        (define fd (vector-ref ostr 2))
+        (if fd
+            (begin
+              (when (/= buf-pos 0)
+                ;; flush to the fd
+                (raw-write-substring fd buf 0 buf-pos))
+             
+              ;; if the new data is bigger than half the buffer size, write
+              ;; it directly, otherwise copy into the buffer
+              (if (> (* 2 len) (string-length buf))
+                  (begin
+                    (raw-write-substring fd str pos len)
+                    (set! buf-pos-after 0))
+                  (begin
+                    (string-copy str pos buf 0 len)
+                    (set! buf-pos-after len))))
+            (begin
+              ;; grow the buffer
+              (define new-buf-size (make-string (* 2 (string-length buf))))
+              (while (> buf-pos-after new-buf-size)
+                (set! new-buf-size (* 2 new-buf-size)))
 
-(define stdout (make-fd-ostream raw-stdout))
-(define stderr (make-fd-ostream raw-stderr))
+              (define new-buf (make-string new-buf-size))
+              (string-copy buf 0 new-buf 0 buf-pos)
+              (string-copy str pos new-buf buf-pos len)
+              (vector-set! ostr 1 new-buf)))))
+  (vector-set! ostr 0 buf-pos-after))
+
+(define (write-string ostr str)
+  (write-substring ostr str 0 (string-length str)))
+
+(define (write-character ostr ch)
+  (define buf-pos (vector-ref ostr 0))
+  (define buf (vector-ref ostr 1))
+  (string-set! buf buf-pos ch)
+  (set! buf-pos (1+ buf-pos))
+
+  (when (= buf-pos (string-length buf))
+    ;; buffer full
+    (define fd (vector-ref ostr 2))
+    (if fd
+        (begin
+          (raw-write-substring fd buf 0 buf-pos)
+          (set! buf-pos 0))
+        (begin
+          ;; grow the buffer
+          (define new-buf (make-string (* 2 (string-length buf))))
+          (string-copy buf 0 new-buf 0 buf-pos)
+          (vector-set! ostr 1 (set! buf new-buf)))))
+
+  (vector-set! ostr 0 buf-pos))
+
+(define (flush-ostream ostr)
+  (define buf-pos (vector-ref ostr 0))
+  (define fd (vector-ref ostr 2))
+  (when (and fd (/= buf-pos 0))
+    (raw-write-substring fd (vector-ref ostr 1) 0 buf-pos)
+    (vector-set! ostr 0 0)))
+
+(define stdout (make-fd-ostream raw-stdout 10000))
+(define stderr (make-fd-ostream raw-stderr 1))
 
 ;;; Lists
 
@@ -653,18 +746,6 @@
         str))
   (string-replace-from str 0))
 
-;;; Vectors
-
-(define (make-vector-from-list l)
-  (define (copy-list-to-vector l vec pos)
-    (unless (null? l)
-      (vector-set! vec pos (car l))
-      (copy-list-to-vector (cdr l) vec (1+ pos))))
-
-  (define vec (make-vector (length l)))
-  (copy-list-to-vector l vec 0)
-  vec)
-
 ;;; Equality
 
 (define (equal? a b)
@@ -673,44 +754,6 @@
         ((string? a)
          (and (string? b) (string-equal? a b)))
         (true (eq? a b))))
-
-;;; String buffers
-
-(define (make-string-buffer)
-  (cons 0 (make-string 20)))
-
-(define (string-buffer-write strbuf str str-pos len)
-  (define buf-pos (car strbuf))
-  (define buf-pos-after (+ buf-pos len))
-  (when (> buf-pos-after (string-length (cdr strbuf)))
-    (define new-buf-size (* 2 (string-length (cdr strbuf))))
-    (while (> buf-pos-after new-buf-size)
-      (set! new-buf-size (* 2 new-buf-size)))
-    
-    (define new-buf (make-string new-buf-size))
-    (string-copy (cdr strbuf) 0 new-buf 0 buf-pos)
-    (rplacd strbuf new-buf))
-
-  (string-copy str str-pos (cdr strbuf) buf-pos len)
-  (rplaca strbuf buf-pos-after))
-
-(define (string-buffer-write-char strbuf ch)
-  (define buf-pos (car strbuf))
-  (when (= buf-pos (string-length (cdr strbuf)))
-    (define new-buf (make-string (* 2 (string-length (cdr strbuf)))))
-    (string-copy (cdr strbuf) 0 new-buf 0 buf-pos)
-    (rplacd strbuf new-buf))
-
-  (string-set! (cdr strbuf) buf-pos ch)
-  (rplaca strbuf (1+ buf-pos)))
-
-(define (string-buffer-ostream strbuf)
-  (lambda (str pos len) (string-buffer-write strbuf str pos len)))
-
-(define (string-buffer-to-string strbuf)
-  (define str (make-string (car strbuf)))
-  (string-copy (cdr strbuf) 0 str 0 (car strbuf))
-  str)
 
 ;;; Printing and formatting
 
@@ -724,19 +767,9 @@
   (string-set! buf 0 ch)
   buf)
 
-(defmacro (define-char-printer name ch)
-  (quasiquote
-    (define (unquote name)
-      (begin
-        (define str (character-string (unquote ch)))
-        (lambda (writer) (write-string writer str))))))
-
-(define-char-printer print-newline #\Newline)
-(define-char-printer print-double-quote #\")
-
-(define (print-number writer num)
+(define (print-number ostr num)
   (if (= num 0)
-      (write-string writer "0")
+      (write-string ostr "0")
       (begin
         (unless (and (<= 2 *print-radix*)
                      (<= *print-radix* (string-length print-number-digits)))
@@ -761,33 +794,30 @@
          (set! pos (1- pos))
          (string-set! buf pos #\-))
         
-        (write-substring writer buf pos (- buf-size pos)))))
+        (write-substring ostr buf pos (- buf-size pos)))))
 
-(define (print-string writer str)
+(define (print-string ostr str)
   (if *print-readably*
       (begin
-        (print-double-quote writer)
-        (write-string writer str)
-        (print-double-quote writer))
-      (write-string writer str)))
-
+        (write-character ostr #\")
+        (write-string ostr str)
+        (write-character ostr #\"))
+      (write-string ostr str)))
 
 (define character-names '((#\Space . "Space")
                           (#\Newline . "Newline")))
 
-(define (print-char writer ch)
+(define (print-char ostr ch)
   (if *print-readably*
       (begin
-       (write-string writer "#\\")
-       (define name (assoc ch character-names))
-       (write-string writer (if name
-                                (character-string ch)
-                                (cdr name))))
-      (write-string writer (character-string ch))))
+        (write-string ostr "#\\")
+        (define name (assoc ch character-names))
+        (write-string ostr (if name (character-string ch) (cdr name))))
+      (write-string ostr (character-string ch))))
 
-(define (print-symbol writer sym)
+(define (print-symbol ostr sym)
   (define str (symbol-name sym))
-  (write-substring writer str 0 (string-length str)))
+  (write-substring ostr str 0 (string-length str)))
 
 (define special-printed-forms
   '((false . "false")
@@ -795,49 +825,49 @@
     (unspecified . "unspecified")
     (() . "()")))
 
-(define (print-list writer l)
-  (write-string writer "(")
-  (print writer (car l))
+(define (print-list ostr l)
+  (write-string ostr "(")
+  (print ostr (car l))
   (set! l (cdr l))
 
   (while (pair? l)
-    (write-string writer " ")
-    (print writer (car l))
+    (write-string ostr " ")
+    (print ostr (car l))
     (set! l (cdr l)))
 
   (unless (null? l)
-    (write-string writer " . ")
-    (print writer l))
+    (write-string ostr " . ")
+    (print ostr l))
 
-  (write-string writer ")"))
+  (write-string ostr ")"))
 
-(define (print writer obj)
+(define (print ostr obj)
   (cond ((pair? obj)
-         (print-list writer obj))
+         (print-list ostr obj))
         ((number? obj)
-         (print-number writer obj))
+         (print-number ostr obj))
         ((string? obj)
-         (print-string writer obj))
+         (print-string ostr obj))
         ((symbol? obj)
-         (print-symbol writer obj))
+         (print-symbol ostr obj))
         ((function? obj)
-         (write-string writer "#<function>"))
+         (write-string ostr "#<function>"))
         (true
          (define special (assoc obj special-printed-forms))
          (if special
-             (write-string writer (cdr special))
+             (write-string ostr (cdr special))
              (error "cannot print object")))))
 
 ;;; Formatted IO
 
-(define (formout-list writer control args)
+(define (formout-list ostr control args)
   (define pos 0)
   (define write-from 0)
   (define control-len (string-length control))
   (define ch)
 
   (define (flush)
-    (write-substring writer control write-from (- pos write-from)))
+    (write-substring ostr control write-from (- pos write-from)))
 
   (while (< pos control-len)
     (set! ch (string-ref control pos)) 
@@ -854,30 +884,30 @@
                        (set! write-from (1- write-from)))
 
                       ((eq? ch #\%)
-                       (print-newline writer))
+                       (write-character ostr #\Newline))
 
                       ((or (eq? ch #\A) (eq? ch #\a))
                        (with-value (*print-readably* false)
-                         (print writer (car args)))
+                         (print ostr (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\S) (eq? ch #\s))
                        (with-value (*print-readably* true)
-                         (print writer (car args)))
+                         (print ostr (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\D) (eq? ch #\d))
                        (with-value (*print-radix* 10)
-                         (print writer (car args)))
+                         (print ostr (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\X) (eq? ch #\x))
                        (with-value (*print-radix* 16)
-                         (print writer (car args)))
+                         (print ostr (car args)))
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\C) (eq? ch #\c))
-                       (print-char writer (car args))
+                       (print-char ostr (car args))
                        (set! args (cdr args)))
 
                       (true
@@ -885,13 +915,13 @@
 
   (flush))
 
-(define (formout writer control . args)
-  (formout-list writer control args))
+(define (formout ostr control . args)
+  (formout-list ostr control args))
 
 (define (format-list control args)
-  (define buf (make-string-buffer))
-  (formout-list (string-buffer-ostream buf) control args)
-  (string-buffer-to-string buf))
+  (define buf (make-buffer-ostream))
+  (formout-list buf control args)
+  (buffer-ostream-to-string buf))
 
 (define (format control . args)
   (format-list control args))
@@ -945,16 +975,16 @@
   (define (gensym)
     (intern (format "gensym-~D" (set! gensym-counter (1+ gensym-counter))))))
 
-;;; Character istreams
+;;; Input streams
 
-;;; istreams are represented as a vector of 3 elements:
+;;; istreams are represented as a vector of 4 elements:
 ;;; - Read position in the buffer
 ;;; - End position of valid data in the buffer
 ;;; - The buffer
 ;;; - The reader function to get more data (false if no more data)
 
 (define (make-fd-istream fd)
-  (make-vector-from-list (list 0 0 (make-string 100) fd)))
+  (make-vector-from-list (list 0 0 (make-string 10000) fd)))
 
 (define stdin (make-fd-istream raw-stdin))
 
@@ -1116,18 +1146,18 @@
       false))
 
 (define (read-token istr)
-  (define buf (make-string-buffer))
-  (string-buffer-write-char buf (read-char istr))
+  (define buf (make-buffer-ostream))
+  (write-character buf (read-char istr))
 
   (define (scan-token)
     (define ch (peek-char istr 0))
     (when (rt-constituent? (rt-char-type ch))
-      (string-buffer-write-char buf ch)
+      (write-character buf ch)
       (consume-char istr)
       (scan-token)))
 
   (scan-token)
-  (string-buffer-to-string buf))
+  (buffer-ostream-to-string buf))
 
 (define (interpret-token token)
   (define istr (make-string-istream token))
@@ -1187,18 +1217,18 @@
     (consume-line-comment istr)))
 
 (define (read-string-literal istr)
-  (define buf (make-string-buffer))
+  (define buf (make-buffer-ostream))
 
   (define (scan-string)
     (define ch (read-char istr))
     (unless (eq? ch #\")
       (when (eq? ch #\\)
         (set! ch (read-char istr)))
-      (string-buffer-write-char buf ch)
+      (write-character buf ch)
       (scan-string)))
 
   (scan-string)
-  (string-buffer-to-string buf))
+  (buffer-ostream-to-string buf))
 
 (define (rassoc-equal key l)
   (cond ((null? l) false)
@@ -1314,6 +1344,12 @@
   (unless saved-command-line
     (set! saved-command-line (c-string-array-to-list (c-global "lisp_argv"))))
   saved-command-line)
+
+;;; Entry point function
+
+(define (runtime-main)
+  (main)
+  (flush-ostream stdout))
 
 ;;; CL compatibility
 
