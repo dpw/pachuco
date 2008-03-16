@@ -769,7 +769,7 @@
 
 (define (print-number ostr num)
   (if (= num 0)
-      (write-string ostr "0")
+      (write-character ostr #\0)
       (begin
         (unless (and (<= 2 *print-radix*)
                      (<= *print-radix* (string-length print-number-digits)))
@@ -810,7 +810,7 @@
 (define (print-character ostr ch)
   (if *print-readably*
       (begin
-        (write-string ostr "#\\")
+        (write-character ostr #\\)
         (define name (assoc ch character-names))
         (write-string ostr (if name (character-string ch) (cdr name))))
       (write-string ostr (character-string ch))))
@@ -826,12 +826,12 @@
     (() . "()")))
 
 (define (print-list ostr l)
-  (write-string ostr "(")
+  (write-character ostr #\()
   (print ostr (car l))
   (set! l (cdr l))
 
   (while (pair? l)
-    (write-string ostr " ")
+    (write-character ostr #\Space)
     (print ostr (car l))
     (set! l (cdr l)))
 
@@ -839,7 +839,7 @@
     (write-string ostr " . ")
     (print ostr l))
 
-  (write-string ostr ")"))
+  (write-character ostr #\)))
 
 (define (print ostr obj)
   (cond ((pair? obj)
