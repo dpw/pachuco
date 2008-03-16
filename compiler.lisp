@@ -32,7 +32,7 @@
     
     number? < <= > >= = /= + * - rem truncate 
     
-    character? char-code code-char
+    character? character-code code-character
 
     string? make-string string-length raw-string-address
     raw-string-ref raw-string-set! raw-string-copy
@@ -393,7 +393,7 @@
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
 
-(define-simplify ((char-code code-char) attrs ch)
+(define-simplify ((character-code code-character) attrs ch)
   (overwrite-form form ch)
   (simplify-recurse form))
 

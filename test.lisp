@@ -145,19 +145,19 @@
 
   (begin
     (define istr (make-string-istream "ab"))
-    (assert-result (peek-char istr 0) #\a)
-    (assert-result (peek-char istr 1) #\b)
-    (assert-result (read-char istr) #\a)
-    (assert-result (peek-char istr 0) #\b)
-    (assert-result (peek-char istr 1) false)
-    (consume-char istr)
-    (assert-result (read-char istr true) false))
+    (assert-result (peek-character istr 0) #\a)
+    (assert-result (peek-character istr 1) #\b)
+    (assert-result (read-character istr) #\a)
+    (assert-result (peek-character istr 0) #\b)
+    (assert-result (peek-character istr 1) false)
+    (consume-character istr)
+    (assert-result (read-character istr true) false))
 
   (begin
     (assert-result (read-integer (make-string-istream "1fF") 16) 511)
     (define istr (make-string-istream "123 "))
     (assert-result (read-integer istr 10) 123)
-    (assert-result (peek-char istr 0) #\Space))
+    (assert-result (peek-character istr 0) #\Space))
 
   (begin
     (define istr (make-string-istream "hello world (etc (etc)  )etc(etc)"))

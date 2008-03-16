@@ -470,7 +470,7 @@
 (define (codegen-quoted quoted out)
   (cond ((pair? quoted) (codegen-quoted-pair quoted out))
         ((number? quoted) (fixnum-representation quoted))
-        ((character? quoted) (fixnum-representation (char-code quoted)))
+        ((character? quoted) (fixnum-representation (character-code quoted)))
         ((string? quoted) (codegen-quoted-string quoted out))
         (true (let* ((c (assoc quoted simple-representations)))
              (cond (c (cdr c))

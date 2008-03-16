@@ -153,8 +153,8 @@
 (reify (truncate a b))
 
 (reify (character? a))
-(reify (char-code a))
-(reify (code-char a))
+(reify (character-code a))
+(reify (code-character a))
 
 (reify (string? a))
 (reify (make-string a))
@@ -548,7 +548,7 @@
     (define len (string-length str))
     (define c-str (make-string (1+ len)))
     (string-copy str 0 c-str 0 len)
-    (string-set! c-str len (code-char 0))
+    (string-set! c-str len (code-character 0))
     (raw-string-address c-str 0))
 
   (define (syscall-open pathname flags mode)
@@ -807,7 +807,7 @@
 (define character-names '((#\Space . "Space")
                           (#\Newline . "Newline")))
 
-(define (print-char ostr ch)
+(define (print-character ostr ch)
   (if *print-readably*
       (begin
         (write-string ostr "#\\")
@@ -907,7 +907,7 @@
                        (set! args (cdr args)))
 
                       ((or (eq? ch #\C) (eq? ch #\c))
-                       (print-char ostr (car args))
+                       (print-character ostr (car args))
                        (set! args (cdr args)))
 
                       (true
@@ -1016,26 +1016,26 @@
   (and (= (vector-ref istr 0) (vector-ref istr 1))
        (not (istream-refill istr))))
 
-(define (read-char istr . accept-eos)
+(define (read-character istr . accept-eos)
   (set! accept-eos (if (null? accept-eos) false (car accept-eos)))
   (define pos (vector-ref istr 0))
   (cond ((< pos (vector-ref istr 1))
          (vector-set! istr 0 (1+ pos))
          (string-ref (vector-ref istr 2) pos))
         ((istream-refill istr)
-         (read-char istr accept-eos))
+         (read-character istr accept-eos))
         (accept-eos false)
-        (true (error "read-char off end of stream"))))
+        (true (error "read-character off end of stream"))))
 
-(define (consume-char istr)
+(define (consume-character istr)
   (define pos (vector-ref istr 0))
   (cond ((< pos (vector-ref istr 1))
          (vector-set! istr 0 (1+ pos)))
         ((istream-refill istr)
-         (consume-char istr))
-        (true (error "consume-char off end of stream"))))
+         (consume-character istr))
+        (true (error "consume-character off end of stream"))))
 
-(define (peek-char istr offset)
+(define (peek-character istr offset)
   (define pos (+ offset (vector-ref istr 0)))
   (cond ((< pos (vector-ref istr 1))
          (string-ref (vector-ref istr 2) pos))
@@ -1043,7 +1043,7 @@
          ;; FIXME: we may need to expand the buffered data to include
          ;; offset.  But for now, offset is always 0 or 1, and
          ;; therefore smaller than the buffer size
-         (peek-char istr offset))
+         (peek-character istr offset))
         (true false)))
 
 ;;; Reader
@@ -1085,26 +1085,26 @@
                        (cons #\" rt-double-quote)
                        (cons #\' rt-single-quote)
                        (cons #\# rt-sharp-sign)))
-    (vector-set! readtable (char-code (car ch-ct)) (cdr ch-ct)))
+    (vector-set! readtable (character-code (car ch-ct)) (cdr ch-ct)))
 
-  (vector-set-range! readtable (char-code #\A) 26 rt-alpha-uc)
-  (vector-set-range! readtable (char-code #\a) 26 rt-alpha-lc)
-  (vector-set-range! readtable (char-code #\0) 10 rt-digit)
+  (vector-set-range! readtable (character-code #\A) 26 rt-alpha-uc)
+  (vector-set-range! readtable (character-code #\a) 26 rt-alpha-lc)
+  (vector-set-range! readtable (character-code #\0) 10 rt-digit)
   (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\! #\~ #\%))
-    (vector-set! readtable (char-code ch) rt-constituent-misc))
+    (vector-set! readtable (character-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)
-  (vector-set! digit-bases rt-digit (char-code #\0))
-  (vector-set! digit-bases rt-alpha-uc (- (char-code #\A) 10))
-  (vector-set! digit-bases rt-alpha-lc (- (char-code #\a) 10)))
+  (vector-set! digit-bases rt-digit (character-code #\0))
+  (vector-set! digit-bases rt-alpha-uc (- (character-code #\A) 10))
+  (vector-set! digit-bases rt-alpha-lc (- (character-code #\a) 10)))
 
-(define (rt-char-type ch)
+(define (rt-character-type ch)
   (if ch
       (begin
-        (set! ch (char-code ch))
+        (set! ch (character-code ch))
         (define ct (if (>= ch 128) rt-illegal (vector-ref readtable ch)))
         (when (= ct rt-illegal)
-          (error "bad character ~C (~D)" ch (char-code ch)))
+          (error "bad character ~C (~D)" ch (character-code ch)))
         ct)
       rt-eos))
 
@@ -1115,20 +1115,20 @@
   ;; Reads an integer from the istream.  Returns false if an integer
   ;; could not be parsed, others returns the value, stopping after the
   ;; last character forming part of the number.
-  (define first-digit (peek-char istr 0))
+  (define first-digit (peek-character istr 0))
   (define negative (if (eq? #\- first-digit)
                        (begin
-                         (consume-char istr)
-                         (set! first-digit (peek-char istr 0))
+                         (consume-character istr)
+                         (set! first-digit (peek-character istr 0))
                          true)
                        false))
 
   (define (digit-value ch)
-    (define ct (rt-char-type ch))
+    (define ct (rt-character-type ch))
     (define base (vector-ref digit-bases ct))
     (if base
         (begin
-          (define val (- (char-code ch) base))
+          (define val (- (character-code ch) base))
           (if (< val radix) val false))
         false))
 
@@ -1136,8 +1136,8 @@
   (if res
       (begin
         (define (scan-integer)
-          (consume-char istr)
-          (define val (digit-value (peek-char istr 0)))
+          (consume-character istr)
+          (define val (digit-value (peek-character istr 0)))
           (when val
             (set! res (+ (* radix res) val))
             (scan-integer)))
@@ -1147,13 +1147,13 @@
 
 (define (read-token istr)
   (define buf (make-buffer-ostream))
-  (write-character buf (read-char istr))
+  (write-character buf (read-character istr))
 
   (define (scan-token)
-    (define ch (peek-char istr 0))
-    (when (rt-constituent? (rt-char-type ch))
+    (define ch (peek-character istr 0))
+    (when (rt-constituent? (rt-character-type ch))
       (write-character buf ch)
-      (consume-char istr)
+      (consume-character istr)
       (scan-token)))
 
   (scan-token)
@@ -1171,21 +1171,21 @@
             (intern token)))))
 
 (define (consume-whitespace istr)
-  (define ch (peek-char istr 0))
-  (define ct (rt-char-type ch))
+  (define ch (peek-character istr 0))
+  (define ct (rt-character-type ch))
   (when (= ct rt-whitespace)
-    (consume-char istr)
+    (consume-character istr)
     (consume-whitespace istr)))
 
 (define (read-list istr c)
   (consume-whitespace istr)
-  (define ch (peek-char istr 0))
+  (define ch (peek-character istr 0))
   (cond ((eq? #\) ch)
-         (consume-char istr) 
+         (consume-character istr) 
          ())
         ((and (eq? #\. ch)
-              (not (rt-constituent? (rt-char-type (peek-char istr 1)))))
-         (consume-char istr)
+              (not (rt-constituent? (rt-character-type (peek-character istr 1)))))
+         (consume-character istr)
 
          (until (read-maybe istr c))
          (define result (car c))
@@ -1193,9 +1193,9 @@
          ;; find and consume the closing )
          (define (find-rparen)
            (consume-whitespace istr)
-           (define ch (peek-char istr 0))
+           (define ch (peek-character istr 0))
            (if (eq? #\) ch)
-               (consume-char istr)
+               (consume-character istr)
                (begin
                  (when (read-maybe istr c)
                    (error "more than one object follows . in list"))
@@ -1212,7 +1212,7 @@
              (read-list istr c)))))
 
 (define (consume-line-comment istr)
-  (define ch (read-char istr true))
+  (define ch (read-character istr true))
   (when (and ch (not (eq? ch #\Newline)))
     (consume-line-comment istr)))
 
@@ -1220,10 +1220,10 @@
   (define buf (make-buffer-ostream))
 
   (define (scan-string)
-    (define ch (read-char istr))
+    (define ch (read-character istr))
     (unless (eq? ch #\")
       (when (eq? ch #\\)
-        (set! ch (read-char istr)))
+        (set! ch (read-character istr)))
       (write-character buf ch)
       (scan-string)))
 
@@ -1235,27 +1235,28 @@
         ((equal? key (cdar l)) (car l))
         (true (rassoc-equal key (cdr l)))))
 
-(define (read-char-literal istr)
-  (if (rt-constituent? (rt-char-type (peek-char istr 1)))
+(define (read-character-literal istr)
+  (if (rt-constituent? (rt-character-type (peek-character istr 1)))
       (begin
         ;; a character name token
         (define name (read-token istr))
-        (define named-char (rassoc-equal name character-names))
-        (unless named-char (error "unknown character name ~A" name))
-        (car named-char))
-      (read-char istr)))
+        (define named-character (rassoc-equal name character-names))
+        (unless named-character (error "unknown character name ~A" name))
+        (car named-character))
+      (read-character istr)))
 
 (define (read-sharp-signed istr)
-  (define ch (read-char istr))
+  (define ch (read-character istr))
 
   (define (read-radixed-integer istr radix)
     (define val (read-integer istr radix))
     (unless (and val 
-                 (not (rt-constituent? (rt-char-type (peek-char istr 0)))))
-      (error "bad digit ~C" (peek-char istr 0)))
+                 (not (rt-constituent? (rt-character-type (peek-character istr
+                                                                          0)))))
+      (error "bad digit ~C" (peek-character istr 0)))
     val)
 
-  (cond ((eq? ch #\\) (read-char-literal istr))
+  (cond ((eq? ch #\\) (read-character-literal istr))
         ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer istr 16))
         ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer istr 2))
         (true (error "unknown sharp sign sequence #~C" ch))))
@@ -1265,24 +1266,24 @@
   ;; comments) returns false if no value was read, otherwise it puts
   ;; the value into the car of the second arg.  this is the first time
   ;; it hurts not to have multiple returns!
-  (define ch (peek-char istr 0))
-  (define ct (rt-char-type ch))
+  (define ch (peek-character istr 0))
+  (define ct (rt-character-type ch))
   (cond ((= ct rt-whitespace)
-         (consume-char istr)
+         (consume-character istr)
          false)
         ((rt-constituent? ct)
          (rplaca c (interpret-token (read-token istr))))
         ((= ct rt-lparen)
-         (consume-char istr)
+         (consume-character istr)
          (rplaca c (read-list istr c)))
         ((= ct rt-double-quote)
-         (consume-char istr)
+         (consume-character istr)
          (rplaca c (read-string-literal istr)))
         ((= ct rt-single-quote)
-         (consume-char istr)
+         (consume-character istr)
          (rplaca c (list 'quote (read istr))))
         ((= ct rt-sharp-sign)
-         (consume-char istr)
+         (consume-character istr)
          (rplaca c (read-sharp-signed istr)))
         ((= ct rt-line-comment)
          (consume-line-comment istr)
@@ -1291,7 +1292,7 @@
          (error "unexpected end of stream while reading"))
         (true
          (error "don't know how to handle character ~C (~D -> ~D)"
-                ch (char-code ch) ct))))
+                ch (character-code ch) ct))))
 
 (define (read istr . eos-val)
   (define c (cons () ()))
