@@ -31,7 +31,7 @@
 (defmacro (cddr x) (list 'cdr (list 'cdr x)))
 (defmacro (cadar x) (list 'car (list ' cdr (list 'car x))))
 (defmacro (cdddr x) (list 'cdr (list ' cdr (list 'cdr x))))
-(defmacro (cddddr x) (list 'cdr (list 'cdr (list ' cdr (list 'cdr x)))))
+(defmacro (cddddr x) (list 'cdr (list 'cdr (list 'cdr (list 'cdr x)))))
 
 (defmacro (first x) (list 'car x))
 (defmacro (second x) (list 'car (list 'cdr x)))
