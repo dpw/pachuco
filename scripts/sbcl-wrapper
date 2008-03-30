@@ -1,0 +1,31 @@
+#!/bin/sh -
+
+command="--noinform --noprint"
+for f in $CL_COMPILER_SOURCES ; do
+  command="$command --load $f"
+done
+
+func=$1
+shift
+
+form=
+for f in $* ; do
+    form="$form \"$f\""
+done
+
+case $func in
+interpret)
+    form="(do-interpret-files '($form))"
+    ;;
+compile)
+    form="(do-compile-files '($form) '(runtime-main))"
+    ;;
+expand)
+    form="(do-expand-files '($form) '(runtime-main))"
+    ;;
+*)
+    echo "unknown command $1" 1>&2
+    exit 1
+esac
+
+sbcl $command --eval "(progn $form (quit))"

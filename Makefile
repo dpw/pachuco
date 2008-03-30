@@ -9,90 +9,47 @@ endif
 endif
 
 COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
+
 CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
+export CL_COMPILER_SOURCES
 
 TEST_SOURCES=runtime.lisp test.lisp
 
 SL_COMPILER_SOURCES=runtime.lisp $(COMPILER_SOURCES) drivermain.lisp
 
-listify=( $(foreach f,$(1),\"$(f)\") )
-cl_expand=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-expand-files '$(call listify,$(1))) (quit))"
-cl_interp=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-interpret-files '$(call listify,$(1)) '(runtime-main)) (quit))"
-cl_compile=sbcl --noinform --noprint $(foreach f,$(CL_COMPILER_SOURCES),--load $(f)) --eval "(progn (do-compile-files '$(call listify,$(1)) '(runtime-main)) (quit))"
-
 all: stage2-test-run compare-stage3
 
-stage0-expand: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
-	$(call cl_expand,$(TEST_SOURCES))
+define stage_template
+$(2)interp: $(1) $(TEST_SOURCES)
+	./$(1) interpret $(TEST_SOURCES)
 
-stage0-interp: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
-	$(call cl_interp,$(TEST_SOURCES))
+$(2)compile: $(1) $(TEST_SOURCES)
+	./$(1) compile $(TEST_SOURCES)
 
-stage0-compile: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
-	$(call cl_compile,$(TEST_SOURCES))
+$(2)test.s: $(1) $(TEST_SOURCES)
+	./$(1) compile $(TEST_SOURCES) >$$@
 
-stage0-test.s: $(TEST_SOURCES) $(CL_COMPILER_SOURCES)
-	$(call cl_compile,$(TEST_SOURCES)) >$@
+$(2)test: main.o $(2)test.s
+	gcc $(CFLAGS) $$^ -o $$@
 
-stage0-test: main.o stage0-test.s
-	gcc $(CFLAGS) $^ -o $@
+$(2)test-run: $(2)test
+	./$(2)test
 
-stage0-test-run: stage0-test
-	./stage0-test
+$(3).s: $(1) $(SL_COMPILER_SOURCES)
+	./$(1) compile $(SL_COMPILER_SOURCES) >$$@
 
+$(3): main.o $(3).s
+	gcc $(CFLAGS) $$^ -o $$@
+endef
 
-stage1.s: $(SL_COMPILER_SOURCES) $(CL_COMPILER_SOURCES)
-	$(call cl_compile,$(SL_COMPILER_SOURCES)) >$@
+scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
 
-stage1: main.o stage1.s
-	gcc $(CFLAGS) $^ -o $@
-
-
-stage1-interp: stage1 $(TEST_SOURCES)
-	./stage1 interpret $(TEST_SOURCES)
-
-stage1-compile: stage1 $(TEST_SOURCES)
-	./stage1 compile $(TEST_SOURCES)
-
-stage1-test.s: stage1 $(TEST_SOURCES)
-	./stage1 compile $(TEST_SOURCES) >$@
-
-stage1-test: main.o stage1-test.s
-	gcc $(CFLAGS) $^ -o $@
-
-stage1-test-run: stage1-test
-	./stage1-test
-
-
-stage2.s: stage1 $(SL_COMPILER_SOURCES)
-	./stage1 compile $(SL_COMPILER_SOURCES) >$@
-
-stage2: main.o stage2.s
-	gcc $(CFLAGS) $^ -o $@
-
-
-stage2-interp: stage2 $(TEST_SOURCES)
-	./stage2 interpret $(TEST_SOURCES)
-
-stage2-compile: stage2 $(TEST_SOURCES)
-	./stage2 compile $(TEST_SOURCES)
-
-stage2-test.s: stage2 $(TEST_SOURCES)
-	./stage2 compile $(TEST_SOURCES) >$@
-
-stage2-test: main.o stage2-test.s
-	gcc $(CFLAGS) $^ -o $@
-
-stage2-test-run: stage2-test
-	./stage2-test
-
-
-stage3.s: stage2 $(SL_COMPILER_SOURCES)
-	./stage2 compile $(SL_COMPILER_SOURCES) >$@
+$(eval $(call stage_template,scripts/sbcl-wrapper,stage0,stage1))
+$(eval $(call stage_template,stage1,stage1-,stage2))
+$(eval $(call stage_template,stage2,stage2-,stage3))
 
 compare-stage3: stage2.s stage3.s
 	cmp -s stage2.s stage3.s
-
 
 clean:
 	rm -f *.s *.o stage0-test stage1 stage1-test stage2 stage2-test
