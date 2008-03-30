@@ -15,13 +15,13 @@ done
 
 case $func in
 interpret)
-    form="(do-interpret-files '($form))"
+    form="(do-interpret-files '($form) '(runtime-main))"
     ;;
 compile)
     form="(do-compile-files '($form) '(runtime-main))"
     ;;
 expand)
-    form="(do-expand-files '($form) '(runtime-main))"
+    form="(do-expand-files '($form))"
     ;;
 *)
     echo "unknown command $1" 1>&2

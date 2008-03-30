@@ -17,26 +17,32 @@ TEST_SOURCES=runtime.lisp test.lisp
 
 SL_COMPILER_SOURCES=runtime.lisp $(COMPILER_SOURCES) drivermain.lisp
 
+# The initial compiler used.  Default to bootstrapping from SBCL
+BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
+
 all: stage2-test-run compare-stage3
+
+benchmark: stage1
+	BENCHMARK_ITERATIONS=5 ./stage1 compile $(SL_COMPILER_SOURCES) >/dev/null
 
 define stage_template
 $(2)interp: $(1) $(TEST_SOURCES)
-	./$(1) interpret $(TEST_SOURCES)
+	$(abspath $(1)) interpret $(TEST_SOURCES)
 
 $(2)compile: $(1) $(TEST_SOURCES)
-	./$(1) compile $(TEST_SOURCES)
+	$(abspath $(1)) compile $(TEST_SOURCES)
 
 $(2)test.s: $(1) $(TEST_SOURCES)
-	./$(1) compile $(TEST_SOURCES) >$$@
+	$(abspath $(1)) compile $(TEST_SOURCES) >$$@
 
 $(2)test: main.o $(2)test.s
 	gcc $(CFLAGS) $$^ -o $$@
 
 $(2)test-run: $(2)test
-	./$(2)test
+	$(abspath $(2)test)
 
 $(3).s: $(1) $(SL_COMPILER_SOURCES)
-	./$(1) compile $(SL_COMPILER_SOURCES) >$$@
+	$(abspath $(1)) compile $(SL_COMPILER_SOURCES) >$$@
 
 $(3): main.o $(3).s
 	gcc $(CFLAGS) $$^ -o $$@
@@ -44,7 +50,7 @@ endef
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
 
-$(eval $(call stage_template,scripts/sbcl-wrapper,stage0,stage1))
+$(eval $(call stage_template,$(BOOTSTRAP_COMPILER),stage0-,stage1))
 $(eval $(call stage_template,stage1,stage1-,stage2))
 $(eval $(call stage_template,stage2,stage2-,stage3))
 
