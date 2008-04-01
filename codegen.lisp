@@ -217,17 +217,18 @@
   (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
 (define (emit-convert-value out operand dest in-frame-base out-frame-base)
-  (emit-adjust-frame-base out in-frame-base out-frame-base)
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
-           (unless (eq? operand dr) (emit-mov out operand dr))))
+           (unless (eq? operand dr) (emit-mov out operand dr)))
+         (emit-adjust-frame-base out in-frame-base out-frame-base))
         ((dest-conditional? dest)
+         (emit-adjust-frame-base out in-frame-base out-frame-base)
          (emit-cmp out (immediate false-representation) operand)
          (emit-branch out "ne" dest))
-        ((dest-discard? dest))
+        ((dest-discard? dest)
+         (emit-adjust-frame-base out in-frame-base out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
-         
 
 (define (emit-prepare-convert-cc-value out reg)
   (emit-clear out reg))
