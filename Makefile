@@ -23,7 +23,7 @@ BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 all: stage2-test-run compare-stage3
 
 benchmark: stage1
-	BENCHMARK_ITERATIONS=5 ./stage1 compile $(SL_COMPILER_SOURCES) >/dev/null
+	BENCHMARK_ITERATIONS=10 ./stage1 compile $(SL_COMPILER_SOURCES) >/dev/null
 
 define stage_template
 $(2)interp: $(1) $(TEST_SOURCES)
