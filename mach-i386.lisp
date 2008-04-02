@@ -51,10 +51,10 @@
 (define-register %b "%bl" "%bx" "%ebx")
 (define-register %c "%cl" "%cx" "%ecx")
 (define-register %d "%dl" "%dx" "%edx")
-(define-register %si "%sil" "%si" "%esi")
-(define-register %di "%dil" "%di" "%edi")
-(define-register %sp "%spl" "%sp" "%esp")
-(define-register %bp "%bpl" "%bp" "%ebp")
+(define-register %si false "%si" "%esi")
+(define-register %di false "%di" "%edi")
+(define-register %sp false "%sp" "%esp")
+(define-register %bp false "%bp" "%ebp")
 
 (define general-registers (list %a %b %c %d %di))
 (define general-register-count (length general-registers))
@@ -68,7 +68,7 @@
 ;;; (check-arg-count, arg-count).
 (define %nargs (last-elem general-registers))
 
-(define c-callee-saved-regs '(%b %bp))
+(define c-callee-saved-regs (list %b %bp))
 
 ;;; Bitness-dependent assembler bits
 
@@ -83,4 +83,4 @@
   (emit-movzx-32 out src dest src-scale dest-scale))
 
 (define (emit-extend-sign-bit out oper)
-  (emit-sar out (immediate 31) oper))
+  (emit-sar out 31 oper))

@@ -33,7 +33,8 @@
 
   (assert-result (list 1 2 3) '(1 2 3))
   (assert-result (append '(1 2) '(3 4)) '(1 2 3 4))
-
+  
+  (assert-result (string-equal? (symbol-name 'foo) "foo") true)
   (assert-result (eq? (intern "foo") 'foo) true)
   (assert-result (symbol-name (intern "bar")) "bar")
 

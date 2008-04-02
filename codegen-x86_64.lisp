@@ -10,7 +10,7 @@
   (emit out "lisp:")
   (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
   (emit-set-ac-flag out true)
-  (emit-mov out (immediate closure-tag) %closure)
+  (emit-mov out closure-tag %closure)
   (emit-function-prologue out))
 
 (define (emit-program-epilogue out)
@@ -41,7 +41,7 @@
   ;; C ABI requires us to align stack to 16 byte bundary
   (emit-push out %bp)
   (emit-mov out %sp %bp)
-  (emit-and out (immediate -16) %sp)
+  (emit-and out -16 %sp)
   (emit out "call ~A" (attr-ref attrs 'c-function-name))
   (emit out "leave")
 

@@ -3,14 +3,10 @@
 
 ;;; Registers
 
-(define register-operands ())
-
 (defmarco (define-register name . variants)
-  (quasiquote (definitions
-    (define (unquote name) (quote (unquote name)))
-    (set! register-operands (acons (unquote name) (quote (unquote variants))
-                                   register-operands)))))
-
+  (quasiquote 
+    (define (unquote name)
+      (make-vector-from-list (quote (unquote variants))))))
 
 ;;; Assembler bits
 

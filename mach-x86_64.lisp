@@ -71,8 +71,8 @@
 ;;; (check-arg-count, arg-count).
 (define %nargs (last-elem general-registers))
 
-(define c-callee-saved-regs '(%b %bp %r12 %r13 %r14 %r15))
-(define c-call-arg-regs '(%di %si %d %c %r8 %r9))
+(define c-callee-saved-regs (list %b %bp %r12 %r13 %r14 %r15))
+(define c-call-arg-regs (list %di %si %d %c %r8 %r9))
 
 ;;; Bitness-dependent assembler bits
 
@@ -91,4 +91,4 @@
       (emit-movzx-32 out src dest src-scale dest-scale)))
 
 (define (emit-extend-sign-bit out oper)
-  (emit-sar out (immediate 63) oper))
+  (emit-sar out 63 oper))

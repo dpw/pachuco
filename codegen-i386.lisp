@@ -12,7 +12,7 @@
   (emit-mov out %sp %bp)
   (dolist (reg c-callee-saved-regs-without-%bp) (emit-push out reg))
   (emit-set-ac-flag out true)
-  (emit-mov out (immediate closure-tag) %closure)
+  (emit-mov out closure-tag %closure)
   (emit-function-prologue out))
 
 (define (emit-program-epilogue out)

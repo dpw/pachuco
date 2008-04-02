@@ -21,28 +21,68 @@
 (define (low-bits-mask bits) (1- (ash 1 bits)))
 
 ;;; Registers and address modes
+;;;
+;;; - immediates are simply numbers or strings (representing assembler
+;;; labels)
+;;;
+;;; - registers a vector of strings, giving the name of the register
+;;; for the various scales
+;;;
+;;; - a memory reference a list of the form (offset regs...)
 
-(define (immediate x)
-  (if (number? x) x (format~ false "$~A" x)))
+(define (immediate? x) (or (number? x) (string? x)))
+(define (register? x) (vector? x))
+(define (mem? x) (pair? x))
 
-(define (dispmem correction offset reg . reg2)
-  (if (null? reg2)
-      (format~ false "~A(~A)" (- offset correction) (value-sized reg))
-      (format~ false "~A(~A,~A)" (- offset correction) (value-sized reg)
-              (value-sized (first reg2)))))
+(define (mem1 x)
+  (cond ((register? x) (list 0 x))
+        ((immediate? x) (list x))
+        ((mem? x) x)
+        (true (error "bad operand ~S" x))))
 
-(define (mem reg)
-  (format~ false "(~A)" (value-sized reg)))
+(define (mem-list args)
+  (let* ((n 0) (regs ()))
+    (dolist (arg args)
+      (cond ((number? arg)
+             (set! n (+ n (* value-size arg))))
+            ((string? arg)
+             (unless (eq? n 0) (error "adding label to number"))
+             (set! n arg))
+            ((register? arg)
+             (set! regs (cons arg regs)))
+            ((pair? arg)
+             (set! n (+ n (car arg)))
+             (set! regs (append regs (cdr arg))))
+            (true
+             (error "bad operand ~S" arg))))
 
-(define (register? reg)
-  (symbol? reg))
+    (when (> (length regs) 2) (error "too many registers"))
+    (cons n regs)))
 
-(define (insn-operand operand scale)
-  (cond ((symbol? operand)
-         (elt (cdr (assoc operand register-operands)) scale))
-        ((string? operand) operand)
-        ((number? operand) (format~ false "$~D" operand))
-        (true (error "strange operand ~S" operand))))
+(define (mem . args)
+  (mem-list args))
+
+(define (mem1+ m n)
+  (let* ((memm (mem m)))
+    (cons (+ (car memm) n) (cdr memm))))
+
+(define (tagged-mem tag . args)
+  (let* ((m (mem-list args)))
+    (cons (- (car m) tag) (cdr m))))
+
+(define (insn-operand x scale)
+  (cond ((immediate? x) (format~ false "$~A" x))
+        ((vector? x) (vector-ref x scale))
+        ((pair? x)
+         (cond ((null? (cdr x)) (car x))
+               ((null? (cddr x))
+                (format~ false "~A(~A)" (if (eq? 0 (car x)) "" (car x))
+                         (vector-ref (second x) value-scale)))
+               (true
+                (format~ false "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
+                         (vector-ref (second x) value-scale)
+                         (vector-ref (third x) value-scale)))))
+        (true (error "strange operand ~S" x))))
 
 (define (value-sized operand)
   (insn-operand operand value-scale))
@@ -130,8 +170,8 @@
 (define (emit-scale-number out scale oper)
   (unless (= scale number-tag-bits)
     (if (< scale number-tag-bits)
-        (emit-sar out (immediate (- number-tag-bits scale)) oper)
-        (emit-shl out (immediate (- scale number-tag-bits)) oper))))
+        (emit-sar out (- number-tag-bits scale) oper)
+        (emit-shl out (- scale number-tag-bits) oper))))
 
 ;;; Branching, jumping, and output handling
 
@@ -222,7 +262,7 @@
          (let* ((dr (dest-value-reg dest)))
            (unless (eq? operand dr) (emit-mov out operand dr))))
         ((dest-conditional? dest)
-         (emit-cmp out (immediate false-representation) operand)
+         (emit-cmp out false-representation operand)
          (emit-branch out "ne" dest))
         ((dest-discard? dest))
         (true
@@ -234,18 +274,17 @@
 
 (define (emit-convert-cc-value out cc reg)
   (emit-set out cc reg)
-  (emit-shl out (immediate atom-tag-bits) reg 0)
-  (emit-or out (immediate atom-tag) reg 0))
+  (emit-shl out atom-tag-bits reg 0)
+  (emit-or out atom-tag reg 0))
 
 ;;; Heap allocation
 
 (define (emit-alloc out tag-bits size allocreg . scale)
-  (emit-mov out "heap_alloc" allocreg)
+  (emit-mov out (mem "heap_alloc") allocreg)
   (emit-sub out size allocreg)
   (set! scale (if (null? scale) value-scale (car scale)))
-  (unless (= tag-bits scale)
-    (emit-and out (immediate (- (ash 1 tag-bits))) allocreg))
-  (emit-mov out allocreg "heap_alloc"))
+  (unless (= tag-bits scale) (emit-and out (- (ash 1 tag-bits)) allocreg))
+  (emit-mov out allocreg (mem "heap_alloc")))
 
 ;;; Stack handling
 
@@ -269,21 +308,20 @@
 ;;; %nargs.  They return with the result in %funcres.
 
 (define (emit-allocate-locals out n)
-  (emit-sub out (immediate (* value-size n)) %sp))
+  (emit-sub out (* value-size n) %sp))
 
 (define (emit-adjust-frame-base out in-frame-base out-frame-base)
   (unless (= in-frame-base out-frame-base)
-    (emit-add out (immediate (* value-size (- in-frame-base out-frame-base)))
-              %sp)))
+    (emit-add out (* value-size (- in-frame-base out-frame-base)) %sp)))
 
 (define (closure-slot closure index)
-  (dispmem closure-tag (* value-size (1+ index)) closure))
+  (tagged-mem closure-tag closure (1+ index)))
 
 (define (param-slot index)
-  (dispmem 0 (* value-size (+ 2 index)) %bp))
+  (mem %bp (+ 2 index)))
 
 (define (local-slot index)
-  (dispmem (* value-size (+ 1 index)) 0 %bp))
+  (mem %bp (- -1 index)))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode)))
@@ -298,8 +336,7 @@
 ;;; Functions and closures
 
 (define-pure-operator (alloc-closure) result ()
-  (emit-alloc out closure-tag-bits
-              (immediate (* value-size (1+ (attr-ref attrs 'size))))
+  (emit-alloc out closure-tag-bits (* value-size (1+ (attr-ref attrs 'size)))
               result)
   (emit-add out closure-tag result))
 
@@ -314,8 +351,7 @@
          (index 0))
     (codegen closure (dest-value closure-reg) in-frame-base in-frame-base regs
              out)
-    (emit-mov out (immediate (attr-ref attrs 'label))
-              (dispmem closure-tag 0 closure-reg))
+    (emit-mov out (attr-ref attrs 'label) (tagged-mem closure-tag closure-reg))
     (dolist (ref refs)
       (codegen ref (dest-value ref-reg) in-frame-base in-frame-base (cdr regs)
                out)
@@ -360,9 +396,9 @@
 
     (emit-scale-number out value-scale ac)
     ;; get the return address
-    (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    (emit-mov out (mem %bp 1) retaddr)
     ;; calculate the address of the end of the argument area
-    (emit-lea out (dispmem 0 value-size %bp ac) ac)
+    (emit-lea out (mem %bp ac 1) ac)
     ;; restore the frame pointer
     (emit-mov out (mem %bp) %bp)
     ;; now we have all to information we need from the stack, move the
@@ -380,7 +416,7 @@
     (if label
         (emit out "~A ~A # ~S" insn label comment)
         (emit out "~A *~A # ~S" insn
-              (value-sized (dispmem closure-tag 0 %closure)) comment))))
+              (value-sized (tagged-mem closure-tag %closure)) comment))))
 
 (define-reg-use ((call tail-call varargs-tail-call) attrs . args)
   (reg-use-recurse form dest-type-value)
@@ -397,13 +433,13 @@
 
 (define-codegen (call attrs func . args)
   (codegen-call-args out func args in-frame-base)
-  (emit-mov out (immediate (fixnum-representation (length args))) %nargs)
+  (emit-mov out (fixnum-representation (length args)) %nargs)
   (emit-call-or-jump out "call" func)
   (emit-restore-%closure out)
   (emit-convert-value out %funcres dest in-frame-base out-frame-base))
 
 (define (emit-restore-%closure out)
-  (emit-mov out (dispmem value-size 0 %bp) %closure))
+  (emit-mov out (mem %bp -1) %closure))
 
 (define-codegen (tail-call attrs func . args)
   (codegen-call-args out func args in-frame-base)
@@ -411,14 +447,13 @@
          (out-arg-count (length args)))
     (if (= in-arg-count out-arg-count)
         (begin 
-          (copy-tail-call-args out-arg-count %bp value-size
+          (copy-tail-call-args out-arg-count (mem %bp 1)
                                (first general-registers) out)
-          (emit-mov out (immediate (fixnum-representation out-arg-count))
-                    %nargs)
+          (emit-mov out (fixnum-representation out-arg-count) %nargs)
           (emit out "leave")
           (emit-call-or-jump out "jmp" func))
-        (codegen-tail-call out func out-arg-count %bp
-                           (* value-size (+ 1 in-arg-count (- out-arg-count)))
+        (codegen-tail-call out func out-arg-count
+                           (mem %bp (+ 1 in-arg-count (- out-arg-count)))
                            general-registers))))
 
 (define-codegen (varargs-tail-call attrs arg-count func . args)
@@ -430,40 +465,37 @@
     (codegen arg-count (dest-value out-arg-reg) new-frame-base new-frame-base
              general-registers out)
     (emit-scale-number out value-scale out-arg-reg)
-    (emit-lea out (dispmem 0 (* value-size (- 1 out-arg-count)) %bp out-arg-reg)
-              out-arg-reg)
-    (codegen-tail-call out func out-arg-count out-arg-reg 0
+    (emit-lea out (mem %bp (- 1 out-arg-count) out-arg-reg) out-arg-reg)
+    (codegen-tail-call out func out-arg-count out-arg-reg
                        (cdr general-registers))))
 
-(define (codegen-tail-call out func out-arg-count out-arg-reg out-arg-base regs)
+(define (codegen-tail-call out func out-arg-count out-arg-base regs)
   (let* ((tmpreg (first regs))
          (retaddr (second regs))
          (savedfp (third regs)))
     ;; save the return address and caller frame pointer
     (emit-mov out (mem %bp) savedfp)
-    (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    (emit-mov out (mem %bp 1) retaddr)
     ;; copy arguments into the correct place
-    (copy-tail-call-args out-arg-count out-arg-reg out-arg-base tmpreg out)
+    (copy-tail-call-args out-arg-count out-arg-base tmpreg out)
     ;; set %sp to its final value, and set everything up for the call
-    (if (= 0 out-arg-base)
-        (emit-mov out out-arg-reg %sp)
-        (emit-lea out (dispmem 0 out-arg-base out-arg-reg) %sp))
+    (if (register? out-arg-base)
+        (emit-mov out out-arg-base %sp)
+        (emit-lea out (mem out-arg-base) %sp))
     (emit-mov out retaddr (mem %sp))
     (emit-mov out savedfp %bp)
     ;; setting up %nargs must be the last thing we do, since %nargs is
     ;; in general-regs and so might be the same as one of our temp
     ;; regs
-    (emit-mov out (immediate (fixnum-representation out-arg-count)) %nargs)
+    (emit-mov out (fixnum-representation out-arg-count) %nargs)
     (emit-call-or-jump out "jmp" func)))
 
-(define (copy-tail-call-args arg-count arg-reg arg-base tmpreg out)
+(define (copy-tail-call-args arg-count arg-base tmpreg out)
   (when (> arg-count 0)
     (set! arg-count (1- arg-count))
-    (let* ((offset (* value-size arg-count)))
-      (emit-mov out (dispmem 0 offset %sp) tmpreg)
-      (emit-mov out tmpreg
-                (dispmem 0 (+ value-size arg-base offset) arg-reg)))
-    (copy-tail-call-args arg-count arg-reg arg-base tmpreg out)))
+    (emit-mov out (mem %sp arg-count) tmpreg)
+    (emit-mov out tmpreg (mem arg-base 1 arg-count))
+    (copy-tail-call-args arg-count arg-base tmpreg out)))
 
 ;;; Literals
 
@@ -521,7 +553,7 @@
                             (dest-conditional-tlabel dest))))
         ((dest-value? dest)
          (let* ((reg (destination-reg dest regs)))
-           (emit-mov out (immediate (attr-ref attrs 'value)) reg)
+           (emit-mov out (attr-ref attrs 'value) reg)
            (emit-convert-value out reg dest in-frame-base out-frame-base)))
         (true
          (error "can't handle dest ~S" dest))))
@@ -564,16 +596,15 @@
   (quasiquote
     (define-cc-operator ((unquote name) val) "e" ()
       ;; just check the low-order byte
-      (emit-and out (immediate (low-bits-mask (unquote tag-bits))) val 0)
-      (emit-cmp out (immediate (unquote tag)) val 0))))
+      (emit-and out (low-bits-mask (unquote tag-bits)) val 0)
+      (emit-cmp out (unquote tag) val 0))))
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
 ;;; Function call-related internals
 
 (define-cc-operator (check-arg-count) "e" ()
-  (emit-cmp out (immediate (fixnum-representation (attr-ref attrs 'nparams)))
-            %nargs))
+  (emit-cmp out (fixnum-representation (attr-ref attrs 'nparams)) %nargs))
 
 (define-pure-operator (arg-count) result ()
   (emit-mov out %nargs result))
@@ -595,16 +626,16 @@
     (emit-sub out after-arg-count before-arg-count)
     (emit-mov out bodyfunc %closure)
     ;; load the return address
-    (emit-mov out (dispmem 0 value-size %bp) retaddr)
+    (emit-mov out (mem %bp 1) retaddr)
     (emit-scale-number out value-scale before-arg-count)
     ;; work out the new value for %sp based on %bp, but don't put it
     ;; in %sp until we have restored the frame pointer
-    (emit-lea out (dispmem 0 value-size %bp before-arg-count) before-arg-count)
+    (emit-lea out (mem %bp 1 before-arg-count) before-arg-count)
     (emit-mov out (mem %bp) %bp)
     (emit-mov out retaddr (mem before-arg-count))
     (emit-mov out before-arg-count %sp)
     (emit-clear out %nargs)
-    (emit out "jmp *~A" (value-sized (dispmem closure-tag 0 bodyfunc)))))
+    (emit out "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc)))))
 
 (define-reg-use (raw-apply-jump attrs func arg-count)
   (operator-args-reg-use form))
@@ -615,7 +646,7 @@
     (operator-args-codegen form in-frame-base
                            (list* func %nargs (cddr regs-without-%nargs)) out)
     (emit-mov out func %closure)
-    (emit out "leave ; jmp *~A" (value-sized (dispmem closure-tag 0 %closure)))))
+    (emit out "leave ; jmp *~A" (value-sized (tagged-mem closure-tag %closure)))))
 
 ;;; Comparisons
 
@@ -636,53 +667,53 @@
 (define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result (alloc)
-  (emit-alloc out pair-tag-bits (immediate (* 2 value-size)) alloc)
+  (emit-alloc out pair-tag-bits (* 2 value-size) alloc)
   (emit-mov out a (mem alloc))
-  (emit-mov out d (dispmem 0 value-size alloc))
-  (emit-lea out (dispmem 0 pair-tag alloc) result))
+  (emit-mov out d (mem alloc 1))
+  (emit-lea out (mem1+ alloc pair-tag) result))
 
 (define-pure-operator (car a) result ()
-  (emit-mov out (dispmem pair-tag 0 a) result))
+  (emit-mov out (tagged-mem pair-tag a) result))
 
 (define-pure-operator (cdr a) result ()
-  (emit-mov out (dispmem pair-tag value-size a) result))
+  (emit-mov out (tagged-mem pair-tag a 1) result))
 
 (define-operator (rplaca c a) c ()
-  (emit-mov out a (dispmem pair-tag 0 c)))
+  (emit-mov out a (tagged-mem pair-tag c)))
 
 (define-operator (rplacd c d) c ()
-  (emit-mov out d (dispmem pair-tag value-size c)))
+  (emit-mov out d (tagged-mem pair-tag c 1)))
 
 ;;; Boxes
 
 (define-pure-operator (make-box val) result (alloc)
-  (emit-alloc out box-tag-bits (immediate value-size) alloc)
+  (emit-alloc out box-tag-bits value-size alloc)
   (emit-mov out val (mem alloc))
-  (emit-lea out (dispmem 0 box-tag alloc) result))
+  (emit-lea out (mem1+ alloc box-tag) result))
 
 (define-operator (box-set! box val) val ()
-  (emit-mov out val (dispmem box-tag 0 box)))
+  (emit-mov out val (tagged-mem box-tag box)))
 
 (define-operator (box-ref box) result ()
-  (emit-mov out (dispmem box-tag 0 box) result))
+  (emit-mov out (tagged-mem box-tag box) result))
 
 ;;; Symbols
 
 (define-cc-operator (symbol? val) "e" ()
   (let* ((l (gen-label)))
-    (emit-cmp out (immediate lowest-symbol-representation) val)
+    (emit-cmp out lowest-symbol-representation val)
     (emit-jcc out "b" l)
-    (emit-and out (immediate (low-bits-mask atom-tag-bits)) val 0)
-    (emit-cmp out (immediate atom-tag) val 0)
+    (emit-and out (low-bits-mask atom-tag-bits) val 0)
+    (emit-cmp out atom-tag val 0)
     (emit-label out l)))
 
 (define-pure-operator (symbol-name sym) result ()
-  (emit-mov out (dispmem atom-tag 0 sym) result))
+  (emit-mov out (tagged-mem atom-tag sym) result))
 
 (define-pure-operator (raw-make-symbol str) result (alloc)
-  (emit-alloc out atom-tag-bits (immediate value-size) alloc)
+  (emit-alloc out atom-tag-bits value-size alloc)
   (emit-mov out str (mem alloc))
-  (emit-lea out (dispmem 0 atom-tag alloc) result))
+  (emit-lea out (mem1+ alloc atom-tag) result))
 
 ;;;  Numbers
 
@@ -708,7 +739,7 @@
 
 (define-simplify-binary-op * 1 begin) 
 (define-pure-operator (* a b) a ()
-  (emit-sar out (immediate number-tag-bits) a)
+  (emit-sar out number-tag-bits a)
   (emit-imul out b a))
 
 (define-simplify (- attrs a . args)
@@ -739,12 +770,12 @@
                                         general-registers out)
       (begin
         (operator-args-codegen form in-frame-base 
-                               (move-regs-to-front '(%a %c) general-registers)
-                               out)
+                             (move-regs-to-front (list %a %c) general-registers)
+                             out)
         (emit-mov out %a %d)
         (emit-extend-sign-bit out %d)
         (emit-idiv out %c)
-        (emit-shl out (immediate number-tag-bits) %a)
+        (emit-shl out number-tag-bits %a)
         (emit-convert-value out %a dest in-frame-base out-frame-base))))
 
 (define-reg-use (rem attrs a b)
@@ -756,8 +787,8 @@
                                         general-registers out)
       (begin
         (operator-args-codegen form in-frame-base
-                               (move-regs-to-front '(%a %c) general-registers)
-                               out)
+                             (move-regs-to-front (list %a %c) general-registers)
+                             out)
         (emit-mov out %a %d)
         (emit-extend-sign-bit out %d)
         (emit-idiv out %c)
@@ -774,34 +805,31 @@
          (scale (attr-ref attrs 'scale)))
     (emit-mov out len saved-len)
     (emit-scale-number out scale len)
-    (emit-add out (immediate value-size) len)
+    (emit-add out value-size len)
     (emit-alloc out tag-bits len alloc scale)
     (emit-mov out saved-len (mem alloc))
-    (emit-lea out (dispmem 0 tag alloc) result)))
+    (emit-lea out (mem1+ alloc tag) result)))
 
 (define-pure-operator (vec-length vec) result ()
-  (emit-mov out (dispmem (attr-ref attrs 'tag) 0 vec) result))
+  (emit-mov out (tagged-mem (attr-ref attrs 'tag) vec) result))
+
+(define (vec-slot attrs vec index)
+  (mem1+ (tagged-mem (attr-ref attrs 'tag) vec index)
+         (attr-ref attrs 'header-size)))
 
 (define-pure-operator (vec-address vec index) result ()
-  (let* ((tag (attr-ref attrs 'tag))
-         (scale (attr-ref attrs 'scale)))
-    (emit-scale-number out scale index)
-    (emit-lea out (dispmem tag (attr-ref attrs 'header-size) vec index)
-              result)))
+  (emit-scale-number out (attr-ref attrs 'scale) index)
+  (emit-lea out (vec-slot attrs vec index) result))
 
 (define-pure-operator (raw-vec-ref vec index) result ()
   (let* ((scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
-    (emit-movzx out (dispmem (attr-ref attrs 'tag) (attr-ref attrs 'header-size)
-                             vec index)
-                result scale)))
+    (emit-movzx out (vec-slot attrs vec index) result scale)))
 
 (define-operator (raw-vec-set! vec index val) val ()
   (let* ((scale (attr-ref attrs 'scale)))
     (emit-scale-number out scale index)
-    (emit-mov out val (dispmem (attr-ref attrs 'tag)
-                               (attr-ref attrs 'header-size) vec index)
-              scale)))
+    (emit-mov out val (vec-slot attrs vec index) scale)))
 
 (define-simplify (copy-mem attrs src-addr dest-addr len)
   ;; this is an utter hack: we use the presence of the forward attr
@@ -836,7 +864,7 @@
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
     (operator-args-codegen form in-frame-base
-                     (move-regs-to-front '(%si %di %c) general-registers)
+                     (move-regs-to-front (list %si %di %c) general-registers)
                      out)
     (if (attr-ref attrs 'forward)
         (emit out "cld")
@@ -845,9 +873,9 @@
           (emit out "std")
           (emit-mov out %c %a)
           (emit-scale-number out scale %a)
-          (emit-lea out (dispmem (ash 1 scale) 0 %si %a) %si)
-          (emit-lea out (dispmem (ash 1 scale) 0 %di %a) %di)))
-    (emit-sar out (immediate number-tag-bits) %c)
+          (emit-lea out (tagged-mem (ash 1 scale) %si %a) %si)
+          (emit-lea out (tagged-mem (ash 1 scale) %di %a) %di)))
+    (emit-sar out number-tag-bits %c)
     (emit-rep-movs out scale)
     (emit-adjust-frame-base out in-frame-base out-frame-base)))
 
@@ -873,19 +901,19 @@
     (emit-jump out l)))
 
 (define-pure-operator (fixnum->raw val) val ()
-  (emit-sar out (immediate number-tag-bits) val))
+  (emit-sar out number-tag-bits val))
 
 (define-pure-operator (raw->fixnum val) val ()
-  (emit-shl out (immediate number-tag-bits) val))
+  (emit-shl out number-tag-bits val))
 
 (define (emit-set-ac-flag out enable)
   (emit-pushf out)
   (if enable
-      (emit-or out (immediate #x40000) (mem %sp) 2)
+      (emit-or out #x40000 (mem %sp) 2)
       (begin
         ;; we can't use an immediate mask value, due to fixnum limitations
         (define reg (first general-registers))
-        (emit-mov out (immediate #x40000) reg 2)
+        (emit-mov out #x40000 reg 2)
         (emit-not out reg 2)
         (emit-and out reg (mem %sp) 2)))
   (emit-popf out))
@@ -896,5 +924,5 @@
 (define-reg-use (c-global attrs) (convert-value-reg-use dest-type))
 
 (define-codegen (c-global attrs)
-  (emit-convert-value out (attr-ref attrs 'name) dest
+  (emit-convert-value out (mem (attr-ref attrs 'name)) dest
                       in-frame-base out-frame-base))
