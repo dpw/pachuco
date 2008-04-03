@@ -308,9 +308,6 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
-(define (emit-allocate-locals out n)
-  (emit-sub out (* value-size n) %sp))
-
 (define (emit-adjust-frame-base out in-frame-base out-frame-base)
   (unless (= in-frame-base out-frame-base)
     (emit-add out (* value-size (- in-frame-base out-frame-base)) %sp)))
