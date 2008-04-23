@@ -15,7 +15,7 @@
   (collect-closures program)
   (introduce-boxes program)
   (decompose-lambdas program false)
-  (codegen-program program)
+  (codegen-program program (make-asm-output))
   ;(format~ true "~S~%" (debug-form program))
   )
 
@@ -826,16 +826,6 @@
 
 ;;; Top-level sections:  Lambdas and quoted forms
 
-(define (codegen-program program)
-  (let* ((out (make-asm-output)))
-    (codegen-sections program out)
-    (emit-program-prologue out)
-    (reg-use program dest-type-discard)
-    (codegen program dest-discard
-             function-in-frame-base function-out-frame-base
-             general-registers out)
-    (emit-program-epilogue out)))
-
 (define-trivial-walker codegen-sections (out))
 
 (define-codegen-sections (quote quoted)
@@ -856,8 +846,6 @@
     ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body out)
 
-    (emit out ".text")
-
     (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
     (assign-varrec-indices (attr-ref attrs 'params) 'param)
 
@@ -867,16 +855,11 @@
         (when self-closure-varrec
           (varrec-attr-set! self-closure-varrec 'mode 'self))))
 
-    (emit-label out (attr-ref attrs 'label))
-    (emit-function-prologue out)
-    (emit-comment-form out body)
-
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
-    (codegen body dest-discard
-             function-in-frame-base function-out-frame-base
-             general-registers out)))
+    (emit-comment-form out body)
+    (codegen-function (attr-ref attrs 'label) body out)))
 
 (define (wrap-lambda-body attrs body)
   ;; wrap a lambda body with code required to check that the number of

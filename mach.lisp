@@ -8,6 +8,20 @@
     (define (unquote name)
       (make-vector-from-list (quote (unquote variants))))))
 
+(define general-registers ())
+(define general-register-count 0)
+
+;;; %nargs is used to pass the number of arguments to functions.  We
+;;; reuse one of the general-registers for this, which means we have
+;;; to be really careful about invoking the operators that use it
+;;; (check-arg-count, arg-count).
+(define %nargs)
+
+(define (add-general-registers regs)
+  (set! general-register-count (+ general-register-count (length regs)))
+  (set! general-registers (nconc general-registers regs))
+  (set! %nargs (last-elem general-registers)))
+
 ;;; Assembler bits
 
 (defmarco (emit-without-flushing template . args)

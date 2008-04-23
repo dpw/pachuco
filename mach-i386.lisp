@@ -56,17 +56,9 @@
 (define-register %sp false "%sp" "%esp")
 (define-register %bp false "%bp" "%ebp")
 
-(define general-registers (list %a %b %c %d %di))
-(define general-register-count (length general-registers))
-
+(add-general-registers (list %a %b %c %d %di))
 (define %closure %si)
 (define %funcres (first general-registers))
-
-;;; %nargs is use to pass the number of arguments to functions.  We
-;;; reuse one of the general-registers for this, which means we have
-;;; to be really careful about invoking the operators that use it
-;;; (check-arg-count, arg-count).
-(define %nargs (last-elem general-registers))
 
 (define c-callee-saved-regs (list %b %bp))
 

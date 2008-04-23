@@ -8,7 +8,16 @@ CFLAGS := $(CFLAGS) -m32
 endif
 endif
 
-COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp codegen-$(TARGET).lisp driver.lisp
+STACK_REGIME=no-fp
+ifeq ($(STACK_REGIME),no-fp)
+STACK_SOURCES=stack-traditional.lisp stack-no-fp.lisp
+else ifeq ($(STACK_REGIME),fp)
+STACK_SOURCES=stack-traditional.lisp stack-fp.lisp
+else
+$(error unknown stack regime $(STACK_REGIME))
+endif
+
+COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp $(STACK_SOURCES) codegen-$(TARGET).lisp driver.lisp
 
 CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES

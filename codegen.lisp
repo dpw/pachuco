@@ -49,10 +49,10 @@
              (unless (eq? n 0) (error "adding label to number"))
              (set! n arg))
             ((register? arg)
-             (set! regs (cons arg regs)))
+             (set! regs (nconc regs (list arg))))
             ((pair? arg)
              (set! n (+ n (car arg)))
-             (set! regs (append regs (cdr arg))))
+             (set! regs (append regs (copy-list (cdr arg)))))
             (true
              (error "bad operand ~S" arg))))
 
@@ -156,6 +156,11 @@
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-not "not")
 (define-insn-1 emit-idiv "idiv")
+
+(define (emit-ret out imm)
+  (if (= 0 imm)
+      (emit out "ret")
+      (emit out "ret $~D" imm)))
 
 (defmarco (define-insn-0 name insn)
   (quasiquote
@@ -287,47 +292,18 @@
   (unless (= tag-bits scale) (emit-and out (- (ash 1 tag-bits)) allocreg))
   (emit-mov out allocreg (mem "heap_alloc")))
 
-;;; Stack handling
-
-;;; Layout:
-
-;;; param N
-;;; ...
-;;; param 1
-;;; param 0
-;;; Return address
-;;; Saved %bp <--- %bp (and (+ %sp (* frame-base value-size)))
-;;; %closure
-;;; Local var 0
-;;; ...
-;;; Local var N
-;;; in-progress param N
-;;; in-progress param N-1
-;;; ...
-;;;
-;;; Functions are called with the closure in %closure, arg-count in
-;;; %nargs.  They return with the result in %funcres.
-
-(define (emit-adjust-frame-base out in-frame-base out-frame-base)
-  (unless (= in-frame-base out-frame-base)
-    (emit-add out (* value-size (- in-frame-base out-frame-base)) %sp)))
+;;; Variable access
 
 (define (closure-slot closure index)
   (tagged-mem closure-tag closure (1+ index)))
-
-(define (param-slot index)
-  (mem %bp (+ 2 index)))
-
-(define (local-slot index)
-  (mem %bp (- -1 index)))
 
 (define (varrec-operand varrec frame-base)
   (let* ((mode (varrec-attr varrec 'mode)))
     (if (eq? mode 'self) %closure
         (let* ((index (varrec-attr varrec 'index)))
           (cond ((eq? mode 'closure) (closure-slot %closure index))
-                ((eq? mode 'param) (param-slot index))
-                ((eq? mode 'local) (local-slot index))
+                ((eq? mode 'param) (param-slot index frame-base))
+                ((eq? mode 'local) (local-slot index frame-base))
                 ((eq? mode 'register) index)
                 (true (error "strange variable mode ~S" mode)))))))
 
@@ -357,54 +333,13 @@
       (set! index (1+ index)))
     (emit-convert-value out closure-reg dest in-frame-base out-frame-base)))
 
-(define function-in-frame-base 1)
-(define function-out-frame-base 0)
-
-(define (emit-function-prologue out)
-  (emit-push out %bp)
-  (emit-mov out %sp %bp)
-  (emit-push out %closure))
-
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
   0)
 
-(define-codegen (return attrs body)
-  (codegen body (dest-value %funcres) in-frame-base out-frame-base
-           general-registers out)
-  (emit out "leave ; ret $~D" (* value-size (attr-ref attrs 'nparams))))
-
 (define-reg-use (varargs-return attrs arg-count body)
   (operator-args-reg-use form)
   0)
-
-(define-codegen (varargs-return attrs arg-count body)
-  (let* ((regs-without-%funcres (remove %funcres general-registers))
-         (ac (first regs-without-%funcres))
-         (retaddr (second regs-without-%funcres)))
-    (operator-args-codegen form in-frame-base
-                           (list* ac %funcres (cdr regs-without-%funcres)) out)
-    ;; We need to clean up the stack before returning, but the return
-    ;; address is on the top.  And we can't simply pop the return
-    ;; address and later do an indirect branch to it, because that is
-    ;; bad for branch prediction.  So what we effectively do is copy
-    ;; the return address to the end of the argument area, move the
-    ;; stack pointer over the other arguments, and then do a ret.  We
-    ;; also have to restore the frame pointer.
-
-    (emit-scale-number out value-scale ac)
-    ;; get the return address
-    (emit-mov out (mem %bp 1) retaddr)
-    ;; calculate the address of the end of the argument area
-    (emit-lea out (mem %bp ac 1) ac)
-    ;; restore the frame pointer
-    (emit-mov out (mem %bp) %bp)
-    ;; now we have all to information we need from the stack, move the
-    ;; stack pointer up
-    (emit-mov out ac %sp)
-    ;; put the return address on the top of the stack
-    (emit-mov out retaddr (mem ac))
-    (emit out "ret")))
 
 (define (emit-call-or-jump out insn func)
   (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
@@ -433,67 +368,11 @@
   (codegen-call-args out func args in-frame-base)
   (emit-mov out (fixnum-representation (length args)) %nargs)
   (emit-call-or-jump out "call" func)
-  (emit-restore-%closure out)
+  (emit-restore-%closure out in-frame-base)
   (emit-convert-value out %funcres dest in-frame-base out-frame-base))
 
-(define (emit-restore-%closure out)
-  (emit-mov out (mem %bp -1) %closure))
-
-(define-codegen (tail-call attrs func . args)
-  (codegen-call-args out func args in-frame-base)
-  (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (length args)))
-    (if (= in-arg-count out-arg-count)
-        (begin 
-          (copy-tail-call-args out-arg-count (mem %bp 1)
-                               (first general-registers) out)
-          (emit-mov out (fixnum-representation out-arg-count) %nargs)
-          (emit out "leave")
-          (emit-call-or-jump out "jmp" func))
-        (codegen-tail-call out func out-arg-count
-                           (mem %bp (+ 1 in-arg-count (- out-arg-count)))
-                           general-registers))))
-
-(define-codegen (varargs-tail-call attrs arg-count func . args)
-  (let* ((new-frame-base (codegen-call-args out func args in-frame-base))
-         (out-arg-reg (first general-registers))
-         (out-arg-count (length args)))
-    ;; here we assume that the arg-count is just a ref, and so won't
-    ;; access %closure
-    (codegen arg-count (dest-value out-arg-reg) new-frame-base new-frame-base
-             general-registers out)
-    (emit-scale-number out value-scale out-arg-reg)
-    (emit-lea out (mem %bp (- 1 out-arg-count) out-arg-reg) out-arg-reg)
-    (codegen-tail-call out func out-arg-count out-arg-reg
-                       (cdr general-registers))))
-
-(define (codegen-tail-call out func out-arg-count out-arg-base regs)
-  (let* ((tmpreg (first regs))
-         (retaddr (second regs))
-         (savedfp (third regs)))
-    ;; save the return address and caller frame pointer
-    (emit-mov out (mem %bp) savedfp)
-    (emit-mov out (mem %bp 1) retaddr)
-    ;; copy arguments into the correct place
-    (copy-tail-call-args out-arg-count out-arg-base tmpreg out)
-    ;; set %sp to its final value, and set everything up for the call
-    (if (register? out-arg-base)
-        (emit-mov out out-arg-base %sp)
-        (emit-lea out (mem out-arg-base) %sp))
-    (emit-mov out retaddr (mem %sp))
-    (emit-mov out savedfp %bp)
-    ;; setting up %nargs must be the last thing we do, since %nargs is
-    ;; in general-regs and so might be the same as one of our temp
-    ;; regs
-    (emit-mov out (fixnum-representation out-arg-count) %nargs)
-    (emit-call-or-jump out "jmp" func)))
-
-(define (copy-tail-call-args arg-count arg-base tmpreg out)
-  (when (> arg-count 0)
-    (set! arg-count (1- arg-count))
-    (emit-mov out (mem %sp arg-count) tmpreg)
-    (emit-mov out tmpreg (mem arg-base 1 arg-count))
-    (copy-tail-call-args arg-count arg-base tmpreg out)))
+(define (emit-restore-%closure out frame-base)
+  (emit-mov out (closure-address-slot frame-base) %closure))
 
 ;;; Literals
 
@@ -608,7 +487,7 @@
   (emit-mov out %nargs result))
 
 (define-pure-operator (raw-args-base) result ()
-  (emit-lea out (param-slot 0) result))
+  (emit-lea out (param-slot 0 in-frame-base) result))
 
 ;;; Apply support
 
@@ -616,35 +495,8 @@
                                          bodyfunc)
   (operator-args-reg-use form))
 
-(define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
-                                         bodyfunc)
-  (operator-args-codegen form in-frame-base regs out)
-  (bind (before-arg-count after-arg-count bodyfunc retaddr . others) regs
-    ;; calculate how far up to move %sp
-    (emit-sub out after-arg-count before-arg-count)
-    (emit-mov out bodyfunc %closure)
-    ;; load the return address
-    (emit-mov out (mem %bp 1) retaddr)
-    (emit-scale-number out value-scale before-arg-count)
-    ;; work out the new value for %sp based on %bp, but don't put it
-    ;; in %sp until we have restored the frame pointer
-    (emit-lea out (mem %bp 1 before-arg-count) before-arg-count)
-    (emit-mov out (mem %bp) %bp)
-    (emit-mov out retaddr (mem before-arg-count))
-    (emit-mov out before-arg-count %sp)
-    (emit-clear out %nargs)
-    (emit out "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc)))))
-
 (define-reg-use (raw-apply-jump attrs func arg-count)
   (operator-args-reg-use form))
-
-(define-codegen (raw-apply-jump attrs func arg-count)
-  (let* ((regs-without-%nargs (remove %nargs regs))
-         (func (first regs-without-%nargs)))
-    (operator-args-codegen form in-frame-base
-                           (list* func %nargs (cddr regs-without-%nargs)) out)
-    (emit-mov out func %closure)
-    (emit out "leave ; jmp *~A" (value-sized (tagged-mem closure-tag %closure)))))
 
 ;;; Comparisons
 
