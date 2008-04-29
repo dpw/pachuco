@@ -64,15 +64,15 @@
 
 ;;; Bitness-dependent assembler bits
 
-(define (emit-literal out lit)
-  (emit out ".int ~A" lit))
+(define (emit-literal cg lit)
+  (emit cg ".int ~A" lit))
 
 (define (insn-size-suffix scale)
   (elt '("b" "w" "l") scale))
 
-(define (emit-movzx out src dest src-scale . dest-scale)
+(define (emit-movzx cg src dest src-scale . dest-scale)
   (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
-  (emit-movzx-32 out src dest src-scale dest-scale))
+  (emit-movzx-32 cg src dest src-scale dest-scale))
 
-(define (emit-extend-sign-bit out oper)
-  (emit-sar out 31 oper))
+(define (emit-extend-sign-bit cg oper)
+  (emit-sar cg 31 oper))

@@ -28,29 +28,29 @@
   (quasiquote (format~ true (unquote (string-concat template "~%"))
                        (unquote-splicing args))))
 
-(defmarco (emit out template . args)
+(defmarco (emit cg template . args)
   (quasiquote (begin
-    (flush-asm-output (unquote out))
+    (flush-asm-output (unquote cg))
     (emit-without-flushing (unquote template) (unquote-splicing args)))))
 
-(defmarco (emit-comment out template . args)
+(defmarco (emit-comment cg template . args)
   (quasiquote
     (let* ((*print-pretty* false))
       (format~ true (unquote (string-concat "# " template "~%"))
                (unquote-splicing args)))))
 
-(defmarco (emit-frame-push out frame-base reg)
+(defmarco (emit-frame-push cg frame-base reg)
   (quasiquote (begin
-    (emit-push (unquote out) (unquote reg))
+    (emit-push (unquote cg) (unquote reg))
     (set! (unquote frame-base) (1+ (unquote frame-base))))))
 
-(defmarco (emit-frame-pop out frame-base reg)
+(defmarco (emit-frame-pop cg frame-base reg)
   (quasiquote (begin
-    (emit-pop (unquote out) (unquote reg))
+    (emit-pop (unquote cg) (unquote reg))
     (set! (unquote frame-base) (1- (unquote frame-base))))))
 
-(define (emit-movzx-32 out src dest src-scale dest-scale)
-  (emit out "mov~A ~A,~A"
+(define (emit-movzx-32 cg src dest src-scale dest-scale)
+  (emit cg "mov~A ~A,~A"
         (elt (elt '(("b")
                     ("zbw" "w")
                     ("zbl" "zwl" "l")) dest-scale) src-scale)

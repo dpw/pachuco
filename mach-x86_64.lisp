@@ -68,19 +68,19 @@
 
 ;;; Bitness-dependent assembler bits
 
-(define (emit-literal out lit)
-  (emit out ".quad ~A" lit))
+(define (emit-literal cg lit)
+  (emit cg ".quad ~A" lit))
 
 (define (insn-size-suffix scale)
   (elt '("b" "w" "l" "q") scale))
 
-(define (emit-movzx out src dest src-scale . dest-scale)
+(define (emit-movzx cg src dest src-scale . dest-scale)
   (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
   (if (= dest-scale 3)
       (if (= src-scale 3)
-          (emit out "movq ~A, ~A" (value-sized src) (value-sized dest))
-          (emit-movzx-32 out src dest src-scale 2))
-      (emit-movzx-32 out src dest src-scale dest-scale)))
+          (emit cg "movq ~A, ~A" (value-sized src) (value-sized dest))
+          (emit-movzx-32 cg src dest src-scale 2))
+      (emit-movzx-32 cg src dest src-scale dest-scale)))
 
-(define (emit-extend-sign-bit out oper)
-  (emit-sar out 63 oper))
+(define (emit-extend-sign-bit cg oper)
+  (emit-sar cg 63 oper))

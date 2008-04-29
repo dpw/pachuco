@@ -5,10 +5,10 @@
 (define (gen-label)
   (format~ false ".L~D" (set! label-counter (1+ label-counter))))
 
-(define (emit-data out label scale)
-  (emit out ".data")
-  (emit out ".align ~D" (ash 1 scale))
-  (emit-label out label))
+(define (emit-data cg label scale)
+  (emit cg ".data")
+  (emit cg ".align ~D" (ash 1 scale))
+  (emit-label cg label))
 
 (define (escape-string-literal str)
   (string-replace (string-replace (string-replace str "\\" "\\\\")
@@ -103,12 +103,12 @@
 
 (defmarco (define-insn-2 name insn)
   (quasiquote
-    (define ((unquote name) out src dest . scale)
-      (emit-insn-2 out (unquote insn) src dest scale))))
+    (define ((unquote name) cg src dest . scale)
+      (emit-insn-2 cg (unquote insn) src dest scale))))
 
-(define (emit-insn-2 out insn src dest scale)
+(define (emit-insn-2 cg insn src dest scale)
   (set! scale (if (null? scale) value-scale (car scale)))
-  (emit out "~A~A ~A, ~A" insn (insn-size-suffix scale)
+  (emit cg "~A~A ~A, ~A" insn (insn-size-suffix scale)
         (insn-operand src scale) (insn-operand dest scale)))
 
 (define-insn-2 emit-lea "lea")
@@ -122,72 +122,72 @@
 (define-insn-2 emit-shl "shl")
 (define-insn-2 emit-sar "sar")
 
-(define (emit-clear out reg . scale)
+(define (emit-clear cg reg . scale)
   (set! scale (if (null? scale) value-scale (car scale)))
-  (emit-xor out reg reg (min 2 scale)))
+  (emit-xor cg reg reg (min 2 scale)))
 
-(define (emit-mov out src dest . scale)
+(define (emit-mov cg src dest . scale)
   (cond ((and (eq? src 0) (register? dest))
-         (emit-clear out dest))
+         (emit-clear cg dest))
         ((and (number? src) (register? dest) (> src 0) (< src 1000000))
-         (emit-movzx out src dest
+         (emit-movzx cg src dest
                      (min 2 (if (null? scale) value-scale (car scale)))))
         (true
-         (emit-insn-2 out "mov" src dest scale))))
+         (emit-insn-2 cg "mov" src dest scale))))
 
-(define (emit-push out reg)
-  (emit out "push~A ~A" value-insn-size-suffix (value-sized reg)))
+(define (emit-push cg reg)
+  (emit cg "push~A ~A" value-insn-size-suffix (value-sized reg)))
 
-(define (emit-pop out reg)
-  (emit out "pop~A ~A" value-insn-size-suffix (value-sized reg)))
+(define (emit-pop cg reg)
+  (emit cg "pop~A ~A" value-insn-size-suffix (value-sized reg)))
 
-(define (emit-set out cc reg)
-  (emit out "set~A ~A" cc (insn-operand reg 0)))
+(define (emit-set cg cc reg)
+  (emit cg "set~A ~A" cc (insn-operand reg 0)))
 
 (defmarco (define-insn-1 name insn)
   (quasiquote
-    (define ((unquote name) out oper . scale)
-      (emit-insn-1 out (unquote insn) oper
+    (define ((unquote name) cg oper . scale)
+      (emit-insn-1 cg (unquote insn) oper
                    (if (null? scale) value-scale (car scale))))))
 
-(define (emit-insn-1 out insn oper scale)
-  (emit out "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
+(define (emit-insn-1 cg insn oper scale)
+  (emit cg "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-not "not")
 (define-insn-1 emit-idiv "idiv")
 
-(define (emit-ret out imm)
+(define (emit-ret cg imm)
   (if (= 0 imm)
-      (emit out "ret")
-      (emit out "ret $~D" imm)))
+      (emit cg "ret")
+      (emit cg "ret $~D" imm)))
 
 (defmarco (define-insn-0 name insn)
   (quasiquote
-    (define ((unquote name) out . scale)
-      (emit out "~A~A" (unquote insn)
+    (define ((unquote name) cg . scale)
+      (emit cg "~A~A" (unquote insn)
             (insn-size-suffix (if (null? scale) value-scale (car scale)))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-pushf "pushf")
 (define-insn-0 emit-popf "popf")
 
-(define (emit-scale-number out scale oper)
+(define (emit-scale-number cg scale oper)
   (unless (= scale number-tag-bits)
     (if (< scale number-tag-bits)
-        (emit-sar out (- number-tag-bits scale) oper)
-        (emit-shl out (- scale number-tag-bits) oper))))
+        (emit-sar cg (- number-tag-bits scale) oper)
+        (emit-shl cg (- scale number-tag-bits) oper))))
 
 ;;; Branching, jumping, and output handling
 
-(define (make-asm-output) (list false ()))
+(define (make-codegen) (list false ()))
 
-(define (optimizing-jumps? out) (car out))
+(define (optimizing-jumps? cg) (car cg))
 
-(define (merge-pending-labels out to-label)
-  (rplacd (cdr out) (nconc (nmapfor (l (second out)) (cons l to-label))
-                           (cddr out)))
-  (rplaca (cdr out) ()))
+(define (merge-pending-labels cg to-label)
+  (rplacd (cdr cg) (nconc (nmapfor (l (second cg)) (cons l to-label))
+                           (cddr cg)))
+  (rplaca (cdr cg) ()))
 
 (define (scan-merged-labels merged-prev l labels)
   (let* ((merged (cdr merged-prev)))
@@ -198,60 +198,60 @@
               (scan-merged-labels merged-prev l (cons (caar merged) labels)))
             (scan-merged-labels merged l labels)))))
 
-(define (take-merged-labels out l)
-  (scan-merged-labels (cdr out) l ()))
+(define (take-merged-labels cg l)
+  (scan-merged-labels (cdr cg) l ()))
 
-(define (pend-label out l)
-  (rplaca (cdr out) (nconc (take-merged-labels out l)
-                           (cons l (second out)))))
+(define (pend-label cg l)
+  (rplaca (cdr cg) (nconc (take-merged-labels cg l)
+                           (cons l (second cg)))))
 
-(define (emit-label out l)
-  (if (optimizing-jumps? out)
-      (pend-label out l)
-      (dolist (ml (cons l (take-merged-labels out l)))
+(define (emit-label cg l)
+  (if (optimizing-jumps? cg)
+      (pend-label cg l)
+      (dolist (ml (cons l (take-merged-labels cg l)))
         (emit-without-flushing "~A:" l))))
 
-(define (emit-jump out label)
-  (if (optimizing-jumps? out)
-      (merge-pending-labels out label)
-      (rplaca out label)))
+(define (emit-jump cg label)
+  (if (optimizing-jumps? cg)
+      (merge-pending-labels cg label)
+      (rplaca cg label)))
 
-(define (emit-branch out cc conddest)
-  (flush-asm-output out)
-  (rplaca out (list cc (dest-conditional-tlabel conddest)
+(define (emit-branch cg cc conddest)
+  (flush-asm-output cg)
+  (rplaca cg (list cc (dest-conditional-tlabel conddest)
                     (dest-conditional-flabel conddest))))
 
-(define (emit-jcc out cc label)
+(define (emit-jcc cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
 
 (define (emit-jmp label)
   (emit-without-flushing "jmp ~A" label))
 
-(define (flush-asm-output out)
-  (when (optimizing-jumps? out)
-    (let* ((branch (first out))
-           (pending-labels (second out)))
+(define (flush-asm-output cg)
+  (when (optimizing-jumps? cg)
+    (let* ((branch (first cg))
+           (pending-labels (second cg)))
       (if (pair? branch)
           (let* ((cc (first branch))
                  (tlabel (second branch))
                  (flabel (third branch)))
             (if (member? tlabel pending-labels)
                 (unless (member? flabel pending-labels)
-                  (emit-jcc out (negate-cc cc) flabel))
+                  (emit-jcc cg (negate-cc cc) flabel))
                 (begin
-                 (emit-jcc out cc tlabel)
+                 (emit-jcc cg cc tlabel)
                  (unless (member? flabel pending-labels)
                    (emit-jmp flabel)))))
           (unless (member? branch pending-labels)
             (emit-jmp branch)))
 
       (if (null? pending-labels)
-          (emit-comment out "unreachable")
+          (emit-comment cg "unreachable")
           (dolist (l pending-labels)
             (emit-without-flushing "~A:" l)))
 
-      (rplaca out false)
-      (rplaca (cdr out) ()))))
+      (rplaca cg false)
+      (rplaca (cdr cg) ()))))
 
 ;;; Dest conversions
 
@@ -261,36 +261,36 @@
 (define (destination-reg dest regs)
   (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
-(define (emit-convert-value out operand dest in-frame-base out-frame-base)
+(define (emit-convert-value cg operand dest in-frame-base out-frame-base)
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
-           (unless (eq? operand dr) (emit-mov out operand dr)))
-         (emit-adjust-frame-base out in-frame-base out-frame-base))
+           (unless (eq? operand dr) (emit-mov cg operand dr)))
+         (emit-adjust-frame-base cg in-frame-base out-frame-base))
         ((dest-conditional? dest)
-         (emit-adjust-frame-base out in-frame-base out-frame-base)
-         (emit-cmp out false-representation operand)
-         (emit-branch out "ne" dest))
+         (emit-adjust-frame-base cg in-frame-base out-frame-base)
+         (emit-cmp cg false-representation operand)
+         (emit-branch cg "ne" dest))
         ((dest-discard? dest)
-         (emit-adjust-frame-base out in-frame-base out-frame-base))
+         (emit-adjust-frame-base cg in-frame-base out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
 
-(define (emit-prepare-convert-cc-value out reg)
-  (emit-clear out reg))
+(define (emit-prepare-convert-cc-value cg reg)
+  (emit-clear cg reg))
 
-(define (emit-convert-cc-value out cc reg)
-  (emit-set out cc reg)
-  (emit-shl out atom-tag-bits reg 0)
-  (emit-or out atom-tag reg 0))
+(define (emit-convert-cc-value cg cc reg)
+  (emit-set cg cc reg)
+  (emit-shl cg atom-tag-bits reg 0)
+  (emit-or cg atom-tag reg 0))
 
 ;;; Heap allocation
 
-(define (emit-alloc out tag-bits size allocreg . scale)
-  (emit-mov out (mem "heap_alloc") allocreg)
-  (emit-sub out size allocreg)
+(define (emit-alloc cg tag-bits size allocreg . scale)
+  (emit-mov cg (mem "heap_alloc") allocreg)
+  (emit-sub cg size allocreg)
   (set! scale (if (null? scale) value-scale (car scale)))
-  (unless (= tag-bits scale) (emit-and out (- (ash 1 tag-bits)) allocreg))
-  (emit-mov out allocreg (mem "heap_alloc")))
+  (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
+  (emit-mov cg allocreg (mem "heap_alloc")))
 
 ;;; Variable access
 
@@ -310,9 +310,9 @@
 ;;; Functions and closures
 
 (define-pure-operator (alloc-closure) result ()
-  (emit-alloc out closure-tag-bits (* value-size (1+ (attr-ref attrs 'size)))
+  (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'size)))
               result)
-  (emit-add out closure-tag result))
+  (emit-add cg closure-tag result))
 
 (define-reg-use (fill-closure attrs closure . refs)
   (let* ((ref-rus (mapfor (ref refs) (reg-use ref dest-type-value))))
@@ -324,14 +324,14 @@
          (ref-reg (second regs))
          (index 0))
     (codegen closure (dest-value closure-reg) in-frame-base in-frame-base regs
-             out)
-    (emit-mov out (attr-ref attrs 'label) (tagged-mem closure-tag closure-reg))
+             cg)
+    (emit-mov cg (attr-ref attrs 'label) (tagged-mem closure-tag closure-reg))
     (dolist (ref refs)
       (codegen ref (dest-value ref-reg) in-frame-base in-frame-base (cdr regs)
-               out)
-      (emit-mov out ref-reg (closure-slot closure-reg index))
+               cg)
+      (emit-mov cg ref-reg (closure-slot closure-reg index))
       (set! index (1+ index)))
-    (emit-convert-value out closure-reg dest in-frame-base out-frame-base)))
+    (emit-convert-value cg closure-reg dest in-frame-base out-frame-base)))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -341,77 +341,77 @@
   (operator-args-reg-use form)
   0)
 
-(define (emit-call-or-jump out insn func)
+(define (emit-call-or-jump cg insn func)
   (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
          (label (and func-varrec
                      (varrec-origin-attr func-varrec 'lambda-label)))
          (comment (comment-form func)))
     (if label
-        (emit out "~A ~A # ~S" insn label comment)
-        (emit out "~A *~A # ~S" insn
+        (emit cg "~A ~A # ~S" insn label comment)
+        (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
 
 (define-reg-use ((call tail-call varargs-tail-call) attrs . args)
   (reg-use-recurse form dest-type-value)
   general-register-count)
 
-(define (codegen-call-args out func args in-frame-base)
+(define (codegen-call-args cg func args in-frame-base)
   (dolist (arg (reverse args))
     (codegen arg (dest-value (first general-registers))
-             in-frame-base in-frame-base general-registers out)
-    (emit-frame-push out in-frame-base (first general-registers)))
+             in-frame-base in-frame-base general-registers cg)
+    (emit-frame-push cg in-frame-base (first general-registers)))
   (codegen func (dest-value %closure)
-           in-frame-base in-frame-base general-registers out)
+           in-frame-base in-frame-base general-registers cg)
   in-frame-base)
 
 (define-codegen (call attrs func . args)
-  (codegen-call-args out func args in-frame-base)
-  (emit-mov out (fixnum-representation (length args)) %nargs)
-  (emit-call-or-jump out "call" func)
-  (emit-restore-%closure out in-frame-base)
-  (emit-convert-value out %funcres dest in-frame-base out-frame-base))
+  (codegen-call-args cg func args in-frame-base)
+  (emit-mov cg (fixnum-representation (length args)) %nargs)
+  (emit-call-or-jump cg "call" func)
+  (emit-restore-%closure cg in-frame-base)
+  (emit-convert-value cg %funcres dest in-frame-base out-frame-base))
 
-(define (emit-restore-%closure out frame-base)
-  (emit-mov out (closure-address-slot frame-base) %closure))
+(define (emit-restore-%closure cg frame-base)
+  (emit-mov cg (closure-address-slot frame-base) %closure))
 
 ;;; Literals
 
-(define (codegen-quoted quoted out)
-  (cond ((pair? quoted) (codegen-quoted-pair quoted out))
+(define (codegen-quoted quoted cg)
+  (cond ((pair? quoted) (codegen-quoted-pair quoted cg))
         ((number? quoted) (fixnum-representation quoted))
         ((character? quoted) (fixnum-representation (character-code quoted)))
-        ((string? quoted) (codegen-quoted-string quoted out))
+        ((string? quoted) (codegen-quoted-string quoted cg))
         (true (let* ((c (assoc quoted simple-representations)))
              (cond (c (cdr c))
-                   ((symbol? quoted) (codegen-quoted-symbol quoted out))
+                   ((symbol? quoted) (codegen-quoted-symbol quoted cg))
                    (true (error "unrecognised quoted form ~S" quoted)))))))
 
-(define (codegen-quoted-pair quoted out)
+(define (codegen-quoted-pair quoted cg)
   (let* ((label (gen-label))
-         (a (codegen-quoted (car quoted) out))
-         (d (codegen-quoted (cdr quoted) out)))
-    (emit-data out label pair-tag-bits)
-    (emit-literal out a)
-    (emit-literal out d)
+         (a (codegen-quoted (car quoted) cg))
+         (d (codegen-quoted (cdr quoted) cg)))
+    (emit-data cg label pair-tag-bits)
+    (emit-literal cg a)
+    (emit-literal cg d)
     (format~ false "~A+~D" label pair-tag)))
 
-(define (codegen-quoted-string str out)
+(define (codegen-quoted-string str cg)
   (let* ((label (gen-label)))
-    (emit-data out label string-tag-bits)
-    (emit-literal out (fixnum-representation (string-length str)))
-    (emit out ".ascii \"~A\"" (escape-string-literal str))
+    (emit-data cg label string-tag-bits)
+    (emit-literal cg (fixnum-representation (string-length str)))
+    (emit cg ".ascii \"~A\"" (escape-string-literal str))
     (format~ false "~A+~D" label string-tag)))
 
 (define emitted-symbols ())
 
-(define (codegen-quoted-symbol sym out)
+(define (codegen-quoted-symbol sym cg)
   (let* ((emitted (assoc sym emitted-symbols)))
     (if emitted (cdr emitted)
         (let* ((label (gen-label))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
-                                            out)))
-          (emit-data out label atom-tag-bits)
-          (emit-literal out name)
+                                            cg)))
+          (emit-data cg label atom-tag-bits)
+          (emit-literal cg name)
           (let* ((lit (format~ false "~A+~D" label atom-tag)))
             (set! emitted-symbols (acons sym lit emitted-symbols))
             lit)))))
@@ -422,16 +422,16 @@
 
 (define-codegen (quote attrs)
   (cond ((dest-discard? dest)
-         (emit-adjust-frame-base out in-frame-base out-frame-base))
+         (emit-adjust-frame-base cg in-frame-base out-frame-base))
         ((dest-conditional? dest)
-         (emit-adjust-frame-base out in-frame-base out-frame-base)
-         (emit-jump out (if (= false-representation (attr-ref attrs 'value))
+         (emit-adjust-frame-base cg in-frame-base out-frame-base)
+         (emit-jump cg (if (= false-representation (attr-ref attrs 'value))
                             (dest-conditional-flabel dest)
                             (dest-conditional-tlabel dest))))
         ((dest-value? dest)
          (let* ((reg (destination-reg dest regs)))
-           (emit-mov out (attr-ref attrs 'value) reg)
-           (emit-convert-value out reg dest in-frame-base out-frame-base)))
+           (emit-mov cg (attr-ref attrs 'value) reg)
+           (emit-convert-value cg reg dest in-frame-base out-frame-base)))
         (true
          (error "can't handle dest ~S" dest))))
 
@@ -446,25 +446,25 @@
            (eq? 'register (varrec-attr varrec 'mode)))
       (begin
         (codegen val (dest-value (varrec-attr varrec 'index))
-                 in-frame-base in-frame-base regs out)
-        (emit-adjust-frame-base out in-frame-base out-frame-base))
+                 in-frame-base in-frame-base regs cg)
+        (emit-adjust-frame-base cg in-frame-base out-frame-base))
       (let* ((reg (destination-reg dest regs)))
-        (codegen val (dest-value reg) in-frame-base in-frame-base regs out)
-        (emit-mov out reg (varrec-operand varrec in-frame-base))
-        (emit-convert-value out reg dest in-frame-base out-frame-base))))
+        (codegen val (dest-value reg) in-frame-base in-frame-base regs cg)
+        (emit-mov cg reg (varrec-operand varrec in-frame-base))
+        (emit-convert-value cg reg dest in-frame-base out-frame-base))))
 
 (define-codegen (define varrec val)
   (error "codegen for define"))
 
-(define (codegen-define varrec val frame-base regs out)
+(define (codegen-define varrec val frame-base regs cg)
   (let* ((reg (first regs)))
-    (codegen val (dest-value reg) frame-base frame-base regs out)
-    (emit-push out reg)))
+    (codegen val (dest-value reg) frame-base frame-base regs cg)
+    (emit-push cg reg)))
 
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 
 (define-codegen (ref varrec)
-  (emit-convert-value out (varrec-operand varrec in-frame-base)
+  (emit-convert-value cg (varrec-operand varrec in-frame-base)
                       dest in-frame-base out-frame-base))
 
 ;;; Operator definitions
@@ -473,21 +473,21 @@
   (quasiquote
     (define-cc-operator ((unquote name) val) "e" ()
       ;; just check the low-order byte
-      (emit-and out (low-bits-mask (unquote tag-bits)) val 0)
-      (emit-cmp out (unquote tag) val 0))))
+      (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
+      (emit-cmp cg (unquote tag) val 0))))
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
 ;;; Function call-related internals
 
 (define-cc-operator (check-arg-count) "e" ()
-  (emit-cmp out (fixnum-representation (attr-ref attrs 'nparams)) %nargs))
+  (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs))
 
 (define-pure-operator (arg-count) result ()
-  (emit-mov out %nargs result))
+  (emit-mov cg %nargs result))
 
 (define-pure-operator (raw-args-base) result ()
-  (emit-lea out (param-slot 0 in-frame-base) result))
+  (emit-lea cg (param-slot 0 in-frame-base) result))
 
 ;;; Apply support
 
@@ -502,7 +502,7 @@
 
 (defmarco (define-cmp-operator name cc)
   (quasiquote (define-cc-operator ((unquote name) a b) (unquote cc) () 
-                (emit-cmp out b a))))
+                (emit-cmp cg b a))))
  
 (define-cmp-operator eq? "e")
 (define-cmp-operator = "e")
@@ -517,53 +517,53 @@
 (define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result (alloc)
-  (emit-alloc out pair-tag-bits (* 2 value-size) alloc)
-  (emit-mov out a (mem alloc))
-  (emit-mov out d (mem alloc 1))
-  (emit-lea out (mem1+ alloc pair-tag) result))
+  (emit-alloc cg pair-tag-bits (* 2 value-size) alloc)
+  (emit-mov cg a (mem alloc))
+  (emit-mov cg d (mem alloc 1))
+  (emit-lea cg (mem1+ alloc pair-tag) result))
 
 (define-pure-operator (car a) result ()
-  (emit-mov out (tagged-mem pair-tag a) result))
+  (emit-mov cg (tagged-mem pair-tag a) result))
 
 (define-pure-operator (cdr a) result ()
-  (emit-mov out (tagged-mem pair-tag a 1) result))
+  (emit-mov cg (tagged-mem pair-tag a 1) result))
 
 (define-operator (rplaca c a) c ()
-  (emit-mov out a (tagged-mem pair-tag c)))
+  (emit-mov cg a (tagged-mem pair-tag c)))
 
 (define-operator (rplacd c d) c ()
-  (emit-mov out d (tagged-mem pair-tag c 1)))
+  (emit-mov cg d (tagged-mem pair-tag c 1)))
 
 ;;; Boxes
 
 (define-pure-operator (make-box val) result (alloc)
-  (emit-alloc out box-tag-bits value-size alloc)
-  (emit-mov out val (mem alloc))
-  (emit-lea out (mem1+ alloc box-tag) result))
+  (emit-alloc cg box-tag-bits value-size alloc)
+  (emit-mov cg val (mem alloc))
+  (emit-lea cg (mem1+ alloc box-tag) result))
 
 (define-operator (box-set! box val) val ()
-  (emit-mov out val (tagged-mem box-tag box)))
+  (emit-mov cg val (tagged-mem box-tag box)))
 
 (define-operator (box-ref box) result ()
-  (emit-mov out (tagged-mem box-tag box) result))
+  (emit-mov cg (tagged-mem box-tag box) result))
 
 ;;; Symbols
 
 (define-cc-operator (symbol? val) "e" ()
   (let* ((l (gen-label)))
-    (emit-cmp out lowest-symbol-representation val)
-    (emit-jcc out "b" l)
-    (emit-and out (low-bits-mask atom-tag-bits) val 0)
-    (emit-cmp out atom-tag val 0)
-    (emit-label out l)))
+    (emit-cmp cg lowest-symbol-representation val)
+    (emit-jcc cg "b" l)
+    (emit-and cg (low-bits-mask atom-tag-bits) val 0)
+    (emit-cmp cg atom-tag val 0)
+    (emit-label cg l)))
 
 (define-pure-operator (symbol-name sym) result ()
-  (emit-mov out (tagged-mem atom-tag sym) result))
+  (emit-mov cg (tagged-mem atom-tag sym) result))
 
 (define-pure-operator (raw-make-symbol str) result (alloc)
-  (emit-alloc out atom-tag-bits value-size alloc)
-  (emit-mov out str (mem alloc))
-  (emit-lea out (mem1+ alloc atom-tag) result))
+  (emit-alloc cg atom-tag-bits value-size alloc)
+  (emit-mov cg str (mem alloc))
+  (emit-lea cg (mem1+ alloc atom-tag) result))
 
 ;;;  Numbers
 
@@ -585,12 +585,12 @@
 
 (define-simplify-binary-op + 0 begin) 
 (define-pure-operator (+ a b) a ()
-  (emit-add out b a))
+  (emit-add cg b a))
 
 (define-simplify-binary-op * 1 begin) 
 (define-pure-operator (* a b) a ()
-  (emit-sar out number-tag-bits a)
-  (emit-imul out b a))
+  (emit-sar cg number-tag-bits a)
+  (emit-imul cg b a))
 
 (define-simplify (- attrs a . args)
   (simplify-recurse form)
@@ -599,10 +599,10 @@
                       (reduce~ a args (lambda (a b) (list '- () a b))))))
 
 (define-pure-operator (negate a) a ()
-  (emit-neg out a))
+  (emit-neg cg a))
 
 (define-pure-operator (- a b) a ()
-  (emit-sub out b a))
+  (emit-sub cg b a))
 
 (define (div-operator-reg-use form dest-type)
   (if (dest-type-discard? dest-type)
@@ -617,16 +617,16 @@
 (define-codegen (truncate attrs a b)
   (if (dest-discard? dest)
       (operator-args-codegen-discarding form in-frame-base out-frame-base
-                                        general-registers out)
+                                        general-registers cg)
       (begin
         (operator-args-codegen form in-frame-base 
                              (move-regs-to-front (list %a %c) general-registers)
-                             out)
-        (emit-mov out %a %d)
-        (emit-extend-sign-bit out %d)
-        (emit-idiv out %c)
-        (emit-shl out number-tag-bits %a)
-        (emit-convert-value out %a dest in-frame-base out-frame-base))))
+                             cg)
+        (emit-mov cg %a %d)
+        (emit-extend-sign-bit cg %d)
+        (emit-idiv cg %c)
+        (emit-shl cg number-tag-bits %a)
+        (emit-convert-value cg %a dest in-frame-base out-frame-base))))
 
 (define-reg-use (rem attrs a b)
   (div-operator-reg-use form dest-type))
@@ -634,15 +634,15 @@
 (define-codegen (rem attrs a b)
   (if (dest-discard? dest)
       (operator-args-codegen-discarding form in-frame-base out-frame-base 
-                                        general-registers out)
+                                        general-registers cg)
       (begin
         (operator-args-codegen form in-frame-base
                              (move-regs-to-front (list %a %c) general-registers)
-                             out)
-        (emit-mov out %a %d)
-        (emit-extend-sign-bit out %d)
-        (emit-idiv out %c)
-        (emit-convert-value out %d dest in-frame-base out-frame-base))))
+                             cg)
+        (emit-mov cg %a %d)
+        (emit-extend-sign-bit cg %d)
+        (emit-idiv cg %c)
+        (emit-convert-value cg %d dest in-frame-base out-frame-base))))
 
 ;;; Strings and vectors
 
@@ -653,33 +653,33 @@
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
-    (emit-mov out len saved-len)
-    (emit-scale-number out scale len)
-    (emit-add out value-size len)
-    (emit-alloc out tag-bits len alloc scale)
-    (emit-mov out saved-len (mem alloc))
-    (emit-lea out (mem1+ alloc tag) result)))
+    (emit-mov cg len saved-len)
+    (emit-scale-number cg scale len)
+    (emit-add cg value-size len)
+    (emit-alloc cg tag-bits len alloc scale)
+    (emit-mov cg saved-len (mem alloc))
+    (emit-lea cg (mem1+ alloc tag) result)))
 
 (define-pure-operator (vec-length vec) result ()
-  (emit-mov out (tagged-mem (attr-ref attrs 'tag) vec) result))
+  (emit-mov cg (tagged-mem (attr-ref attrs 'tag) vec) result))
 
 (define (vec-slot attrs vec index)
   (mem1+ (tagged-mem (attr-ref attrs 'tag) vec index)
          (attr-ref attrs 'header-size)))
 
 (define-pure-operator (vec-address vec index) result ()
-  (emit-scale-number out (attr-ref attrs 'scale) index)
-  (emit-lea out (vec-slot attrs vec index) result))
+  (emit-scale-number cg (attr-ref attrs 'scale) index)
+  (emit-lea cg (vec-slot attrs vec index) result))
 
 (define-pure-operator (raw-vec-ref vec index) result ()
   (let* ((scale (attr-ref attrs 'scale)))
-    (emit-scale-number out scale index)
-    (emit-movzx out (vec-slot attrs vec index) result scale)))
+    (emit-scale-number cg scale index)
+    (emit-movzx cg (vec-slot attrs vec index) result scale)))
 
 (define-operator (raw-vec-set! vec index val) val ()
   (let* ((scale (attr-ref attrs 'scale)))
-    (emit-scale-number out scale index)
-    (emit-mov out val (vec-slot attrs vec index) scale)))
+    (emit-scale-number cg scale index)
+    (emit-mov cg val (vec-slot attrs vec index) scale)))
 
 (define-simplify (copy-mem attrs src-addr dest-addr len)
   ;; this is an utter hack: we use the presence of the forward attr
@@ -715,58 +715,58 @@
          (scale (attr-ref attrs 'scale)))
     (operator-args-codegen form in-frame-base
                      (move-regs-to-front (list %si %di %c) general-registers)
-                     out)
+                     cg)
     (if (attr-ref attrs 'forward)
-        (emit out "cld")
+        (emit cg "cld")
         (begin
           ;; when coping backwards, we need to offset src-addr and dest-addr
-          (emit out "std")
-          (emit-mov out %c %a)
-          (emit-scale-number out scale %a)
-          (emit-lea out (tagged-mem (ash 1 scale) %si %a) %si)
-          (emit-lea out (tagged-mem (ash 1 scale) %di %a) %di)))
-    (emit-sar out number-tag-bits %c)
-    (emit-rep-movs out scale)
-    (emit-adjust-frame-base out in-frame-base out-frame-base)))
+          (emit cg "std")
+          (emit-mov cg %c %a)
+          (emit-scale-number cg scale %a)
+          (emit-lea cg (tagged-mem (ash 1 scale) %si %a) %si)
+          (emit-lea cg (tagged-mem (ash 1 scale) %di %a) %di)))
+    (emit-sar cg number-tag-bits %c)
+    (emit-rep-movs cg scale)
+    (emit-adjust-frame-base cg in-frame-base out-frame-base)))
 
 ;;; Raw memory access
 
 (define-pure-operator (raw-ref addr) result ()
-  (emit-movzx out (mem addr) result (attr-ref attrs 'scale)))
+  (emit-movzx cg (mem addr) result (attr-ref attrs 'scale)))
 
 (define-operator (raw-set! addr val) val ()
-  (emit-mov out val (mem addr) (attr-ref attrs 'scale)))
+  (emit-mov cg val (mem addr) (attr-ref attrs 'scale)))
 
 ;;; Misc. runtime
 
 (define-reg-use (error-halt attrs message args) 0)
 (define-codegen (error-halt attrs message args)
   (let* ((l (gen-label)))
-    (emit-label out l)
-    (emit-comment out "error-halt: ~S"
+    (emit-label cg l)
+    (emit-comment cg "error-halt: ~S"
                   (if (eq? 'quote (first message)) 
                       (form-attr message 'quoted)
                       "unknown"))
-    (emit out "hlt")
-    (emit-jump out l)))
+    (emit cg "hlt")
+    (emit-jump cg l)))
 
 (define-pure-operator (fixnum->raw val) val ()
-  (emit-sar out number-tag-bits val))
+  (emit-sar cg number-tag-bits val))
 
 (define-pure-operator (raw->fixnum val) val ()
-  (emit-shl out number-tag-bits val))
+  (emit-shl cg number-tag-bits val))
 
-(define (emit-set-ac-flag out enable)
-  (emit-pushf out)
+(define (emit-set-ac-flag cg enable)
+  (emit-pushf cg)
   (if enable
-      (emit-or out #x40000 (mem %sp) 2)
+      (emit-or cg #x40000 (mem %sp) 2)
       (begin
         ;; we can't use an immediate mask value, due to fixnum limitations
         (define reg (first general-registers))
-        (emit-mov out #x40000 reg 2)
-        (emit-not out reg 2)
-        (emit-and out reg (mem %sp) 2)))
-  (emit-popf out))
+        (emit-mov cg #x40000 reg 2)
+        (emit-not cg reg 2)
+        (emit-and cg reg (mem %sp) 2)))
+  (emit-popf cg))
 
 (define-simplify (c-global name)
   (rplaca (cdr form) (list (cons 'name name))))
@@ -774,5 +774,5 @@
 (define-reg-use (c-global attrs) (convert-value-reg-use dest-type))
 
 (define-codegen (c-global attrs)
-  (emit-convert-value out (mem (attr-ref attrs 'name)) dest
+  (emit-convert-value cg (mem (attr-ref attrs 'name)) dest
                       in-frame-base out-frame-base))

@@ -12,17 +12,17 @@
     (error "too many arguments to c-call"))
   (operator-args-codegen form in-frame-base
                       (move-regs-to-front c-call-arg-regs general-registers)
-                      out)
-  (emit out "cld")
-  (emit-set-ac-flag out false)
+                      cg)
+  (emit cg "cld")
+  (emit-set-ac-flag cg false)
 
   ;; C ABI requires us to align stack to 16 byte bundary
-  (emit-mov out %sp %b)
-  (emit-and out -16 %sp)
-  (emit out "call ~A" (attr-ref attrs 'c-function-name))
-  (emit-mov out %b %sp)
+  (emit-mov cg %sp %b)
+  (emit-and cg -16 %sp)
+  (emit cg "call ~A" (attr-ref attrs 'c-function-name))
+  (emit-mov cg %b %sp)
   
-  (emit-set-ac-flag out true)
+  (emit-set-ac-flag cg true)
   (unless (member? %closure c-callee-saved-regs)
-    (emit-restore-%closure out in-frame-base))
-  (emit-convert-value out %a dest in-frame-base out-frame-base))
+    (emit-restore-%closure cg in-frame-base))
+  (emit-convert-value cg %a dest in-frame-base out-frame-base))
