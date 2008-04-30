@@ -78,16 +78,16 @@
     (emit-call-or-jump cg "jmp" func)))
 
 (define-codegen (tail-call attrs func . args)
-  (let* ((new-frame-base (codegen-call-args cg func args in-frame-base))
-         (in-arg-count (attr-ref attrs 'nparams))
+  (set! in-frame-base (codegen-call-args cg func args in-frame-base))
+  (let* ((in-arg-count (attr-ref attrs 'nparams))
          (out-arg-count (length args))
-         (retaddr (return-address-slot new-frame-base))
+         (retaddr (return-address-slot in-frame-base))
          (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
         (begin 
           (copy-tail-call-args out-arg-count out-retaddr 
                                (first general-registers) cg)
-          (emit-adjust-frame-base cg new-frame-base out-frame-base)
+          (emit-adjust-frame-base cg in-frame-base out-frame-base)
           ;; setting up %nargs must be the last thing we do, since
           ;; %nargs is in general-regs and so might be the same as one
           ;; of our temp regs
@@ -97,14 +97,14 @@
                            general-registers cg))))
 
 (define-codegen (varargs-tail-call attrs arg-count func . args)
-  (let* ((new-frame-base (codegen-call-args cg func args in-frame-base))
-         (in-arg-count-reg (first general-registers))
+  (set! in-frame-base (codegen-call-args cg func args in-frame-base))
+  (let* ((in-arg-count-reg (first general-registers))
          (out-arg-count (length args))
-         (retaddr (return-address-slot new-frame-base)))
+         (retaddr (return-address-slot in-frame-base)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
     (codegen arg-count (dest-value in-arg-count-reg)
-             new-frame-base new-frame-base general-registers cg)
+             in-frame-base in-frame-base general-registers cg)
     (emit-scale-number cg value-scale in-arg-count-reg)
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
