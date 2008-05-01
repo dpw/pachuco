@@ -67,6 +67,8 @@
 
   (assert-result (filterfor (x '(0 1 2 3 4 5)) (= 0 (rem x 2)))
                  '(0 2 4))
+  (assert-result (nfilterfor (x (list 0 1 2 3 4 5)) (= 0 (rem x 2)))
+                 '(0 2 4))
 
   (assert-result (sublist '(1 2 3) 1) '(2 3))
   (assert-result (sublist '(1 2 3 4) 1 3) '(2 3))

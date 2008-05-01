@@ -43,6 +43,8 @@
 
 (defmacro filterfor ((var l) &rest body)
   `(mapcan #'(lambda (,var) (and (progn ,@body) (list ,var))) ,l))
+(defmacro nfilterfor ((var l) &rest body)
+  `(filterfor (,var ,l) ,@body))
 
 (defmacro nmapfor ((var l) &rest body)
   (let ((c (gensym)))
