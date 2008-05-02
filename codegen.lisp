@@ -1,5 +1,17 @@
 ;;; Code generation
 
+(define (make-codegen) (list false ()))
+
+(define (codegen-deferred-jump cg) (car cg))
+(define (codegen-set-deferred-jump! cg jump) (rplaca cg jump))
+
+(define (codegen-here-labels cg) (cadr cg))
+(define (codegen-set-here-labels! cg labels) (rplaca (cdr cg) labels))
+
+(define (codegen-redirect-labels cg) (cddr cg))
+(define (codegen-set-redirect-labels! cg rl) (rplacd (cdr cg) rl))
+
+
 (define label-counter 0)
 
 (define (gen-label)
@@ -180,78 +192,92 @@
 
 ;;; Branching, jumping, and output handling
 
-(define (make-codegen) (list false ()))
-
-(define (optimizing-jumps? cg) (car cg))
-
-(define (merge-pending-labels cg to-label)
-  (rplacd (cdr cg) (nconc (nmapfor (l (second cg)) (cons l to-label))
-                           (cddr cg)))
-  (rplaca (cdr cg) ()))
-
-(define (scan-merged-labels merged-prev l labels)
-  (let* ((merged (cdr merged-prev)))
-    (if (null? merged) labels
-        (if (eq? l (cdar merged))
-            (begin
-              (rplacd merged-prev (cdr merged))
-              (scan-merged-labels merged-prev l (cons (caar merged) labels)))
-            (scan-merged-labels merged l labels)))))
-
-(define (take-merged-labels cg l)
-  (scan-merged-labels (cdr cg) l ()))
-
-(define (pend-label cg l)
-  (rplaca (cdr cg) (nconc (take-merged-labels cg l)
-                           (cons l (second cg)))))
-
-(define (emit-label cg l)
-  (if (optimizing-jumps? cg)
-      (pend-label cg l)
-      (dolist (ml (cons l (take-merged-labels cg l)))
-        (emit-without-flushing "~A:" l))))
+;;; Three elements related to optimising flow state are held in the
+;;; codegen object:
+;;;
+;;; - deferred-jump: A function representing the deferred jump or
+;;; branch.  This function is called to emit the jump in
+;;; flush-labels-and-jumps.  It's false not optimising flow state.
+;;;
+;;; - here-labels: The list of labels for this point in the
+;;; instruction stream.
+;;;
+;;; - redirect-labels: an alist from labels to the labels there
+;;; redirect to.  We never change the label of a jump/branch; instead,
+;;; when we emit a label, we also emit all the labels that reidrect to
+;;; it.
+;;;
+;;; Bear in mind that jumps/branches always jump forwards, never
+;;; backwards.
 
 (define (emit-jump cg label)
-  (if (optimizing-jumps? cg)
-      (merge-pending-labels cg label)
-      (rplaca cg label)))
+  (if (codegen-deferred-jump cg)
+      (begin
+        ;; there is no direct way to reach this jump, so all the here
+        ;; labels now redirect to the jumped-to label
+        (codegen-set-redirect-labels! cg
+          (nconc (nmapfor (l (codegen-here-labels cg)) (cons l label))
+                 (codegen-redirect-labels cg)))
+        (codegen-set-here-labels! cg ()))
+      (codegen-set-deferred-jump! cg
+        (lambda ()
+          ;; emit a jump, unless we are jumping to a here label
+          (unless (member? label (codegen-here-labels cg))
+            (emit-jmp label))))))
 
 (define (emit-branch cg cc conddest)
-  (flush-asm-output cg)
-  (rplaca cg (list cc (dest-conditional-tlabel conddest)
-                    (dest-conditional-flabel conddest))))
+  (flush-labels-and-jumps cg)
+  (codegen-set-deferred-jump! cg
+    (lambda ()
+      (let* ((here-labels (codegen-here-labels cg))
+             (tlabel (dest-conditional-tlabel conddest))
+             (flabel (dest-conditional-flabel conddest)))
+        (if (member? tlabel here-labels)
+            (unless (member? flabel here-labels)
+              (emit-jcc cg (negate-cc cc) flabel))
+            (begin
+             (emit-jcc cg cc tlabel)
+             (unless (member? flabel here-labels)
+               (emit-jmp flabel))))))))
+
+(define (emit-label cg label)
+  (let* ((here-labels (cons label (nconc (codegen-here-labels cg)
+                                         (take-merged-labels cg label)))))
+    (if (codegen-deferred-jump cg)
+        (codegen-set-here-labels! cg here-labels)
+        (dolist (ml here-labels)
+          (emit-without-flushing "~A:" ml)))))
+
+(define (take-merged-labels cg label)
+  ;; extract the labels which lead to label
+  (let* ((res ()))
+    (codegen-set-redirect-labels! cg
+      (nfilterfor (redirect (codegen-redirect-labels cg))
+        (if (eq? label (cdr redirect))
+            (begin
+              (push (car redirect) res)
+              false)
+            true)))
+    res))
+
+(define (flush-labels-and-jumps cg)
+  (let* ((jump-func (codegen-deferred-jump cg)))
+    (when jump-func
+      (funcall jump-func)
+      (let* ((here-labels (codegen-here-labels cg)))
+        (if (null? here-labels)
+            (emit-comment cg "unreachable")
+            (dolist (l here-labels)
+              (emit-without-flushing "~A:" l))))
+
+      (codegen-set-deferred-jump! cg false)
+      (codegen-set-here-labels! cg ()))))
 
 (define (emit-jcc cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
 
 (define (emit-jmp label)
   (emit-without-flushing "jmp ~A" label))
-
-(define (flush-asm-output cg)
-  (when (optimizing-jumps? cg)
-    (let* ((branch (first cg))
-           (pending-labels (second cg)))
-      (if (pair? branch)
-          (let* ((cc (first branch))
-                 (tlabel (second branch))
-                 (flabel (third branch)))
-            (if (member? tlabel pending-labels)
-                (unless (member? flabel pending-labels)
-                  (emit-jcc cg (negate-cc cc) flabel))
-                (begin
-                 (emit-jcc cg cc tlabel)
-                 (unless (member? flabel pending-labels)
-                   (emit-jmp flabel)))))
-          (unless (member? branch pending-labels)
-            (emit-jmp branch)))
-
-      (if (null? pending-labels)
-          (emit-comment cg "unreachable")
-          (dolist (l pending-labels)
-            (emit-without-flushing "~A:" l)))
-
-      (rplaca cg false)
-      (rplaca (cdr cg) ()))))
 
 ;;; Dest conversions
 

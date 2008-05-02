@@ -30,7 +30,7 @@
 
 (defmarco (emit cg template . args)
   (quasiquote (begin
-    (flush-asm-output (unquote cg))
+    (flush-labels-and-jumps (unquote cg))
     (emit-without-flushing (unquote template) (unquote-splicing args)))))
 
 (defmarco (emit-comment cg template . args)
