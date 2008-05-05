@@ -858,6 +858,7 @@
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
+    (codegen-set-frame-base! cg 0)
     (emit-comment-form cg body)
     (codegen-function (attr-ref attrs 'label) body cg)))
 
@@ -884,7 +885,7 @@
                       (arg-count ()))))))))
 
 (define-trivial-walker reg-use (dest-type))
-(define-trivial-walker codegen (dest in-frame-base out-frame-base regs cg))
+(define-trivial-walker codegen (dest out-frame-base regs cg))
 
 ;;; Begin
 
@@ -901,19 +902,23 @@
              (emit-comment-form cg form)
              (if (null? forms)
                  (codegen (if (eq? 'define (car form)) (third form) form)
-                          dest in-frame-base out-frame-base regs cg)
+                          dest out-frame-base regs cg)
                  (begin
-                    (if (eq? 'define (car form))
-                        (let* ((varrec (second form)))
-                          (varrec-attr-set! varrec 'mode 'local)
-                          (varrec-attr-set! varrec 'index in-frame-base)
-                          (codegen-define varrec (third form) in-frame-base
-                                          regs cg)
-                          (set! in-frame-base (1+ in-frame-base)))
-                        (codegen form dest-discard in-frame-base in-frame-base
-                                 regs cg))
-                    (block-codegen (car forms) (cdr forms))))))
+                   (if (eq? 'define (car form))
+                       (let* ((varrec (second form)))
+                         (varrec-attr-set! varrec 'mode 'local)
+                         (varrec-attr-set! varrec 'index
+                                           (codegen-frame-base cg))
+                         (codegen (third form) (dest-value (first regs))
+                                  (codegen-frame-base cg) regs cg)
+                         (emit-frame-push cg (first regs)))
+                       (codegen form dest-discard (codegen-frame-base cg)
+                                regs cg))
+                   (block-codegen (car forms) (cdr forms))))))
     (block-codegen (car body) (cdr body))))
+
+(define-reg-use (define varrec val) (reg-use val dest-type-value))
+(define-codegen (define varrec val) (error "codegen on define"))
 
 ;;; If
 
@@ -926,15 +931,16 @@
   (let* ((l1 (gen-label))
          (l2 (gen-label))
          (l3 (gen-label)))
-    (codegen test (dest-conditional l1 l2) in-frame-base in-frame-base
+    (codegen test (dest-conditional l1 l2) (codegen-frame-base cg)
              regs cg)
     (emit-label cg l1)
     (emit-comment-form cg then)
-    (codegen then dest in-frame-base out-frame-base regs cg)
+    (with-saved-frame-base cg
+      (codegen then dest out-frame-base regs cg))
     (emit-jump cg l3)
     (emit-label cg l2)
     (emit-comment-form cg else)
-    (codegen else dest in-frame-base out-frame-base regs cg)
+    (codegen else dest out-frame-base regs cg)
     (emit-label cg l3)))
 
 ;;; Operator support
@@ -974,7 +980,7 @@
                               (cadr form)))
     (if (null? trashy-args-ru) ru general-register-count)))
 
-(define (operator-args-codegen form frame-base regs cg)
+(define (operator-args-codegen form regs cg)
   ;; generate the code to evaluate the arguments of an operator
   (let* ((trashy-args-ru (form-attr form 'trashy-args-ru))
          (non-trashy-args-ru (form-attr form 'non-trashy-args-ru))
@@ -993,8 +999,8 @@
 
       (dolist (arg-ru trashy-args-ru)
         (codegen (elt args (cdr arg-ru)) (dest-value (first regs))
-                 frame-base frame-base regs cg)
-        (emit-frame-push cg frame-base (first regs))))
+                 (codegen-frame-base cg) regs cg)
+        (emit-frame-push cg (first regs))))
     
     (let* ((non-trashy-regs (copy-list regs))
            (result-regs ()))
@@ -1013,12 +1019,12 @@
       ;; available for each one
       (dolist (arg-ru (reverse non-trashy-args-ru))
         (codegen (elt args (cdr arg-ru)) (dest-value (first non-trashy-regs))
-                 frame-base frame-base non-trashy-regs cg)
+                 (codegen-frame-base cg) non-trashy-regs cg)
         (set! non-trashy-regs (cdr non-trashy-regs))))
   
     ;; reload trashy arg results from stack
     (dolist (arg-ru (reverse trashy-args-ru))
-      (emit-frame-pop cg frame-base (elt regs (cdr arg-ru))))))
+      (emit-frame-pop cg (elt regs (cdr arg-ru))))))
 
 (defmarco (define-operator template outreg supplemental-regs . body)
   ;; define how to generate code for an operator
@@ -1032,13 +1038,12 @@
              (convert-value-reg-use dest-type)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
-        (operator-args-codegen form in-frame-base regs cg)
+        (operator-args-codegen form regs cg)
         (bind ((unquote-splicing (cdr template))
                (unquote-splicing supplemental-regs) . others) regs
           (let* ((result (destination-reg dest regs)))
             (unquote-splicing body)
-            (emit-convert-value cg (unquote outreg) dest
-                                in-frame-base out-frame-base))))))))
+            (emit-convert-value cg (unquote outreg) dest out-frame-base))))))))
 
 (define (operator-args-reg-use-discarding form)
   ;; find the number of registers required for evaluation of the
@@ -1048,13 +1053,12 @@
       (let* ((rus (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
         (reduce~ (car rus) (cdr rus) (function max)))))
 
-(define (operator-args-codegen-discarding form in-frame-base out-frame-base
-                                          regs cg)
+(define (operator-args-codegen-discarding form out-frame-base regs cg)
   ;; generate the code to evaluate the arguments of an operator, when
   ;; the operator itself has been eliminated
   (dolist (arg (cddr form))
-    (codegen arg dest-discard in-frame-base in-frame-base regs cg))
-  (emit-adjust-frame-base cg in-frame-base out-frame-base))
+    (codegen arg dest-discard (codegen-frame-base cg) regs cg))
+  (emit-reset-frame-base cg out-frame-base))
 
 (defmarco (define-pure-operator template outreg supplemental-regs . body)
   ;; define how to generate code for an operator that is free of
@@ -1072,16 +1076,15 @@
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
         (if (dest-discard? dest)
-            (operator-args-codegen-discarding form in-frame-base
-                                              out-frame-base regs cg)
+            (operator-args-codegen-discarding form out-frame-base regs cg)
             (begin
-              (operator-args-codegen form in-frame-base regs cg)
+              (operator-args-codegen form regs cg)
               (bind ((unquote-splicing (cdr template))
                      (unquote-splicing supplemental-regs) . others) regs
                 (let* ((result (destination-reg dest regs)))
                   (unquote-splicing body)
                   (emit-convert-value cg (unquote outreg) dest
-                                      in-frame-base out-frame-base))))))))))
+                                      out-frame-base))))))))))
 
 (defmarco (define-cc-operator template cc supplemental-regs . body)
   ;; define how to generate code for an operator that is free of
@@ -1099,14 +1102,13 @@
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
         (cond ((dest-discard? dest)
-               (operator-args-codegen-discarding form in-frame-base
-                                                 out-frame-base regs cg))
+               (operator-args-codegen-discarding form out-frame-base regs cg))
               ((dest-conditional? dest)
-               (operator-args-codegen form in-frame-base regs cg)
+               (operator-args-codegen form regs cg)
                
                ;; Adjust the frame base here, since it could mess with the ccs
                ;; later on.  This assumes that cc ops don't depend on %sp
-               (emit-adjust-frame-base cg in-frame-base out-frame-base)
+               (emit-reset-frame-base cg out-frame-base)
 
                (bind ((unquote-splicing (cdr template))
                       (unquote-splicing supplemental-regs) . others)
@@ -1119,15 +1121,14 @@
                                          (list (car regs))
                                          (sublist (cdr regs) args-count)))
                       (op-regs (cdr regs)))
-                 (operator-args-codegen form in-frame-base args-regs cg)
+                 (operator-args-codegen form args-regs cg)
                  (emit-prepare-convert-cc-value cg (car regs))
                  (bind ((unquote-splicing (cdr template))
                         (unquote-splicing supplemental-regs) . others)
                        op-regs
                    (unquote-splicing body)
                    (emit-convert-cc-value cg (unquote cc) (car regs))
-                   (emit-convert-value cg (car regs) dest
-                                       in-frame-base out-frame-base))))
+                   (emit-convert-value cg (car regs) dest out-frame-base))))
               (true
                (error "can't handle dest ~S" dest))))))))
 

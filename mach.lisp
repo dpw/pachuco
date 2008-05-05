@@ -39,16 +39,6 @@
       (format~ true (unquote (string-concat "# " template "~%"))
                (unquote-splicing args)))))
 
-(defmarco (emit-frame-push cg frame-base reg)
-  (quasiquote (begin
-    (emit-push (unquote cg) (unquote reg))
-    (set! (unquote frame-base) (1+ (unquote frame-base))))))
-
-(defmarco (emit-frame-pop cg frame-base reg)
-  (quasiquote (begin
-    (emit-pop (unquote cg) (unquote reg))
-    (set! (unquote frame-base) (1- (unquote frame-base))))))
-
 (define (emit-movzx-32 cg src dest src-scale dest-scale)
   (emit cg "mov~A ~A,~A"
         (elt (elt '(("b")
@@ -56,3 +46,10 @@
                     ("zbl" "zwl" "l")) dest-scale) src-scale)
         (insn-operand src src-scale)
         (insn-operand dest dest-scale)))
+
+(defmarco (with-saved-frame-base cg . body)
+  (let* ((orig-frame-base (gensym)))
+    (quasiquote
+      (let* (((unquote orig-frame-base) (codegen-frame-base (unquote cg))))
+        (unquote-splicing body)
+        (codegen-set-frame-base! (unquote cg) (unquote orig-frame-base))))))

@@ -1,15 +1,18 @@
 ;;; Code generation
 
-(define (make-codegen) (list false ()))
+(define (make-codegen) (list false false ()))
 
-(define (codegen-deferred-jump cg) (car cg))
-(define (codegen-set-deferred-jump! cg jump) (rplaca cg jump))
+(define (codegen-frame-base cg) (first cg))
+(define (codegen-set-frame-base! cg frame-base) (rplaca cg frame-base))
 
-(define (codegen-here-labels cg) (cadr cg))
-(define (codegen-set-here-labels! cg labels) (rplaca (cdr cg) labels))
+(define (codegen-deferred-jump cg) (second cg))
+(define (codegen-set-deferred-jump! cg jump) (rplaca (cdr cg) jump))
 
-(define (codegen-redirect-labels cg) (cddr cg))
-(define (codegen-set-redirect-labels! cg rl) (rplacd (cdr cg) rl))
+(define (codegen-here-labels cg) (third cg))
+(define (codegen-set-here-labels! cg labels) (rplaca (cddr cg) labels))
+
+(define (codegen-redirect-labels cg) (cdddr cg))
+(define (codegen-set-redirect-labels! cg rl) (rplacd (cddr cg) rl))
 
 
 (define label-counter 0)
@@ -287,17 +290,17 @@
 (define (destination-reg dest regs)
   (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
-(define (emit-convert-value cg operand dest in-frame-base out-frame-base)
+(define (emit-convert-value cg operand dest out-frame-base)
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
            (unless (eq? operand dr) (emit-mov cg operand dr)))
-         (emit-adjust-frame-base cg in-frame-base out-frame-base))
+         (emit-reset-frame-base cg out-frame-base))
         ((dest-conditional? dest)
-         (emit-adjust-frame-base cg in-frame-base out-frame-base)
+         (emit-reset-frame-base cg out-frame-base)
          (emit-cmp cg false-representation operand)
          (emit-branch cg "ne" dest))
         ((dest-discard? dest)
-         (emit-adjust-frame-base cg in-frame-base out-frame-base))
+         (emit-reset-frame-base cg out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
 
@@ -323,13 +326,13 @@
 (define (closure-slot closure index)
   (tagged-mem closure-tag closure (1+ index)))
 
-(define (varrec-operand varrec frame-base)
+(define (varrec-operand varrec cg)
   (let* ((mode (varrec-attr varrec 'mode)))
     (if (eq? mode 'self) %closure
         (let* ((index (varrec-attr varrec 'index)))
           (cond ((eq? mode 'closure) (closure-slot %closure index))
-                ((eq? mode 'param) (param-slot index frame-base))
-                ((eq? mode 'local) (local-slot index frame-base))
+                ((eq? mode 'param) (param-slot cg index))
+                ((eq? mode 'local) (local-slot cg index))
                 ((eq? mode 'register) index)
                 (true (error "strange variable mode ~S" mode)))))))
 
@@ -349,15 +352,15 @@
   (let* ((closure-reg (first regs))
          (ref-reg (second regs))
          (index 0))
-    (codegen closure (dest-value closure-reg) in-frame-base in-frame-base regs
+    (codegen closure (dest-value closure-reg) (codegen-frame-base cg) regs
              cg)
     (emit-mov cg (attr-ref attrs 'label) (tagged-mem closure-tag closure-reg))
     (dolist (ref refs)
-      (codegen ref (dest-value ref-reg) in-frame-base in-frame-base (cdr regs)
+      (codegen ref (dest-value ref-reg) (codegen-frame-base cg) (cdr regs)
                cg)
       (emit-mov cg ref-reg (closure-slot closure-reg index))
       (set! index (1+ index)))
-    (emit-convert-value cg closure-reg dest in-frame-base out-frame-base)))
+    (emit-convert-value cg closure-reg dest out-frame-base)))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -381,24 +384,24 @@
   (reg-use-recurse form dest-type-value)
   general-register-count)
 
-(define (codegen-call-args cg func args in-frame-base)
+(define (codegen-call-args cg func args)
   (dolist (arg (reverse args))
     (codegen arg (dest-value (first general-registers))
-             in-frame-base in-frame-base general-registers cg)
-    (emit-frame-push cg in-frame-base (first general-registers)))
+             (codegen-frame-base cg) general-registers cg)
+    (emit-frame-push cg (first general-registers)))
   (codegen func (dest-value %closure)
-           in-frame-base in-frame-base general-registers cg)
-  in-frame-base)
+           (codegen-frame-base cg) general-registers cg))
 
 (define-codegen (call attrs func . args)
-  (codegen-call-args cg func args in-frame-base)
-  (emit-mov cg (fixnum-representation (length args)) %nargs)
-  (emit-call-or-jump cg "call" func)
-  (emit-restore-%closure cg in-frame-base)
-  (emit-convert-value cg %funcres dest in-frame-base out-frame-base))
+  (with-saved-frame-base cg
+    (codegen-call-args cg func args)
+    (emit-mov cg (fixnum-representation (length args)) %nargs)
+    (emit-call-or-jump cg "call" func))
+  (emit-restore-%closure cg)
+  (emit-convert-value cg %funcres dest out-frame-base))
 
-(define (emit-restore-%closure cg frame-base)
-  (emit-mov cg (closure-address-slot frame-base) %closure))
+(define (emit-restore-%closure cg)
+  (emit-mov cg (closure-address-slot cg) %closure))
 
 ;;; Literals
 
@@ -448,22 +451,22 @@
 
 (define-codegen (quote attrs)
   (cond ((dest-discard? dest)
-         (emit-adjust-frame-base cg in-frame-base out-frame-base))
+         (emit-reset-frame-base cg out-frame-base))
         ((dest-conditional? dest)
-         (emit-adjust-frame-base cg in-frame-base out-frame-base)
+         (emit-reset-frame-base cg out-frame-base)
          (emit-jump cg (if (= false-representation (attr-ref attrs 'value))
                             (dest-conditional-flabel dest)
                             (dest-conditional-tlabel dest))))
         ((dest-value? dest)
          (let* ((reg (destination-reg dest regs)))
            (emit-mov cg (attr-ref attrs 'value) reg)
-           (emit-convert-value cg reg dest in-frame-base out-frame-base)))
+           (emit-convert-value cg reg dest out-frame-base)))
         (true
          (error "can't handle dest ~S" dest))))
 
 ;;; Variables
 
-(define-reg-use ((set! define) varrec val)
+(define-reg-use (set! varrec val)
   (max (reg-use val dest-type-value)
        (convert-value-reg-use dest-type)))
 
@@ -472,26 +475,17 @@
            (eq? 'register (varrec-attr varrec 'mode)))
       (begin
         (codegen val (dest-value (varrec-attr varrec 'index))
-                 in-frame-base in-frame-base regs cg)
-        (emit-adjust-frame-base cg in-frame-base out-frame-base))
+                 (codegen-frame-base cg) regs cg)
+        (emit-reset-frame-base cg out-frame-base))
       (let* ((reg (destination-reg dest regs)))
-        (codegen val (dest-value reg) in-frame-base in-frame-base regs cg)
-        (emit-mov cg reg (varrec-operand varrec in-frame-base))
-        (emit-convert-value cg reg dest in-frame-base out-frame-base))))
-
-(define-codegen (define varrec val)
-  (error "codegen for define"))
-
-(define (codegen-define varrec val frame-base regs cg)
-  (let* ((reg (first regs)))
-    (codegen val (dest-value reg) frame-base frame-base regs cg)
-    (emit-push cg reg)))
+        (codegen val (dest-value reg) (codegen-frame-base cg) regs cg)
+        (emit-mov cg reg (varrec-operand varrec cg))
+        (emit-convert-value cg reg dest out-frame-base))))
 
 (define-reg-use (ref varrec) (convert-value-reg-use dest-type))
 
 (define-codegen (ref varrec)
-  (emit-convert-value cg (varrec-operand varrec in-frame-base)
-                      dest in-frame-base out-frame-base))
+  (emit-convert-value cg (varrec-operand varrec cg) dest out-frame-base))
 
 ;;; Operator definitions
 
@@ -513,7 +507,7 @@
   (emit-mov cg %nargs result))
 
 (define-pure-operator (raw-args-base) result ()
-  (emit-lea cg (param-slot 0 in-frame-base) result))
+  (emit-lea cg (param-slot cg 0) result))
 
 ;;; Apply support
 
@@ -642,33 +636,31 @@
 
 (define-codegen (truncate attrs a b)
   (if (dest-discard? dest)
-      (operator-args-codegen-discarding form in-frame-base out-frame-base
-                                        general-registers cg)
+      (operator-args-codegen-discarding form out-frame-base general-registers
+                                        cg)
       (begin
-        (operator-args-codegen form in-frame-base 
-                             (move-regs-to-front (list %a %c) general-registers)
-                             cg)
+        (operator-args-codegen form
+                         (move-regs-to-front (list %a %c) general-registers) cg)
         (emit-mov cg %a %d)
         (emit-extend-sign-bit cg %d)
         (emit-idiv cg %c)
         (emit-shl cg number-tag-bits %a)
-        (emit-convert-value cg %a dest in-frame-base out-frame-base))))
+        (emit-convert-value cg %a dest out-frame-base))))
 
 (define-reg-use (rem attrs a b)
   (div-operator-reg-use form dest-type))
 
 (define-codegen (rem attrs a b)
   (if (dest-discard? dest)
-      (operator-args-codegen-discarding form in-frame-base out-frame-base 
-                                        general-registers cg)
+      (operator-args-codegen-discarding form out-frame-base general-registers
+                                        cg)
       (begin
-        (operator-args-codegen form in-frame-base
-                             (move-regs-to-front (list %a %c) general-registers)
-                             cg)
+        (operator-args-codegen form
+                         (move-regs-to-front (list %a %c) general-registers) cg)
         (emit-mov cg %a %d)
         (emit-extend-sign-bit cg %d)
         (emit-idiv cg %c)
-        (emit-convert-value cg %d dest in-frame-base out-frame-base))))
+        (emit-convert-value cg %d dest out-frame-base))))
 
 ;;; Strings and vectors
 
@@ -739,9 +731,8 @@
     (error "mem-copy result not discarded"))
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form in-frame-base
-                     (move-regs-to-front (list %si %di %c) general-registers)
-                     cg)
+    (operator-args-codegen form
+                    (move-regs-to-front (list %si %di %c) general-registers) cg)
     (if (attr-ref attrs 'forward)
         (emit cg "cld")
         (begin
@@ -753,7 +744,7 @@
           (emit-lea cg (tagged-mem (ash 1 scale) %di %a) %di)))
     (emit-sar cg number-tag-bits %c)
     (emit-rep-movs cg scale)
-    (emit-adjust-frame-base cg in-frame-base out-frame-base)))
+    (emit-reset-frame-base cg out-frame-base)))
 
 ;;; Raw memory access
 
@@ -800,5 +791,4 @@
 (define-reg-use (c-global attrs) (convert-value-reg-use dest-type))
 
 (define-codegen (c-global attrs)
-  (emit-convert-value cg (mem (attr-ref attrs 'name)) dest
-                      in-frame-base out-frame-base))
+  (emit-convert-value cg (mem (attr-ref attrs 'name)) dest out-frame-base))

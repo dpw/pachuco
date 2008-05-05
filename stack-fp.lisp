@@ -19,16 +19,16 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
-(define (param-slot index frame-base)
+(define (param-slot cg index)
   (mem %bp (+ 2 index)))
 
-(define (local-slot index frame-base)
+(define (local-slot cg index)
   (mem %bp (- -2 index)))
 
-(define (return-address-slot frame-base)
+(define (return-address-slot cg)
   (mem %bp 1))
 
-(define (closure-address-slot frame-base)
+(define (closure-address-slot cg)
   (mem %bp -1))
 
 ;;; Functions, calls, returns, etc.
@@ -39,21 +39,20 @@
   (emit-push cg %bp)
   (emit-mov cg %sp %bp)
   (emit-push cg %closure)
-  (codegen body dest-discard 0 -1 general-registers cg))
+  (codegen body dest-discard -1 general-registers cg))
 
 (define-codegen (return attrs body)
-  (codegen body (dest-value %funcres) in-frame-base out-frame-base
-           general-registers cg)
+  (codegen body (dest-value %funcres) out-frame-base general-registers cg)
   (emit cg "leave")
   (emit-ret cg (* value-size (attr-ref attrs 'nparams))))
 
 (define-codegen (varargs-return attrs arg-count body)
   (let* ((regs-without-%funcres (remove %funcres general-registers))
-         (retaddr (return-address-slot in-frame-base))
+         (retaddr (return-address-slot cg))
          (arg-count-reg (first regs-without-%funcres))
          (retaddr-reg (second regs-without-%funcres)))
-    (operator-args-codegen form in-frame-base
-                 (list* arg-count-reg %funcres (cdr regs-without-%funcres)) cg)
+    (operator-args-codegen form
+                  (list* arg-count-reg %funcres (cdr regs-without-%funcres)) cg)
     ;; We need to clean up the stack before returning, but the return
     ;; address is on the top.  And we can't simply pop the return
     ;; address and later do an indirect branch to it, because that is
@@ -85,10 +84,10 @@
     (emit-call-or-jump cg "jmp" func)))
 
 (define-codegen (tail-call attrs func . args)
-  (set! in-frame-base (codegen-call-args cg func args in-frame-base))
+  (codegen-call-args cg func args)
   (let* ((in-arg-count (attr-ref attrs 'nparams))
          (out-arg-count (length args))
-         (retaddr (return-address-slot in-frame-base))
+         (retaddr (return-address-slot cg))
          (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
         (begin 
@@ -101,14 +100,14 @@
                            general-registers cg))))
 
 (define-codegen (varargs-tail-call attrs arg-count func . args)
-  (set! in-frame-base (codegen-call-args cg func args in-frame-base))
+  (codegen-call-args cg func args)
   (let* ((in-arg-count-reg (first general-registers))
          (out-arg-count (length args))
-         (retaddr (return-address-slot in-frame-base)))
+         (retaddr (return-address-slot cg)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
-    (codegen arg-count (dest-value in-arg-count-reg)
-             in-frame-base in-frame-base general-registers cg)
+    (codegen arg-count (dest-value in-arg-count-reg) (codegen-frame-base cg)
+             general-registers cg)
     (emit-scale-number cg value-scale in-arg-count-reg)
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
@@ -119,9 +118,9 @@
 
 (define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
                                          bodyfunc)
-  (operator-args-codegen form in-frame-base regs cg)
+  (operator-args-codegen form regs cg)
   (bind (before-arg-count after-arg-count bodyfunc retaddr-reg . others) regs
-    (let* ((retaddr (return-address-slot in-frame-base)))
+    (let* ((retaddr (return-address-slot cg)))
       ;; calculate how far up to move %sp
       (emit-sub cg after-arg-count before-arg-count)
       (emit-mov cg bodyfunc %closure)
@@ -136,9 +135,9 @@
 (define-codegen (raw-apply-jump attrs func arg-count)
   (let* ((regs-without-%nargs (remove %nargs regs))
          (func (first regs-without-%nargs)))
-    (operator-args-codegen form in-frame-base
-                           (list* func %nargs (cddr regs-without-%nargs)) cg)
-    (emit-adjust-frame-base cg in-frame-base out-frame-base)
+    (operator-args-codegen form (list* func %nargs (cddr regs-without-%nargs))
+                           cg)
+    (emit-reset-frame-base cg out-frame-base)
     (emit-mov cg func %closure)
     (emit cg "leave ; jmp *~A" (value-sized (tagged-mem closure-tag %closure)))))
 
@@ -160,10 +159,8 @@
     (emit-mov cg closure-tag %closure)
     (emit-push cg %closure)
     (dolist (reg c-callee-saved-regs-without-%bp) (emit-push cg reg))
-    (codegen program dest-discard
-             (length c-callee-saved-regs-without-%bp)
-             (length c-callee-saved-regs-without-%bp)
-             general-registers cg)
+    (codegen-set-frame-base! cg (length c-callee-saved-regs-without-%bp))
+    (codegen program dest-discard (codegen-frame-base cg) general-registers cg)
     (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop cg reg))
     (emit-add cg value-size %sp) ; clean closure slot
     (emit-set-ac-flag cg false)

@@ -10,9 +10,8 @@
 (define-codegen (c-call attrs . args)
   (when (> (length args) (length c-call-arg-regs))
     (error "too many arguments to c-call"))
-  (operator-args-codegen form in-frame-base
-                      (move-regs-to-front c-call-arg-regs general-registers)
-                      cg)
+  (operator-args-codegen form
+                      (move-regs-to-front c-call-arg-regs general-registers) cg)
   (emit cg "cld")
   (emit-set-ac-flag cg false)
 
@@ -23,6 +22,5 @@
   (emit-mov cg %b %sp)
   
   (emit-set-ac-flag cg true)
-  (unless (member? %closure c-callee-saved-regs)
-    (emit-restore-%closure cg in-frame-base))
-  (emit-convert-value cg %a dest in-frame-base out-frame-base))
+  (unless (member? %closure c-callee-saved-regs) (emit-restore-%closure cg))
+  (emit-convert-value cg %a dest out-frame-base))
