@@ -431,7 +431,11 @@
 (define (resolve-variables form)
   (resolve-variables-aux form ()))
             
-;;; Classify all variables into read-only and potentially read-write
+;;; Classify all variables into read-only and (potentially)
+;;; read-write, or early function (a read-only variable with a
+;;; function value that is potential ready before its definition).
+;;;
+;;; A state is attached to each varrec:
 ;;;
 ;;; I (4) - initial state
 ;;; r (5) - read before a define
@@ -448,8 +452,9 @@
 ;;; ref           R W E F r r !
 ;;; set!          W W E E E E !
 ;;;
-;;; An "acccess" attribute is added to each varrec, indicating whether
-;;; the access style is read-only, written, or early-function.
+;;; When we finish traversing a binding form, an "acccess" attribute
+;;; is added to each varrec, indicating whether the access style is
+;;; read-only, written, or early-function.
 
 (define-trivial-walker classify-variables ())
 
@@ -513,6 +518,17 @@
 ;;; => (lambda ((closure (fv (source fv ...) ...)) ...) ... (fv ...) ...)
 ;;;
 ;;; Also adds the boxed attribute to origin varrecs.
+
+;;; When we reach this phase, all uses of a variable refer to the same
+;;; varrec.  This phase determines which uses can access the variable
+;;; directly, and which need to go via a closure.  The former get the
+;;; "origin" varrec (this has an origin attribute of false).  The
+;;; latter get new varrecs, with their origin attribute pointing to
+;;; the origin varrec.
+;;;
+;;; This is implemented by adding a closure stack to each origin
+;;; varrec.  The closure stack is an alist from the binding form depth
+;;; to the appropriate varrec for uses within that binding form.
 
 (define (resolve-closure-var varrec depth closure-cell)
   (let* ((closure-stack (varrec-attr varrec 'closure-stack))
