@@ -10,6 +10,17 @@
                res expected)))))
 
 (define (tests)
+  ;; This test assumes the intended behaviour compiler behaviour.  The
+  ;; interpreter does something different, in the name of simplicity.
+  ;; What a lanuage spec might have to say about this is uncertain at
+  ;; this point.
+  (when-compiling
+    (begin
+      (define x 0)
+      (begin
+        (define x x)
+        (assert-result x unspecified))))
+
   (assert-result (function? ()) false)
   (assert-result (function? (lambda ())) true)
 

@@ -473,11 +473,11 @@
   (update-varrec-state varrec varrec-set!-state-table))
 
 (define-classify-variables (define varrec val)
+  (classify-variables val)
   (let* ((lambda? (eq? 'lambda (car val)))
          (state (update-varrec-state varrec (if lambda?
                                                 varrec-define-lambda-state-table
                                                 varrec-define-state-table))))
-    (classify-variables val)
     (when (= state 2) (rplaca form 'set!))
     (when lambda? (form-attr-set! val 'self varrec))))
 
