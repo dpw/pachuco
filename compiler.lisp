@@ -3,9 +3,10 @@
 (define (compile-program program)
   ;; Compile the program, printing the resulting assembly on standard
   ;; output
-  (set! program (list* 'begin () (normalize-forms program)))
-  (set! program (gather-symbols program))
-  (set! program (car (eliminate-definitions program)))
+  (set! program (normalize-forms program))
+  (set! program (gather-symbols-forms program))
+  (set! program (eliminate-definitions-forms program))
+  (set! program (list* 'begin () program))
   (replace-empty-bodies program)
   (normalize-lambdas program)
   (collect-defines program)
@@ -226,12 +227,11 @@
 (define-gather-symbols-aux (quote quoted)
   (gather-symbols-from-quoted-form quoted cell))
 
-(define (gather-symbols form)
+(define (gather-symbols-forms forms)
   (let* ((cell (cons () ())))
-    (gather-symbols-aux form cell)
-    (quasiquote (begin ()
-                       (define interned-symbols (quote (unquote (car cell))))
-                       (unquote form)))))
+    (gather-symbols-aux-forms forms cell)
+    (cons (quasiquote (define interned-symbols (quote (unquote (car cell)))))
+          forms)))
 
 ;;; Remove the definitions forms, splicing them into the surrounding
 ;;; begin/lambda
