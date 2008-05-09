@@ -13,6 +13,7 @@
   (simplify program)
   (resolve-variables program)
   (classify-variables program)
+  (mark-top-level-definitions program)
   (collect-closures program)
   (introduce-boxes program)
   (decompose-lambdas program false)
@@ -283,7 +284,7 @@
   (let* ((dotted false))
     (labels ((undot (params)
                (cond ((pair? params)
-                      (rplaca params (cons (car params) ()))
+                      (rplaca params (list (car params)))
                       (rplacd params (undot (cdr params)))
                       params)
                      ((null? params)
@@ -511,6 +512,27 @@
 (define (varrec-early-function? varrec)
   (eq? 'early-function (varrec-attr varrec 'access)))
 
+;;; Mark the top-level definitions as such, so we can omit them from closures
+;;;
+;;; The program should always consist of a begin form at this point
+
+(define (mark-top-level-definitions program)
+  (mark-non-top-level-definitions-recurse program)
+  (dolist (varrec (second program))
+    (varrec-attr-set! varrec 'mode 'top-level)))
+
+(define-trivial-walker mark-non-top-level-definitions ())
+
+(define-mark-non-top-level-definitions (begin varrecs . body)
+  (dolist (varrec varrecs)
+    (varrec-attr-set! varrec 'mode 'local))
+  (mark-non-top-level-definitions-forms body))
+
+(define-mark-non-top-level-definitions (lambda attrs body)
+  (dolist (varrec (form-attr form 'params))
+    (varrec-attr-set! varrec 'mode 'param))
+  (mark-non-top-level-definitions body))
+
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
 ;;;
@@ -530,16 +552,15 @@
 ;;; varrec.  The closure stack is an alist from the binding form depth
 ;;; to the appropriate varrec for uses within that binding form.
 
-(define (resolve-closure-var varrec depth closure-cell)
+(define (resolve-closure-var varrec mode depth closure-cell)
   (let* ((closure-stack (varrec-attr varrec 'closure-stack))
          (depth-local (first closure-stack)))
     (if (= depth (car depth-local))
         (cdr depth-local)
-        ;; The (cdddr varrec) here is a hack - it assumes that the
-        ;; boxed and closure-stack attrs are on the front of the
-        ;; alist, which happens to be true, and skips them
-        (let* ((local-varrec (list* (car varrec) (cons 'origin varrec)
-                                    (cdddr varrec))))
+        (let* ((local-varrec (list (car varrec)
+                                   (cons 'origin varrec)
+                                   (cons 'access (varrec-attr varrec 'access))
+                                   (cons 'mode mode))))
           (varrec-attr-set! varrec 'closure-stack
                             (acons depth local-varrec closure-stack))
           (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
@@ -549,19 +570,19 @@
 (define-trivial-walker collect-closures-aux (depth closure-cell))
 
 (define-collect-closures-aux (ref varrec)
-  (rplaca (cdr form) (resolve-closure-var varrec depth closure-cell)))
+  (rplaca (cdr form) (resolve-closure-var varrec 'closure depth closure-cell)))
 
 (define-collect-closures-aux ((define set!) varrec val)
-  (rplaca (cdr form) (resolve-closure-var varrec depth closure-cell))
+  (rplaca (cdr form) (resolve-closure-var varrec 'closure depth closure-cell))
   (collect-closures-aux val depth closure-cell))
 
 (define (collect-closures-body form varrecs depth closure-cell)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'boxed false)
+    (varrec-attr-set! varrec 'origin false)
     (varrec-attr-set! varrec 'closure-stack (acons depth varrec ())))
   (collect-closures-aux-recurse form depth closure-cell)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'origin false)
     (varrec-attr-remove varrec 'closure-stack)))
 
 (define-collect-closures-aux (begin varrecs . body)
@@ -570,26 +591,29 @@
 (define-collect-closures-aux (lambda attrs body)
   (let* ((local-closure-cell (cons () ()))
          (self-closure-cell (cons () ())))
-    ;; if we have an unwritten self varrec, we don't put it in the
-    ;; closure.  instead we use a special self-closure attr.
+    ;; if we have an unwritten self varrec, we don't want it to get
+    ;; captured in the closure.  And we need to distinguish it from
+    ;; the origin varrec, used to refer to the function outside of the
+    ;; function.  So we create a "self-closure" varrec, to refer to
+    ;; the function inside the function.
     (let* ((self-varrec (attr-ref attrs 'self)))
       (form-attr-set! form 'self-closure
                       (if (and self-varrec
                                (not (varrec-written? self-varrec)))
-                          (resolve-closure-var self-varrec (1+ depth)
+                          (resolve-closure-var self-varrec 'self (1+ depth)
                                                self-closure-cell)
                           false)))
 
     (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
                            local-closure-cell)
     (form-attr-set! form 'closure (car local-closure-cell))
-    (dolist (local-varrec (append (car local-closure-cell)
-                                  (car self-closure-cell)))
+    (dolist (local-varrec (append (car self-closure-cell)
+                                  (car local-closure-cell)))
       (let* ((origin-varrec (varrec-attr local-varrec 'origin)))
         (varrec-attr-set! origin-varrec 'closure-stack 
                           (cdr (varrec-attr origin-varrec 'closure-stack)))
         (varrec-attr-set! local-varrec 'source
-                   (resolve-closure-var origin-varrec depth closure-cell))))))
+            (resolve-closure-var origin-varrec 'closure depth closure-cell))))))
 
 (define (collect-closures form)
   (collect-closures-aux form 0 ()))
@@ -603,11 +627,11 @@
 ;;; variables to go via the storage boxes.
 ;;;
 ;;; For variables introduced by begin, we also need to allocate the
-;;; storage boxes, but these always get initialized to unspecified, so
-;;; this is straightforward.  We initialize other written vars while
-;;; we are doing this.
+;;; storage boxes, but classify-variables ensured that a define always
+;;; precedes any other other of a variable, so we simply patch the
+;;; define to do the make-box.
 ;;;
-;;; Variables introduced by lambdas are most complicated, since we need
+;;; Variables introduced by lambdas are more complicated, since we need
 ;;; to copy the original parameter value into the storage box.  So we
 ;;; have to rename the original parameter.  This involves wrapping the
 ;;; lambda body with a begin form.
@@ -644,7 +668,8 @@
          (box-init-forms ()))
     (nmapfor (varrec (attr-ref attrs 'params))
       (if (varrec-boxed? varrec)
-          (let* ((temprec (list (gensym))))
+          (let* ((temprec (cons (gensym) '((mode . param)))))
+            (varrec-attr-set! varrec 'mode 'local)
             (set! box-varrecs (cons varrec box-varrecs))
             (set! box-init-forms (cons (init-boxed-param-form varrec temprec)
                                        box-init-forms))
@@ -848,12 +873,11 @@
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted cg))
                            (cons 'quoted quoted))))
 
-(define (assign-varrec-indices varrecs mode)
+(define (assign-varrec-indices varrecs)
   ;; assign slot indices to varrecs
   (let* ((index 0))
     (dolist (varrec varrecs)
       (varrec-attr-set! varrec 'index index)
-      (varrec-attr-set! varrec 'mode mode)
       (set! index (1+ index)))))
 
 (define-codegen-sections (fill-closure attrs . args)
@@ -862,15 +886,12 @@
     ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body cg)
 
-    (assign-varrec-indices (attr-ref attrs 'closure) 'closure)
-    (assign-varrec-indices (attr-ref attrs 'params) 'param)
+    (assign-varrec-indices (attr-ref attrs 'closure))
+    (assign-varrec-indices (attr-ref attrs 'params))
 
     (when self-varrec
-      (emit-comment cg "~S" (car self-varrec))
-      (let* ((self-closure-varrec (attr-ref attrs 'self-closure)))
-        (when self-closure-varrec
-          (varrec-attr-set! self-closure-varrec 'mode 'self))))
-
+      (emit-comment cg "~S" (car self-varrec)))
+    
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
     (reg-use body dest-type-value)
@@ -922,7 +943,6 @@
                  (begin
                    (if (eq? 'define (car form))
                        (let* ((varrec (second form)))
-                         (varrec-attr-set! varrec 'mode 'local)
                          (varrec-attr-set! varrec 'index
                                            (codegen-frame-base cg))
                          (codegen (third form) (dest-value (first regs))

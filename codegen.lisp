@@ -333,6 +333,7 @@
           (cond ((eq? mode 'closure) (closure-slot %closure index))
                 ((eq? mode 'param) (param-slot cg index))
                 ((eq? mode 'local) (local-slot cg index))
+                ((eq? mode 'top-level) (local-slot cg index))
                 ((eq? mode 'register) index)
                 (true (error "strange variable mode ~S" mode)))))))
 
