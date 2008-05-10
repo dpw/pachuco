@@ -397,8 +397,11 @@
     (codegen arg (dest-value (first general-registers))
              (codegen-frame-base cg) general-registers cg)
     (emit-frame-push cg (first general-registers)))
-  (codegen func (dest-value %closure)
-           (codegen-frame-base cg) general-registers cg))
+  (unless (and (eq? 'ref (first func))
+               (varrec-origin-attr (second func) 'lambda-label)
+               (varrec-origin-attr (second func) 'no-closure))
+    (codegen func (dest-value %closure) (codegen-frame-base cg)
+             general-registers cg)))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg

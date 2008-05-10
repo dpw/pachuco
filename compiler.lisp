@@ -710,7 +710,8 @@
           (if (varrec-early-function? varrec)
               (decompose-define-lambda form varrec attrs closure body begin) 
               (decompose-lambda val attrs closure body begin
-                                (make-alloc-closure closure)))))
+                                (make-alloc-closure closure))))
+        (varrec-attr-set! varrec 'no-closure (null? closure)))
       (decompose-lambdas val begin)))
 
 (define (decompose-define-lambda form varrec attrs closure body begin)
