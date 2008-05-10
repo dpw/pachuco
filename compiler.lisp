@@ -516,12 +516,12 @@
 ;;;
 ;;; The program should always consist of a begin form at this point
 
-(define (mark-top-level-definitions program)
-  (mark-non-top-level-definitions-recurse program)
-  (dolist (varrec (second program))
-    (varrec-attr-set! varrec 'mode 'top-level)))
-
 (define-trivial-walker mark-non-top-level-definitions ())
+
+(define (mark-top-level-definitions program)
+  (dolist (varrec (second program))
+    (varrec-attr-set! varrec 'mode 'top-level))
+  (mark-non-top-level-definitions-recurse program))
 
 (define-mark-non-top-level-definitions (begin varrecs . body)
   (dolist (varrec varrecs)
@@ -872,6 +872,19 @@
 (define-codegen-sections (quote quoted)
   (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted cg))
                            (cons 'quoted quoted))))
+
+(define-codegen-sections (begin varrecs . body)
+  (dolist (varrec varrecs)
+    (when (eq? 'top-level (varrec-attr varrec 'mode))
+      (varrec-attr-set! varrec 'label 
+                        (codegen-top-level-variable cg (car varrec)))))
+  (codegen-sections-forms body cg))
+
+(define-codegen-sections (define varrec val)
+  ;; convert define for top-level variables to set!
+  (when (eq? 'top-level (varrec-attr varrec 'mode))
+    (rplaca form 'set!))
+  (codegen-sections val cg))
 
 (define (assign-varrec-indices varrecs)
   ;; assign slot indices to varrecs

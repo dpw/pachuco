@@ -328,14 +328,21 @@
 
 (define (varrec-operand varrec cg)
   (let* ((mode (varrec-attr varrec 'mode)))
-    (if (eq? mode 'self) %closure
-        (let* ((index (varrec-attr varrec 'index)))
-          (cond ((eq? mode 'closure) (closure-slot %closure index))
-                ((eq? mode 'param) (param-slot cg index))
-                ((eq? mode 'local) (local-slot cg index))
-                ((eq? mode 'top-level) (local-slot cg index))
-                ((eq? mode 'register) index)
-                (true (error "strange variable mode ~S" mode)))))))
+    (cond ((eq? mode 'self) %closure)
+          ((eq? mode 'top-level) (mem (varrec-attr varrec 'label)))
+          (true
+           (let* ((index (varrec-attr varrec 'index)))
+             (cond ((eq? mode 'closure) (closure-slot %closure index))
+                   ((eq? mode 'param) (param-slot cg index))
+                   ((eq? mode 'local) (local-slot cg index))
+                   (true (error "strange variable mode ~S" mode))))))))
+
+(define (codegen-top-level-variable cg name)
+  (let* ((label (gen-label)))
+    (emit-comment cg "top-level ~S" name)
+    (emit cg ".local ~A" label)
+    (emit cg ".comm ~A, ~D, ~D" label value-size value-size)
+    label))
 
 ;;; Functions and closures
 
