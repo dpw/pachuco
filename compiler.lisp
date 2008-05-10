@@ -553,19 +553,22 @@
 ;;; to the appropriate varrec for uses within that binding form.
 
 (define (resolve-closure-var varrec mode depth closure-cell)
-  (let* ((closure-stack (varrec-attr varrec 'closure-stack))
-         (depth-local (first closure-stack)))
-    (if (= depth (car depth-local))
-        (cdr depth-local)
-        (let* ((local-varrec (list (car varrec)
-                                   (cons 'origin varrec)
-                                   (cons 'access (varrec-attr varrec 'access))
-                                   (cons 'mode mode))))
-          (varrec-attr-set! varrec 'closure-stack
-                            (acons depth local-varrec closure-stack))
-          (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
-          (rplaca closure-cell (cons local-varrec (car closure-cell)))
-          local-varrec))))
+  (let* ((closure-stack (varrec-attr varrec 'closure-stack)))
+    (cond ((not closure-stack)
+           varrec)
+          ((= depth (caar closure-stack))
+           (cdar closure-stack))
+          (true
+           (let* ((local-varrec
+                    (list (car varrec)
+                          (cons 'origin varrec)
+                          (cons 'access (varrec-attr varrec 'access))
+                          (cons 'mode mode))))
+             (varrec-attr-set! varrec 'closure-stack
+                               (acons depth local-varrec closure-stack))
+             (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
+             (rplaca closure-cell (cons local-varrec (car closure-cell)))
+             local-varrec)))))
 
 (define-trivial-walker collect-closures-aux (depth closure-cell))
 
@@ -580,7 +583,10 @@
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'boxed false)
     (varrec-attr-set! varrec 'origin false)
-    (varrec-attr-set! varrec 'closure-stack (acons depth varrec ())))
+    (varrec-attr-set! varrec 'closure-stack
+                      (if (eq? 'top-level (varrec-attr varrec 'mode))
+                          false
+                          (acons depth varrec ()))))
   (collect-closures-aux-recurse form depth closure-cell)
   (dolist (varrec varrecs)
     (varrec-attr-remove varrec 'closure-stack)))
@@ -597,12 +603,8 @@
     ;; function.  So we create a "self-closure" varrec, to refer to
     ;; the function inside the function.
     (let* ((self-varrec (attr-ref attrs 'self)))
-      (form-attr-set! form 'self-closure
-                      (if (and self-varrec
-                               (not (varrec-written? self-varrec)))
-                          (resolve-closure-var self-varrec 'self (1+ depth)
-                                               self-closure-cell)
-                          false)))
+      (when (and self-varrec (not (varrec-written? self-varrec)))
+        (resolve-closure-var self-varrec 'self (1+ depth) self-closure-cell)))
 
     (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
                            local-closure-cell)
@@ -779,8 +781,6 @@
              ())
             ((or (eq? key 'params) (eq? key 'closure))
              (list (cons key (debug-uniquify-varrecs val))))
-            ((eq? key 'self-closure)
-             (list (cons key (debug-uniquify-varrec val))))
             ((eq? key 'self)
              (list (cons key (debug-substitute-varrec val))))
             ((eq? key 'body)

@@ -354,7 +354,7 @@
 (define-reg-use (fill-closure attrs closure . refs)
   (let* ((ref-rus (mapfor (ref refs) (reg-use ref dest-type-value))))
     (max (reg-use closure dest-type-value)
-         (1+ (reduce~ (car ref-rus) (cdr ref-rus) (function max))))))
+         (1+ (reduce~ 0 ref-rus (function max))))))
 
 (define-codegen (fill-closure attrs closure . refs)
   (let* ((closure-reg (first regs))
