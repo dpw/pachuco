@@ -89,7 +89,7 @@
   (cond ((immediate? x) (format~ false "$~A" x))
         ((vector? x) (vector-ref x scale))
         ((pair? x)
-         (cond ((null? (cdr x)) (car x))
+         (cond ((null? (cdr x)) (indirect-operand (car x)))
                ((null? (cddr x))
                 (format~ false "~A(~A)" (if (eq? 0 (car x)) "" (car x))
                          (vector-ref (second x) value-scale)))

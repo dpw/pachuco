@@ -76,3 +76,8 @@
 
 (define (emit-extend-sign-bit cg oper)
   (emit-sar cg 31 oper))
+
+;;; No special handling required for indirect operands on i386
+
+(defmarco (indirect-operand addr)
+  addr)

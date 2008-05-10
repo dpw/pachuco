@@ -1,5 +1,13 @@
 ;;; x86_64-specific code generation
 
+;;; rip-relative addressing is shorter on x86-64, but is not the
+;;; default in the assembly syntax:
+
+(define (indirect-operand addr)
+  (unless (string? addr)
+    (error "indirect operand ~S, which is surprising" addr))
+  (format~ false "~A(%rip)" addr))
+
 ;;; C calls
 
 (define-reg-use (c-call c-function-name . args)
