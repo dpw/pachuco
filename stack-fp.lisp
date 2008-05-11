@@ -19,17 +19,11 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
-(define (param-slot cg index)
-  (mem %bp (+ 2 index)))
-
-(define (local-slot cg index)
-  (mem %bp (- -2 index)))
-
 (define (return-address-slot cg)
   (mem %bp 1))
 
 (define (closure-address-slot cg)
-  (mem %bp -1))
+  (mem %bp (if (codegen-have-closure cg) -1 0)))
 
 ;;; Functions, calls, returns, etc.
 
@@ -38,8 +32,9 @@
   (emit-label cg label)
   (emit-push cg %bp)
   (emit-mov cg %sp %bp)
-  (emit-push cg %closure)
-  (codegen body dest-discard -1 general-registers cg))
+  (when (codegen-have-closure cg) (emit-push cg %closure))
+  (codegen body dest-discard (if (codegen-have-closure cg) -1 0)
+           general-registers cg))
 
 (define-codegen (return attrs body)
   (codegen body (dest-value %funcres) out-frame-base general-registers cg)
@@ -156,13 +151,13 @@
     (emit-push cg %bp)
     (emit-mov cg %sp %bp)
     (emit-set-ac-flag cg true)
-    (emit-mov cg closure-tag %closure)
-    (emit-push cg %closure)
     (dolist (reg c-callee-saved-regs-without-%bp) (emit-push cg reg))
+
     (codegen-set-frame-base! cg (length c-callee-saved-regs-without-%bp))
+    (codegen-set-have-closure! cg false)
     (codegen program dest-discard (codegen-frame-base cg) general-registers cg)
+
     (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop cg reg))
-    (emit-add cg value-size %sp) ; clean closure slot
     (emit-set-ac-flag cg false)
     (emit cg "cld ; leave")
     (emit cg "ret")))

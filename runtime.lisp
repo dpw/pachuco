@@ -36,6 +36,7 @@
 (defmacro (first x) (list 'car x))
 (defmacro (second x) (list 'car (list 'cdr x)))
 (defmacro (third x) (list 'car (list 'cdr (list 'cdr x))))
+(defmacro (fourth x) (list 'car (list 'cdr (list 'cdr (list 'cdr x)))))
 
 (defmacro (null? x) (list 'eq? () x))
 

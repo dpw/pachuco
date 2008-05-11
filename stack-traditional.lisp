@@ -9,6 +9,15 @@
     (emit-mov cg tmpreg (mem out-retaddr 1 out-arg-count))
     (copy-tail-call-args out-arg-count out-retaddr tmpreg cg)))
 
+;;; Parameters are always passed immediately above the return address
+;;; slot
+(define (param-slot cg index)
+  (mem (return-address-slot cg) (+ 1 index)))
+
+;;; Locals always come below the closure address slot
+(define (local-slot cg index)
+  (mem (closure-address-slot cg) (- -1 index)))
+
 (define (emit-frame-push cg reg)
   (emit-push cg reg)
   (codegen-set-frame-base! cg (1+ (codegen-frame-base cg))))
@@ -22,4 +31,3 @@
     (unless (= in-frame-base out-frame-base)
       (emit-add cg (* value-size (- in-frame-base out-frame-base)) %sp)
       (codegen-set-frame-base! cg out-frame-base))))
-

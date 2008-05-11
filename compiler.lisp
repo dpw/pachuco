@@ -896,11 +896,12 @@
 
 (define-codegen-sections (fill-closure attrs . args)
   (let* ((self-varrec (attr-ref attrs 'self))
+         (closure (attr-ref attrs 'closure))
          (body (attr-ref attrs 'body)))
     ;; generate code for nested lambdas and data for quoted forms
     (codegen-sections body cg)
 
-    (assign-varrec-indices (attr-ref attrs 'closure))
+    (assign-varrec-indices closure)
     (assign-varrec-indices (attr-ref attrs 'params))
 
     (when self-varrec
@@ -911,6 +912,7 @@
     (reg-use body dest-type-value)
     (codegen-set-frame-base! cg 0)
     (emit-comment-form cg body)
+    (codegen-set-have-closure! cg (not (null? closure)))
     (codegen-function (attr-ref attrs 'label) body cg)))
 
 (define (wrap-lambda-body attrs body)
