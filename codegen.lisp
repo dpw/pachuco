@@ -416,7 +416,8 @@
   (emit-convert-value cg %funcres dest out-frame-base))
 
 (define (emit-restore-%closure cg)
-  (emit-mov cg (closure-address-slot cg) %closure))
+  (when (codegen-have-closure cg)
+    (emit-mov cg (closure-address-slot cg) %closure)))
 
 ;;; Literals
 
