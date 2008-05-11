@@ -237,8 +237,11 @@
 
 ;;; Lists
 
+(define (length-aux l n)
+  (if (null? l) n (length-aux (cdr l) (1+ n))))
+
 (define (length l)
-  (if (null? l) 0 (1+ (length (cdr l)))))
+  (length-aux l 0))
 
 (define (member? item l)
   (cond ((null? l) false)
