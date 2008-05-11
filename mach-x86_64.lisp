@@ -28,14 +28,13 @@
 (defconstant atom-tag-bits 3)
 
 (defconstant false-representation #b111)
-(defconstant unspecified-representation #b10111)
 (defconstant lowest-symbol-representation #b100000000111)
 
 (defconstant simple-representations 
   ;; The quotes here are significant for CL compatibility
   (list (cons 'false false-representation)
         (cons 'true #b1111)
-        (cons 'unspecified unspecified-representation)
+        (cons 'unspecified #b10111)
         (cons () #b11111)))
 
 ;;; Registers
