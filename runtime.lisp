@@ -5,16 +5,6 @@
 (defmacro (when-interpreting . rest)
   (if compiling '(definitions) (cons 'definitions rest)))
 
-;;; The compiler emits references to these.  Put stub definitions in
-;;; place early, just in case
-
-(when-compiling
-  (define (arity-mismatch arg-frame param-frame-length)
-    (error-halt "arity-mismatch" ()))
-
-  (define (handle-varargs arg-frame param-frame-length)
-    (error-halt "handle-varargs" ())))
-
 ;;; Basics needed by quasiquote
 
 (define (list . l) l)
@@ -234,6 +224,52 @@
   (quasiquote (while (not (unquote test)) (unquote-splicing rest))))
 
 (define (identity x) x)
+
+;;; Compiled code support
+
+;;; The real definition of error requires formatted output, which is a
+;;; bit late in the day.  So put a stub definition in place here.
+(define (error message . args)
+  (error-halt message args))
+
+(when-compiling
+  (define (arity-mismatch nparams nargs)
+    (error "expected ~S arguments, got ~S" nparams nargs))
+
+  (define (handle-varargs nparams nargs args-base)
+    (when (< nargs nparams)
+        (error "expected at least ~S arguments, got ~S" nparams nargs))
+
+    (define (make-varargs-list nargs l)
+      (if (/= nargs nparams)
+          (make-varargs-list (1- nargs)
+                             (cons (raw-vec-ref args-base (1- nargs)) l))
+          l))
+
+    (make-varargs-list nargs ()))
+
+  (define (apply func arg1 . args)
+    (define (count-args args)
+      (if (null? (cdr args)) (length (car args))
+          (1+ (count-args (cdr args)))))
+
+    (define (copy-final-args args args-base index)
+      (unless (null? args)
+        (raw-vec-set! args-base index (car args))
+        (copy-final-args (cdr args) args-base (1+ index))))
+      
+    (define (copy-args args args-base index)
+      (if (null? (cdr args)) (copy-final-args (car args) args-base index)
+          (begin
+            (raw-vec-set! args-base index (car args))
+            (copy-args (cdr args) args-base (1+ index)))))
+
+    (set! args (cons arg1 args))
+    (define arg-count (count-args args))
+    (raw-jump-with-arg-space raw-arg-count arg-count
+      (lambda ()
+        (copy-args args (raw-args-base) 0)
+        (raw-apply-jump func arg-count)))))
 
 ;;; Lists
 
@@ -949,51 +985,11 @@
 (define (format control . args)
   (format-list control args))
 
-;;; With formatted IO in place, define error support and handlers
-
-(define (error message . args)
+(set! (error message . args)
   (formout stderr "~A~%" (format-list message args))
   (error-halt message args))
 
 (when-compiling
-  (set! (arity-mismatch nparams nargs)
-    (error "expected ~S arguments, got ~S" nparams nargs))
-
-  (set! (handle-varargs nparams nargs args-base)
-    (when (< nargs nparams)
-        (error "expected at least ~S arguments, got ~S" nparams nargs))
-
-    (define (make-varargs-list nargs l)
-      (if (/= nargs nparams)
-          (make-varargs-list (1- nargs)
-                             (cons (raw-vec-ref args-base (1- nargs)) l))
-          l))
-
-    (make-varargs-list nargs ()))
-
-  (define (apply func arg1 . args)
-    (define (count-args args)
-      (if (null? (cdr args)) (length (car args))
-          (1+ (count-args (cdr args)))))
-
-    (define (copy-final-args args args-base index)
-      (unless (null? args)
-        (raw-vec-set! args-base index (car args))
-        (copy-final-args (cdr args) args-base (1+ index))))
-      
-    (define (copy-args args args-base index)
-      (if (null? (cdr args)) (copy-final-args (car args) args-base index)
-          (begin
-            (raw-vec-set! args-base index (car args))
-            (copy-args (cdr args) args-base (1+ index)))))
-
-    (set! args (cons arg1 args))
-    (define arg-count (count-args args))
-    (raw-jump-with-arg-space raw-arg-count arg-count
-      (lambda ()
-        (copy-args args (raw-args-base) 0)
-        (raw-apply-jump func arg-count))))
-
   (define gensym-counter 0)
   (define (gensym)
     (intern (format "gensym-~D" (set! gensym-counter (1+ gensym-counter))))))
