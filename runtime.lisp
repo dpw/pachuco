@@ -203,14 +203,6 @@
 
 ;;; Control structures
 
-(defmacro (prog1 form . forms)
-  (define temp (gensym))
-  (quasiquote
-    (begin
-      (define (unquote temp) (unquote form))
-      (unquote-splicing forms)
-      (unquote temp))))
-
 (defmacro (while test . rest)
   (define name (gensym))
   (quasiquote (begin
@@ -737,13 +729,14 @@
 
 (defmacro (with-value binding . body)
   (define temp (gensym))
+  (define res (gensym))
   (quasiquote
     (begin
       (define (unquote temp) (unquote (first binding)))
       (set! (unquote (first binding)) (unquote (second binding)))
-      (prog1
-        (begin (unquote-splicing body))
-        (set! (unquote (first binding)) (unquote temp))))))
+      (define (unquote res) (begin (unquote-splicing body)))
+      (set! (unquote (first binding)) (unquote temp))
+      (unquote res))))
 
 ;;; Strings
 
