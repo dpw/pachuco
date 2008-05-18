@@ -94,14 +94,6 @@
 (define (normalize-2 form)
   (list* (car form) (cadr form) (normalize-forms (cddr form))))
 
-
-(define (compound-symbol . pieces)
-  (intern (string-flatten (mapfor (p pieces)
-                            (cond ((string? p) (string-symbolcase p))
-                                  ((symbol? p) (symbol-name p))
-                                  (true (error "~S" p)))))))
-
-
 ;;; A walker is a function which recurses over a program tree,
 ;;; dispatching forms to handlers based on their keywords.
 ;;; define-walker is a macro providing a convenient way to define

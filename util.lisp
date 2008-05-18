@@ -32,3 +32,12 @@
 (define (lapush key val lalist)
   ;; push an key-val entry onto a list-of-alists
   (rplaca lalist (cons (cons key val) (car lalist))))
+
+
+(define (compound-symbol . pieces)
+  (intern (string-flatten (mapfor (p pieces)
+                            (cond ((string? p) (string-symbolcase p))
+                                  ((symbol? p) (symbol-name p))
+                                  (true (error "~S" p)))))))
+
+
