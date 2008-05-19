@@ -356,9 +356,8 @@
   (emit-add cg closure-tag result))
 
 (define-reg-use (fill-closure attrs closure . refs)
-  (let* ((ref-rus (mapfor (ref refs) (reg-use ref dest-type-value))))
-    (max (reg-use closure dest-type-value)
-         (1+ (reduce~ 0 ref-rus (function max))))))
+  (max (reg-use closure dest-type-value)
+       (1+ (max$ 0 (mapfor (ref refs) (reg-use ref dest-type-value))))))
 
 (define-codegen (fill-closure attrs closure . refs)
   (let* ((closure-reg (first regs))

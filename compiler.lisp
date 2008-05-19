@@ -1094,8 +1094,7 @@
   ;; arguments of an operator, when the operator itself has been
   ;; eliminated
   (if (null? (cddr form)) 0
-      (let* ((rus (mapfor (arg (cddr form)) (reg-use arg dest-type-discard))))
-        (reduce~ (car rus) (cdr rus) (function max)))))
+      (max$ 0 (mapfor (arg (cddr form)) (reg-use arg dest-type-discard)))))
 
 (define (operator-args-codegen-discarding form out-frame-base regs cg)
   ;; generate the code to evaluate the arguments of an operator, when

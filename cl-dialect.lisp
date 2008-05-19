@@ -203,6 +203,12 @@
 (defun reduce~ (initial l f)
   (reduce f l :initial-value initial))
 
+(defun max$ (init nums)
+  (reduce (function max) nums :initial-value init))
+
+(defun min$ (init nums)
+  (reduce (function min) nums :initial-value init))
+
 (defun make-vector-from-list (l)
   (make-array (length l) :initial-contents l))
 

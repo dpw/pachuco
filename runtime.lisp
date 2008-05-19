@@ -164,22 +164,10 @@
   ;; we introduce it much later
   (reify (gensym a)))
 
-;;; Arithmetic
+;;; Numbers
 
 (defmacro (1- n) (quasiquote (- (unquote n) 1)))
 (defmacro (1+ n) (quasiquote (+ (unquote n) 1)))
-
-(define (max a . nums)
-  (reduce a nums (lambda (a b) (if (> a b) a b))))
-
-(define (min a . nums)
-  (reduce a nums (lambda (a b) (if (< a b) a b))))
-
-;; We only support left shifts, because that is all the compiler needs
-(define (ash n count)
-  (cond ((= count 0) n)
-        ((> count 0) (ash (+ n n) (1- count)))
-        (true (error "no support for right shifts"))))
 
 ;;; Booleans
 
@@ -484,6 +472,50 @@
                 (true
                  (error "sublist fell off the end of the list"))))
         (copy-partial-list (nthcdr start l) (- (first end) start)))))
+
+;;; Numbers again
+
+;; We only support left shifts, because that is all the compiler needs
+(define (ash n count)
+  (cond ((= count 0) n)
+        ((> count 0) (ash (+ n n) (1- count)))
+        (true (error "no support for right shifts"))))
+
+(defmacro (max init . nums)
+  (reduce init nums (lambda (a b)
+                      (define avar (gensym))
+                      (define bvar (gensym))
+                      (quasiquote (begin
+                                    (define (unquote avar) (unquote a))
+                                    (define (unquote bvar) (unquote b))
+                                    (if (> (unquote avar) (unquote bvar))
+                                        (unquote avar)
+                                        (unquote bvar)))))))
+
+(define (max$ init nums)
+  (reduce init nums (lambda (a b) (max a b))))
+
+(define (max init . nums)
+  (max$ init nums))
+
+
+(defmacro (min init . nums)
+  (reduce init nums (lambda (a b)
+                      (define avar (gensym))
+                      (define bvar (gensym))
+                      (quasiquote (begin
+                                    (define (unquote avar) (unquote a))
+                                    (define (unquote bvar) (unquote b))
+                                    (if (< (unquote avar) (unquote bvar))
+                                        (unquote avar)
+                                        (unquote bvar)))))))
+
+(define (min$ init nums)
+  (reduce init nums (lambda (a b) (min a b))))
+
+(define (min init . nums)
+  (min$ init nums))
+
 
 ;;; Symbols
 
@@ -1102,7 +1134,7 @@
   (vector-set-range! readtable (character-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (character-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (character-code #\0) 10 rt-digit)
-  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\! #\~ #\%))
+  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\! #\~ #\% #\$))
     (vector-set! readtable (character-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)
