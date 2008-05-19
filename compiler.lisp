@@ -401,7 +401,7 @@
 
 (define (resolve-variable var frames)
   (let* ((varrec (lassoc var frames)))
-    (when (null? varrec) (error "unbound variable ~S" var))
+    (unless varrec (error "unbound variable ~S" var))
     varrec))
 
 (define-resolve-variables-aux (ref var)
