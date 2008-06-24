@@ -52,7 +52,7 @@ while [ $# -gt 0 ] ; do
     esac
 done
 
-cmd="$compiler compile $cdir/runtime.lisp $cdir/runtime2.lisp $files"
+cmd="$compiler compile $cdir/runtime.lisp $cdir/runtime2.lisp $cdir/gc.lisp $files"
 
 if [ -n "$time" ] ; then
     $(which time) -f "%E" $cmd >/dev/null

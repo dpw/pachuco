@@ -780,6 +780,14 @@
 (define-operator (raw-set! addr val) val ()
   (emit-mov cg val (mem addr) (attr-ref attrs 'scale)))
 
+;;; Raw ops for the GC
+
+(define-pure-operator (raw-logand a b) a ()
+  (emit-and cg b a))
+
+(define-pure-operator (raw-- a b) a ()
+  (emit-sub cg b a))
+
 ;;; Misc. runtime
 
 (define-reg-use (error-halt attrs message args) 0)

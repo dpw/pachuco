@@ -46,10 +46,12 @@
 
     fixnum->raw raw->fixnum
 
+    raw-logand raw--
+    
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call c-global))
+                     c-call c-global compiler-constant))
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
@@ -1326,3 +1328,16 @@
 
 (define-raw-type "raw" value-scale)    ; memory as value-sized words
 (define-raw-type "raw-1" 0)            ; memory as bytes
+
+;; Access to compiler constants for GC
+
+(define compiler-constants
+  (list (cons 'number-tag number-tag)
+        (cons 'number-tag-bits number-tag-bits)
+        (cons 'pair-tag pair-tag)
+        (cons 'pair-tag-bits pair-tag-bits)))
+
+(define-simplify (compiler-constant ccsym)
+  (let* ((cc (assoc ccsym compiler-constants)))
+    (unless cc (error "unknown compiler constant ~S" ccsym))
+    (overwrite-form form (list 'quote (cdr cc)))))
