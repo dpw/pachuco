@@ -113,4 +113,15 @@
       (raw-set! addr copy)
       (rplaca copy (gc-live a))
       (rplacd copy (gc-live (cdr val)))
+      copy)
+
+    (vector gc-address-type
+      (define len (vector-length val))
+      (define copy (make-vector len))
+      (raw-set! addr copy)
+      (define (copy-elems i)
+        (when (< i len)
+          (raw-vector-set! copy i (gc-live (raw-vector-ref val i)))
+          (copy-elems (1+ i))))
+      (copy-elems 0)
       copy)))
