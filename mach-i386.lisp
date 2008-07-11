@@ -13,8 +13,12 @@
 ;;; Value representation
 
 ;;; number-tag must be all zeros
-(defconstant number-tag #b00)
-(defconstant number-tag-bits 2)
+(defconstant number-tag #b000)
+(defconstant number-tag-bits 3)
+
+;;; specials are (), true, false, etc.
+(defconstant special-tag #b100)
+(defconstant special-tag-bits 3)
 
 (defconstant box-tag #b01)
 (defconstant box-tag-bits 2)
@@ -31,18 +35,17 @@
 (defconstant string-tag #b1011)
 (defconstant string-tag-bits 4)
 
-(defconstant atom-tag #b1111)
-(defconstant atom-tag-bits 4)
+(defconstant symbol-tag #b1111)
+(defconstant symbol-tag-bits 4)
 
-(defconstant false-representation #b1111)
-(defconstant lowest-symbol-representation #b100000001111)
+(defconstant false-representation #b100)
 
 (defconstant simple-representations 
   ;; The quotes here are significant for CL compatibility
   (list (cons 'false false-representation)
-        (cons 'true #b11111)
-        (cons 'unspecified #b101111)
-        (cons () #b111111)))
+        (cons 'true #b1100)
+        (cons 'unspecified #b10100)
+        (cons () #b11100)))
 
 ;;; Registers
 

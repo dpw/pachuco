@@ -129,6 +129,8 @@
   (assert-result (string-equal? "foo" "foo") true)
   (assert-result (string-equal? "foo" "bar") false)
   (assert-result (substring "Hello" 1 3) "ell")
+  (assert-result (string-search "banana" "an" 0) 1)
+  (assert-result (string-search "banana" "an" 2) 3)
   (assert-result (string-replace "banana" "an" "rane") "braneranea")
   (assert-result (not (character? #\x)) false)
 

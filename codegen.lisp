@@ -312,9 +312,10 @@
   (emit-clear cg reg))
 
 (define (emit-convert-cc-value cg cc reg)
+  ;; this embeds special-tag and the representations of false and true
   (emit-set cg cc reg)
-  (emit-shl cg atom-tag-bits reg 0)
-  (emit-or cg atom-tag reg 0))
+  (emit-shl cg special-tag-bits reg 0)
+  (emit-or cg special-tag reg 0))
 
 ;;; Heap allocation
 
@@ -454,9 +455,9 @@
         (let* ((label (gen-label))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
                                             cg)))
-          (emit-data cg label atom-tag-bits)
+          (emit-data cg label symbol-tag-bits)
           (emit-literal cg name)
-          (let* ((lit (format~ false "~A+~D" label atom-tag)))
+          (let* ((lit (format~ false "~A+~D" label symbol-tag)))
             (set! emitted-symbols (acons sym lit emitted-symbols))
             lit)))))
 
@@ -584,21 +585,15 @@
 
 ;;; Symbols
 
-(define-cc-operator (symbol? val) "e" ()
-  (let* ((l (gen-label)))
-    (emit-cmp cg lowest-symbol-representation val)
-    (emit-jcc cg "b" l)
-    (emit-and cg (low-bits-mask atom-tag-bits) val 0)
-    (emit-cmp cg atom-tag val 0)
-    (emit-label cg l)))
+(define-tag-check symbol? symbol-tag symbol-tag-bits)
 
 (define-pure-operator (symbol-name sym) result ()
-  (emit-mov cg (tagged-mem atom-tag sym) result))
+  (emit-mov cg (tagged-mem symbol-tag sym) result))
 
 (define-pure-operator (raw-make-symbol str) result (alloc)
-  (emit-alloc cg atom-tag-bits value-size alloc)
+  (emit-alloc cg symbol-tag-bits value-size alloc)
   (emit-mov cg str (mem alloc))
-  (emit-lea cg (mem1+ alloc atom-tag) result))
+  (emit-lea cg (mem1+ alloc symbol-tag) result))
 
 ;;;  Numbers
 
