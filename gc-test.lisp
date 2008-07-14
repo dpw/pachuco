@@ -81,7 +81,9 @@
   (assert (loopy-equal? (looped-vector) (looped-vector)))
 
   ;; now the actual gc tests
+  (assert-result (gc ()) ())
   (assert-result (gc (list 1 2 3)) '(1 2 3))
+  (assert-result (gc (string-concat "A" "B")) "AB")
   (assert (loopy-equal? (gc (looped-list 1 2 3)) (looped-list 1 2 3)))
   (assert (loopy-equal? (gc (looped-vector)) (looped-vector))))
 

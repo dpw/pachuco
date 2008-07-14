@@ -124,4 +124,11 @@
           (raw-vector-set! copy i (gc-live (raw-vector-ref val i)))
           (copy-elems (1+ i))))
       (copy-elems 0)
+      copy)
+
+    (string gc-address-type
+      (define len (string-length val))
+      (define copy (make-string len))
+      (raw-set! addr copy)
+      (raw-string-copy val 0 copy 0 len)
       copy)))
