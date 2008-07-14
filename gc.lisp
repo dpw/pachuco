@@ -119,11 +119,7 @@
       (define len (vector-length val))
       (define copy (make-vector len))
       (raw-set! addr copy)
-      (define (copy-elems i)
-        (when (< i len)
-          (raw-vector-set! copy i (gc-live (raw-vector-ref val i)))
-          (copy-elems (1+ i))))
-      (copy-elems 0)
+      (gc-copy-vector-elems val copy len 0)
       copy)
 
     (string gc-address-type
@@ -138,5 +134,10 @@
       ;; symbol.  But that would be really perverse.
       (define copy (raw-make-symbol (gc-live (symbol-name val))))
       (raw-set! addr copy)
-      copy)))
+      copy))
+
+  (define (gc-copy-vector-elems src dest len i)
+    (when (< i len)
+      (raw-vector-set! dest i (gc-live (raw-vector-ref src i)))
+      (gc-copy-vector-elems src dest len (1+ i)))))
     
