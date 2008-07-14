@@ -84,6 +84,10 @@
   (assert-result (gc ()) ())
   (assert-result (gc (list 1 2 3)) '(1 2 3))
   (assert-result (gc (string-concat "A" "B")) "AB")
+  (begin
+    (define str "test-symbol")
+    (define sym (raw-make-symbol str))
+    (assert-result (symbol-name (gc sym)) str))
   (assert (loopy-equal? (gc (looped-list 1 2 3)) (looped-list 1 2 3)))
   (assert (loopy-equal? (gc (looped-vector)) (looped-vector))))
 

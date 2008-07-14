@@ -1339,7 +1339,9 @@
         (cons 'vector-tag vector-tag)
         (cons 'vector-tag-bits vector-tag-bits)
         (cons 'string-tag string-tag)
-        (cons 'string-tag-bits string-tag-bits)))
+        (cons 'string-tag-bits string-tag-bits)
+        (cons 'symbol-tag symbol-tag)
+        (cons 'symbol-tag-bits symbol-tag-bits)))
 
 (define-simplify (compiler-constant ccsym)
   (let* ((cc (assoc ccsym compiler-constants)))

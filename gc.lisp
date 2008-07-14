@@ -131,4 +131,12 @@
       (define copy (make-string len))
       (raw-set! addr copy)
       (raw-string-copy val 0 copy 0 len)
+      copy)
+    
+    (symbol gc-address-type
+      ;; This won't work for a symbol with its name slot set to the
+      ;; symbol.  But that would be really perverse.
+      (define copy (raw-make-symbol (gc-live (symbol-name val))))
+      (raw-set! addr copy)
       copy)))
+    
