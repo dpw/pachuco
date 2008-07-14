@@ -390,6 +390,12 @@
       (set! index (1+ index)))
     (emit-convert-value cg closure-reg dest out-frame-base)))
 
+(define (codegen-function-intro label closure-size cg)
+  (emit cg ".text")
+  (emit cg ".align ~D" (ash 1 value-scale))
+  (emit-literal cg (fixnum-representation closure-size))
+  (emit-label cg label))
+
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
   0)

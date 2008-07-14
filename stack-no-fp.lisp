@@ -29,9 +29,8 @@
 
 ;;; Functions, calls, returns, etc.
 
-(define (codegen-function label body cg) 
-  (emit cg ".text")
-  (emit-label cg label)
+(define (codegen-function label closure-size body cg) 
+  (codegen-function-intro label closure-size cg)
   (when (codegen-have-closure cg) (emit-push cg %closure))
   (codegen body dest-discard (if (codegen-have-closure cg) -1 0)
            general-registers cg))

@@ -950,7 +950,7 @@
     (codegen-set-frame-base! cg 0)
     (emit-comment-form cg body)
     (codegen-set-have-closure! cg (not (null? closure)))
-    (codegen-function (attr-ref attrs 'label) body cg)))
+    (codegen-function (attr-ref attrs 'label) (1+ (length closure)) body cg)))
 
 (define (wrap-lambda-body lambda-form)
   ;; wrap a lambda body with code required to check that the number of
