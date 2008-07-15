@@ -42,7 +42,7 @@
         (gen-label))))
 
 (define (emit-data cg label scale)
-  (emit cg ".data")
+  (emit cg ".section .rodata")
   (emit cg ".align ~D" (ash 1 scale))
   (emit-label cg label))
 
