@@ -134,7 +134,7 @@
 
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
-    (codegen-sections program cg)
+    (codegen-program-sections program cg)
     (reg-use program dest-type-discard)
     
     (emit cg ".text")

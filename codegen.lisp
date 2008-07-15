@@ -372,9 +372,20 @@
 
 (define (codegen-top-level-variable cg name label)
   (emit-comment cg "top-level ~S" name)
-  (when (string-starts-with? label ".L")
-    (emit cg ".local ~A" label))
-  (emit cg ".comm ~A, ~D, ~D" label value-size value-size))
+  (emit cg ".section .bss")
+  (emit cg "~A:" label)
+  (emit-literal cg 0))
+
+(define (codegen-program-sections program cg)
+  (define (emit-bss-label l)
+    (emit cg ".section .bss")
+    (emit cg ".align ~D" value-size)
+    (emit cg ".globl ~A" l)
+    (emit cg "~A:" l))
+
+  (emit-bss-label "top_level_start")
+  (codegen-sections program cg)
+  (emit-bss-label "top_level_end"))
 
 ;;; Functions and closures
 
