@@ -81,23 +81,23 @@
   (assert (loopy-equal? (looped-vector) (looped-vector)))
 
   ;; now the actual gc tests
-  (assert-result (gc ()) ())
-  (assert-result (gc (list 1 2 3)) '(1 2 3))
-  (assert-result (gc (string-concat "A" "B")) "AB")
+  (assert-result (gc-test-copy ()) ())
+  (assert-result (gc-test-copy (list 1 2 3)) '(1 2 3))
+  (assert-result (gc-test-copy (string-concat "A" "B")) "AB")
 
   (begin
     (define str "test-symbol")
     (define sym (raw-make-symbol str))
-    (assert-result (symbol-name (gc sym)) str))
+    (assert-result (symbol-name (gc-test-copy sym)) str))
 
-  (assert (loopy-equal? (gc (looped-list 1 2 3)) (looped-list 1 2 3)))
-  (assert (loopy-equal? (gc (looped-vector)) (looped-vector)))
+  (assert (loopy-equal? (gc-test-copy (looped-list 1 2 3)) (looped-list 1 2 3)))
+  (assert (loopy-equal? (gc-test-copy (looped-vector)) (looped-vector)))
 
   (begin
     (define (make-closure x)
       (lambda () x))
 
-    (assert-result (funcall (gc (make-closure "hello"))) "hello")
+    (assert-result (funcall (gc-test-copy (make-closure "hello"))) "hello")
 
     (define (make-settable-closure)
       (define x)
@@ -109,7 +109,7 @@
         (define f (lambda () x))
         (set! x f)
         f))
-    (define looped-closure-copy (gc looped-closure))
+    (define looped-closure-copy (gc-test-copy looped-closure))
 
     (assert-result (funcall looped-closure-copy) looped-closure-copy)))
 

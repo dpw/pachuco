@@ -25,7 +25,10 @@
         ;; anything with those.
         val))
 
-  (define (gc val)
+  (define (gc-test-copy val)
+    ;; a test function that uses the GC machinery to destructively
+    ;; copy objects
+
     ;; heap_alloc moves downwards, so from-space is above it, and
     ;; to-space is below it
     (set! gc-from-space (c-global "heap_alloc"))
