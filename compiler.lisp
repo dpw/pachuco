@@ -46,12 +46,12 @@
 
     fixnum->raw raw->fixnum
 
-    raw-logand raw--
+    raw-logand raw-- raw-+
     
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call c-global compiler-constant))
+                     c-call c-global compiler-constant raw-alloc))
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
@@ -1341,9 +1341,14 @@
         (cons 'string-tag string-tag)
         (cons 'string-tag-bits string-tag-bits)
         (cons 'symbol-tag symbol-tag)
-        (cons 'symbol-tag-bits symbol-tag-bits)))
+        (cons 'symbol-tag-bits symbol-tag-bits)
+        (cons 'closure-tag closure-tag)
+        (cons 'closure-tag-bits closure-tag-bits)))
 
-(define-simplify (compiler-constant ccsym)
+(define (compiler-constant-value ccsym)
   (let* ((cc (assoc ccsym compiler-constants)))
     (unless cc (error "unknown compiler constant ~S" ccsym))
-    (overwrite-form form (list 'quote (cdr cc)))))
+    (cdr cc)))
+
+(define-simplify (compiler-constant ccsym)
+  (overwrite-form form (list 'quote (compiler-constant-value ccsym))))

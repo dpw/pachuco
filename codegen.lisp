@@ -343,6 +343,17 @@
   (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
   (emit-mov cg allocreg (mem "heap_alloc")))
 
+;; the gc uses the raw-alloc operation
+
+(define-simplify (raw-alloc tag-bits-ccsym size)
+  (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
+
+(define-pure-operator (raw-alloc size) result (alloc)
+  (emit-scale-number cg value-scale size)
+  (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
+              size alloc)
+  (emit-mov cg alloc result))
+
 ;;; Variable access
 
 (define (closure-slot closure index)
@@ -793,6 +804,9 @@
 
 (define-pure-operator (raw-- a b) a ()
   (emit-sub cg b a))
+
+(define-pure-operator (raw-+ a b) a ()
+  (emit-add cg b a))
 
 ;;; Misc. runtime
 
