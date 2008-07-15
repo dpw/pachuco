@@ -147,6 +147,13 @@
       (raw-set! addr copy)
       (raw-set! copy-addr code)
       (gc-copy-vec addr copy-addr size 1)
+      copy)
+
+    (box gc-address-type
+      (define boxed (raw-box-ref val))
+      (define copy (raw-make-box unspecified))
+      (raw-set! addr copy)
+      (raw-box-set! copy (gc-live boxed))
       copy))
 
   (define (gc-copy-vec src dest len i)

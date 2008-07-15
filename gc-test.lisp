@@ -97,7 +97,21 @@
     (define (make-closure x)
       (lambda () x))
 
-    (assert-result (funcall (gc (make-closure "hello"))) "hello")))
+    (assert-result (funcall (gc (make-closure "hello"))) "hello")
+
+    (define (make-settable-closure)
+      (define x)
+      (lambda (y) (set! x y)))
+
+    (define looped-closure
+      (begin
+        (define x)
+        (define f (lambda () x))
+        (set! x f)
+        f))
+    (define looped-closure-copy (gc looped-closure))
+
+    (assert-result (funcall looped-closure-copy) looped-closure-copy)))
 
 (define (main)
   (gc-tests)

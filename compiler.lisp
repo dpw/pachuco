@@ -44,6 +44,8 @@
     raw-vec-set! raw-vec-ref raw-ref raw-set! raw-copy
     raw-1-vec-set! raw-1-vec-ref raw-1-ref raw-1-set! raw-1-copy
 
+    raw-make-box raw-box-ref raw-box-set!
+
     fixnum->raw raw->fixnum
 
     raw-logand raw-- raw-+
@@ -56,7 +58,6 @@
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
                             alloc-closure fill-closure
-                            make-box box-ref box-set!
                             check-arg-count arg-count
                             negate
                             make-vec vec-length vec-address
@@ -625,7 +626,7 @@
 ;;; For variables introduced by begin, we also need to allocate the
 ;;; storage boxes, but classify-variables ensured that a define always
 ;;; precedes any other other of a variable, so we simply patch the
-;;; define to do the make-box.
+;;; define to do the raw-make-box.
 ;;;
 ;;; Variables introduced by lambdas are more complicated, since we need
 ;;; to copy the original parameter value into the storage box.  So we
@@ -643,21 +644,22 @@
 (define-introduce-boxes (ref varrec)
   (when (varrec-boxed? varrec)
     (overwrite-form form 
-                    (quasiquote (box-ref () (ref (unquote varrec)))))))
+                    (quasiquote (raw-box-ref () (ref (unquote varrec)))))))
 
 (define-introduce-boxes (set! varrec val)
   (when (varrec-boxed? varrec)
-    (overwrite-form form (quasiquote (box-set! () (ref (unquote varrec))
-                                               (unquote val)))))
+    (overwrite-form form (quasiquote (raw-box-set! () (ref (unquote varrec))
+                                                   (unquote val)))))
   (introduce-boxes val))
 
 (define-introduce-boxes (define varrec val)
   (when (varrec-boxed? varrec)
-    (rplaca (cddr form) (list 'make-box () val)))
+    (rplaca (cddr form) (list 'raw-make-box () val)))
   (introduce-boxes val))
 
 (define (init-boxed-param-form varrec temprec)
-  (quasiquote (define (unquote varrec) (make-box () (ref (unquote temprec))))))
+  (quasiquote (define (unquote varrec)
+                (raw-make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
   ;; Where a parameter should be boxed, we need to replace the
@@ -1343,7 +1345,9 @@
         (cons 'symbol-tag symbol-tag)
         (cons 'symbol-tag-bits symbol-tag-bits)
         (cons 'closure-tag closure-tag)
-        (cons 'closure-tag-bits closure-tag-bits)))
+        (cons 'closure-tag-bits closure-tag-bits)
+        (cons 'box-tag box-tag)
+        (cons 'box-tag-bits box-tag-bits)))
 
 (define (compiler-constant-value ccsym)
   (let* ((cc (assoc ccsym compiler-constants)))

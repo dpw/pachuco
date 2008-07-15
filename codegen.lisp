@@ -605,15 +605,15 @@
 
 ;;; Boxes
 
-(define-pure-operator (make-box val) result (alloc)
+(define-pure-operator (raw-make-box val) result (alloc)
   (emit-alloc cg box-tag-bits value-size alloc)
   (emit-mov cg val (mem alloc))
   (emit-lea cg (mem1+ alloc box-tag) result))
 
-(define-operator (box-set! box val) val ()
+(define-operator (raw-box-set! box val) val ()
   (emit-mov cg val (tagged-mem box-tag box)))
 
-(define-operator (box-ref box) result ()
+(define-operator (raw-box-ref box) result ()
   (emit-mov cg (tagged-mem box-tag box) result))
 
 ;;; Symbols
