@@ -1,10 +1,10 @@
 (when-compiling
   ;; gc-type table is a vector mapping from the low-order bits of a value 
   ;; to the appropriate type-specific GC routine
-  (define gc-type-table)
+  (define gc-type-table false)
 
   ;; the mask to apply to a value to get an index into gc-type-table
-  (define gc-raw-tag-mask)
+  (define gc-raw-tag-mask false)
 
   ;; the limits of from-space and to-space
   (define gc-from-space false)
@@ -25,6 +25,36 @@
         ;; anything with those.
         val))
 
+  (define (gc-root-set start-addr end-addr)
+    (when (< start-addr end-addr)
+      (raw-set! start-addr (gc-live (raw-ref start-addr)))
+      (gc-root-set (raw-+ start-addr
+                          (fixnum->raw (compiler-constant value-size)))
+                   end-addr)))
+
+  (define (gc)
+    ;; heap_alloc moves downwards, so from-space is above it, and
+    ;; to-space is below it.
+    (set! gc-from-space (raw-c-global "heap_alloc"))
+    (set! gc-from-space-end (raw-c-global "heap_end"))
+    (set! gc-to-space (raw-c-global "heap"))
+    (set! gc-to-space-end gc-from-space)
+
+    ;; it's critical that the GC type table is in to-space, so that it
+    ;; doesn't get disrupted by copying.  So we construct it afresh at
+    ;; the start of each GC.
+    (construct-gc-type-table)
+    
+    (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
+    (gc-root-set (raw-args-base) runtime-main-args-base)
+
+    (formout stderr "GC done, ~D bytes copied~%"
+             (raw->fixnum (raw-- gc-to-space-end (raw-c-global "heap_alloc"))))
+
+    (set! gc-from-space (set! gc-from-space-end
+      (set! gc-to-space (set! gc-to-space-end
+        (set! gc-type-table (set! gc-raw-tag-mask false)))))))
+
   (define (gc-test-copy val)
     ;; a test function that uses the GC machinery to destructively
     ;; copy objects
@@ -34,40 +64,25 @@
     (set! gc-from-space (raw-c-global "heap_alloc"))
     (set! gc-from-space-end (raw-c-global "heap_end"))
     (set! gc-to-space (raw-c-global "heap"))
-    (set! gc-to-space-end (raw-c-global "heap_alloc"))
+    (set! gc-to-space-end gc-from-space)
+    (construct-gc-type-table)
     
     (define res (gc-live val))
 
     (set! gc-from-space (set! gc-from-space-end
-      (set! gc-to-space (set! gc-to-space-end false))))
+      (set! gc-to-space (set! gc-to-space-end
+        (set! gc-type-table (set! gc-raw-tag-mask false))))))
 
     res)
 
-  (define (construct-gc-type-table . tag-bits-funcs)
-    ;; contract gc-type-table passed on the type information
-    (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
-    (define table-size (ash 1 max-bits))
-    (set! gc-type-table (make-vector table-size))
-    (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
-    
-    ;; fill in the table
-    (dolist (tbf (cons (list 0 0 (function gc-unknown-type)) tag-bits-funcs))
-      (define step (ash 1 (second tbf)))
-      (define i (first tbf))
-      (while (< i table-size)
-        (vector-set! gc-type-table i (third tbf))
-        (set! i (+ i step)))))
-
-  (define (gc-unknown-type val)
-    ;; handler for unknown tags
-    (error "unknown type with tag ~D" 
-           (raw->fixnum (raw-logand gc-raw-tag-mask val))))
-
   (defmacro (define-gc-types . type-gcs)
     ;; a convenience macro which takes a body full of type-gc
-    ;; declarations, and produces a construct-gc-type-table form
-    ;; taking advantage of compiler-constant
-    (list* 'construct-gc-type-table
+    ;; declarations, and produces a construct-gc-type-table definition
+
+    ;; first, produce the code to generate tags-bits-funcs.  This is a
+    ;; list of triples, each one giving a type tag, it tag-bits, and
+    ;; the copier function.
+    (define tbf-form
       (mapfor (type-gc type-gcs)
         (define type (first type-gc))
         (define tag (list 'compiler-constant (compound-symbol type "-tag")))
@@ -76,10 +91,29 @@
         (quasiquote 
           (list (unquote tag) (unquote bits)
                 ((unquote (second type-gc)) (unquote tag) (unquote bits)
-                                        (unquote-splicing (cddr type-gc))))))))
+                                        (unquote-splicing (cddr type-gc)))))))
+    
+    (quasiquote
+      (define (construct-gc-type-table)
+        (define tag-bits-funcs (list
+          (list 0 0 (lambda (val)
+                      (error "unknown type with tag ~D" 
+                             (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
+          (unquote-splicing tbf-form)))
+        (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
+        (define table-size (ash 1 max-bits))
+        (set! gc-type-table (make-vector table-size))
+        (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
+    
+        ;; fill in the table
+        (dolist (tbf tag-bits-funcs)
+          (define step (ash 1 (second tbf)))
+          (define i (first tbf))
+          (while (< i table-size)
+            (vector-set! gc-type-table i (third tbf))
+            (set! i (+ i step)))))))
 
-  (defmacro (gc-number-type tag bits)
-    ;; don't need to copy anything for a fixnum
+  (defmacro (gc-identity-type tag bits)
     'identity)
 
   (defmacro (gc-address-type tag bits . copier)
@@ -108,7 +142,8 @@
               (begin (unquote-splicing copier)))))))
 
   (define-gc-types
-    (number gc-number-type)
+    (number gc-identity-type)
+    (special gc-identity-type)
 
     (pair gc-address-type
       (define a (car val))

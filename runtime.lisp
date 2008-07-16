@@ -1405,12 +1405,16 @@
 
 (define (command-line)
   (unless saved-command-line
-    (set! saved-command-line (c-string-array-to-list (raw-c-global "lisp_argv"))))
+    (set! saved-command-line
+      (c-string-array-to-list (raw-c-global "lisp_argv"))))
   saved-command-line)
 
 ;;; Entry point function
 
+(define runtime-main-args-base)
+
 (define (runtime-main)
+  (set! runtime-main-args-base (raw-args-base))
   (main)
   (flush-ostream stdout))
 

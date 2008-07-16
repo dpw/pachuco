@@ -68,6 +68,8 @@
     (vector-set! v 2 v)
     v)
 
+  (gc)
+
   ;; some tests for loopy-equal
   (assert (loopy-equal? () ()))
   (assert (loopy-equal? (list 'x) (list 'x)))
@@ -111,7 +113,9 @@
         f))
     (define looped-closure-copy (gc-test-copy looped-closure))
 
-    (assert-result (funcall looped-closure-copy) looped-closure-copy)))
+    (assert-result (funcall looped-closure-copy) looped-closure-copy))
+  
+  (gc))
 
 (define (main)
   (gc-tests)

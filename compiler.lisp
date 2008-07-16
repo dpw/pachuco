@@ -53,7 +53,7 @@
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call raw-c-global compiler-constant raw-alloc))
+                     c-call raw-c-global raw-label compiler-constant raw-alloc))
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
@@ -1334,8 +1334,11 @@
 ;; Access to compiler constants for GC
 
 (define compiler-constants
-  (list (cons 'number-tag number-tag)
+  (list (cons 'value-size value-size)
+        (cons 'number-tag number-tag)
         (cons 'number-tag-bits number-tag-bits)
+        (cons 'special-tag special-tag)
+        (cons 'special-tag-bits special-tag-bits)
         (cons 'pair-tag pair-tag)
         (cons 'pair-tag-bits pair-tag-bits)
         (cons 'vector-tag vector-tag)
