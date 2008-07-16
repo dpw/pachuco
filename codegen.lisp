@@ -850,10 +850,10 @@
         (emit-and cg reg (mem %sp) 2)))
   (emit-popf cg))
 
-(define-simplify (c-global name)
+(define-simplify (raw-c-global name)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-reg-use (c-global attrs) (convert-value-reg-use dest-type))
+(define-reg-use (raw-c-global attrs) (convert-value-reg-use dest-type))
 
-(define-codegen (c-global attrs)
+(define-codegen (raw-c-global attrs)
   (emit-convert-value cg (mem (attr-ref attrs 'name)) dest out-frame-base))

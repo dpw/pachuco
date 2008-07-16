@@ -31,10 +31,10 @@
 
     ;; heap_alloc moves downwards, so from-space is above it, and
     ;; to-space is below it
-    (set! gc-from-space (c-global "heap_alloc"))
-    (set! gc-from-space-end (c-global "heap_end"))
-    (set! gc-to-space (c-global "heap"))
-    (set! gc-to-space-end (c-global "heap_alloc"))
+    (set! gc-from-space (raw-c-global "heap_alloc"))
+    (set! gc-from-space-end (raw-c-global "heap_end"))
+    (set! gc-to-space (raw-c-global "heap"))
+    (set! gc-to-space-end (raw-c-global "heap_alloc"))
     
     (define res (gc-live val))
 

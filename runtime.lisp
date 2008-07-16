@@ -1405,7 +1405,7 @@
 
 (define (command-line)
   (unless saved-command-line
-    (set! saved-command-line (c-string-array-to-list (c-global "lisp_argv"))))
+    (set! saved-command-line (c-string-array-to-list (raw-c-global "lisp_argv"))))
   saved-command-line)
 
 ;;; Entry point function

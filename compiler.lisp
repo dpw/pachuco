@@ -53,7 +53,7 @@
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call c-global compiler-constant raw-alloc))
+                     c-call raw-c-global compiler-constant raw-alloc))
 
 (define internal-keywords '(ref call return varargs-return
                             tail-call varargs-tail-call
