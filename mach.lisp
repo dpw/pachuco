@@ -25,8 +25,10 @@
 ;;; Assembler bits
 
 (defmarco (emit-without-flushing template . args)
-  (quasiquote (format~ true (unquote (string-concat template "~%"))
-                       (unquote-splicing args))))
+  (quasiquote
+    (let* ((*print-pretty* false))
+      (format~ true (unquote (string-concat template "~%"))
+               (unquote-splicing args)))))
 
 (defmarco (emit cg template . args)
   (quasiquote (begin
