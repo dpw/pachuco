@@ -676,12 +676,46 @@
                                  (unquote body))))))
   (introduce-boxes body))
 
-;;; Decompose lambdas into alloc-closure and fill-closure.
+;;; Decompose lambdas into alloc-closure and fill-closure forms.
 ;;;
-;;; Also, assign a label for the code for each lambda, and where
-;;; possible, propogate it to the associated variable
+;;; alloc-closure allocate a closure representing a function, and sets
+;;; its code pointer.  fill-closure fills the variable reference slots
+;;; in a closure.
+;;;
+;;; The point of this is to support recursive functions (including
+;;; mutually recursive functions), without introducing boxes.  If we
+;;; have two mutually recursive non-top-level functions, represented
+;;; by closures F and G, then F needs to contain a slot pointing to G,
+;;; and G needs to contain a slot pointing to F.  Thus we allocate F
+;;; and G first, and then fill in their slots.
+;;;
+;;; The functions that need treating in this way were identified in
+;;; the classify-variables phase as early-access functions (with
+;;; predicate varrec-early-function?).
+;;;
+;;; This phase also assigns a label for the code for each function (in
+;;; the label attribute of the alloc-closure), and where possible,
+;;; propogates it to the associated variable (in the lambda-label
+;;; attribute of the varrec).
+;;;
+;;; So, for example, the effect is similar to a transformation from:
+;;;
+;;; (begin
+;;;   (define g (lambda () (h)))
+;;;   (define h (lambda () (g))))
+;;;
+;;; to
+;;;
+;;; (begin
+;;;   (define g (alloc-closure ((body (h)) (label "g") (closure h))))
+;;;   (define h (alloc-closure ((body (g)) (label "h") (closure g))))
+;;;   (fill-closure g h)
+;;;   (fill-closure h g))
 
-(define-trivial-walker decompose-lambdas (begin))
+;;; We need a reference to the begin form in which eligible function
+;;; definitions occur, in order to hoist the define...alloc-closure to
+;;; the start
+(define-trivial-walker decompose-lambdas (begin-form))
 
 (define-decompose-lambdas (begin varrecs . body)
   (dolist (varrec varrecs)
@@ -689,50 +723,43 @@
   (decompose-lambdas-forms body form))
 
 (define-decompose-lambdas (lambda attrs body)
-  (let* ((closure (attr-ref attrs 'closure)))
-    (decompose-lambda form attrs closure body begin
-                    (make-alloc-closure closure))))
+  (decompose-lambda form (gen-label) begin-form))
 
 (define-decompose-lambdas (define varrec val)
   (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-      (let* ((attrs (second val))
-             (body (third val))
-             (closure (attr-ref attrs 'closure)))
-        (varrec-attr-set! varrec 'lambda-label
-          (if (varrec-early-function? varrec)
-              (decompose-define-lambda form varrec attrs closure body begin) 
-              (decompose-lambda val attrs closure body begin
-                                (make-alloc-closure closure))))
-        (varrec-attr-set! varrec 'no-closure (null? closure)))
-      (decompose-lambdas val begin)))
+      (let* ((label (gen-label)))
+        (varrec-attr-set! varrec 'lambda-label label)
+        (varrec-attr-set! varrec 'no-closure (null? (form-attr val 'closure)))
+        (if (varrec-early-function? varrec)
+            (begin
+              (rplacd (cdr begin-form)
+                      (cons (list 'define varrec
+                                  (make-alloc-closure val label begin-form))
+                            (cddr begin-form)))
+              (overwrite-form form (make-fill-closure val (list 'ref varrec))))
+            (decompose-lambda val label begin-form)))
+      (decompose-lambdas val begin-form)))
 
-(define (decompose-define-lambda form varrec attrs closure body begin)
-  (rplacd (cdr begin)
-          (cons (list 'define varrec (make-alloc-closure closure))
-                (cddr begin)))
-  (decompose-lambda form attrs closure body begin (list 'ref varrec)))
+(define (decompose-lambda lambda-form label begin-form)
+  (overwrite-form lambda-form
+                  (make-fill-closure lambda-form
+                                     (make-alloc-closure lambda-form label
+                                                         begin-form))))
 
-(define (decompose-lambda form attrs closure body begin closure-form)
-  (dolist (varrec (attr-ref attrs 'params))
+(define (make-alloc-closure lambda-form label begin-form)
+  (dolist (varrec (form-attr lambda-form 'params))
     (varrec-attr-set! varrec 'lambda-label false))
-  (decompose-lambdas body begin)
+  (decompose-lambdas (third lambda-form) begin-form)
+  (list 'alloc-closure (list* (cons 'label label)
+                              (cons 'body (third lambda-form))
+                              (second lambda-form))))
 
-  ;; turn (lambda attrs body) into
-  ;; (fill-closure attrs (alloc-closure n) refs)
-  (let* ((label (gen-label)))
-    (overwrite-form form
-      (quasiquote
-        (fill-closure ((unquote-splicing attrs)
-                        (label . (unquote label))
-                        (body (unquote-splicing body)))
-          (unquote closure-form)
-          (unquote-splicing
-            (mapfor (varrec closure)
-              (list 'ref (varrec-attr varrec 'source)))))))
-    label))
-
-(define (make-alloc-closure closure)
-  (quasiquote (alloc-closure ((size . (unquote (length closure)))))))
+(define (make-fill-closure lambda-form closure-form)
+  (let* ((closure (form-attr lambda-form 'closure)))
+    (if (null? closure) closure-form
+        (list* 'fill-closure () closure-form
+               (mapfor (varrec closure)
+                 (list 'ref (varrec-attr varrec 'source)))))))
 
 ;;; Produce a debug form
 
@@ -784,8 +811,8 @@
 (define-debug-form (lambda attrs body)
   (list 'lambda (debug-lambda-attrs attrs) (debug-form body)))
 
-(define-debug-form (fill-closure attrs . args)
-  (list* 'fill-closure (debug-lambda-attrs attrs) (debug-forms args)))
+(define-debug-form (alloc-closure attrs)
+  (list* 'alloc-closure (debug-lambda-attrs attrs)))
 
 (define-debug-form ((define set!) varrec val)
   (list (car form) (debug-substitute-varrec varrec) (debug-form val)))
@@ -886,7 +913,7 @@
       (varrec-attr-set! varrec 'index index)
       (set! index (1+ index)))))
 
-(define-codegen-sections (fill-closure attrs . args)
+(define-codegen-sections (alloc-closure attrs)
   (let* ((self-varrec (attr-ref attrs 'self))
          (closure (attr-ref attrs 'closure))
          (body (attr-ref attrs 'body)))

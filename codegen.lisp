@@ -351,10 +351,11 @@
 
 ;;; Functions and closures
 
-(define-pure-operator (alloc-closure) result ()
-  (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'size)))
-              result)
-  (emit-add cg closure-tag result))
+(define-pure-operator (alloc-closure) result (alloc)
+  (emit-alloc cg closure-tag-bits
+              (* value-size (1+ (length (attr-ref attrs 'closure)))) alloc)
+  (emit-mov cg (attr-ref attrs 'label) (mem alloc))
+  (emit-lea cg (mem1+ alloc closure-tag) result))
 
 (define-reg-use (fill-closure attrs closure . refs)
   (max (reg-use closure dest-type-value)
@@ -366,7 +367,6 @@
          (index 0))
     (codegen closure (dest-value closure-reg) (codegen-frame-base cg) regs
              cg)
-    (emit-mov cg (attr-ref attrs 'label) (tagged-mem closure-tag closure-reg))
     (dolist (ref refs)
       (codegen ref (dest-value ref-reg) (codegen-frame-base cg) (cdr regs)
                cg)
