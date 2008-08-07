@@ -24,6 +24,23 @@
 (define (gen-label)
   (format~ false ".L~D" (set! label-counter (1+ label-counter))))
 
+(define (label-name-ok? name i)
+  (or (= i (string-length name))
+      (let* ((ch (string-ref name i)))
+        (and (or (character-alphanumeric? ch) (eq? ch #\-))
+             (label-name-ok? name (1+ i))))))
+
+(define function-label-prefix "lf_")
+(define variable-label-prefix "lv_")
+
+(define (make-label-for sym prefix)
+  ;; map a lisp symbol to an assembly label, returning a gen-labelled
+  ;; label if necessary
+  (let* ((name (subject-language-symbol-name sym)))
+    (if (label-name-ok? name 0)
+        (string-concat prefix (string-replace name "-" "_"))
+        (gen-label))))
+
 (define (emit-data cg label scale)
   (emit cg ".data")
   (emit cg ".align ~D" (ash 1 scale))
@@ -342,12 +359,11 @@
                    ((eq? mode 'local) (local-slot cg index))
                    (true (error "strange variable mode ~S" mode))))))))
 
-(define (codegen-top-level-variable cg name)
-  (let* ((label (gen-label)))
-    (emit-comment cg "top-level ~S" name)
-    (emit cg ".local ~A" label)
-    (emit cg ".comm ~A, ~D, ~D" label value-size value-size)
-    label))
+(define (codegen-top-level-variable cg name label)
+  (emit-comment cg "top-level ~S" name)
+  (when (string-starts-with? label ".L")
+    (emit cg ".local ~A" label))
+  (emit cg ".comm ~A, ~D, ~D" label value-size value-size))
 
 ;;; Functions and closures
 

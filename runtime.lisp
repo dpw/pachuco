@@ -1155,6 +1155,13 @@
 (define (rt-constituent? ct)
   (<= ct rt-constituent-max))
 
+(define (character-alphanumeric? ch)
+  (set! ch (character-code ch))
+  (and (< ch 128)
+       (begin
+         (define ct (vector-ref readtable ch))
+         (not (and (/= ct rt-alpha-uc) (/= ct rt-alpha-lc) (/= ct rt-digit))))))
+
 (define (read-integer istr radix)
   ;; Reads an integer from the istream.  Returns false if an integer
   ;; could not be parsed, others returns the value, stopping after the

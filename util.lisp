@@ -33,11 +33,11 @@
   ;; push an key-val entry onto a list-of-alists
   (rplaca lalist (cons (cons key val) (car lalist))))
 
-
 (define (compound-symbol . pieces)
   (intern (string-flatten (mapfor (p pieces)
                             (cond ((string? p) (string-symbolcase p))
                                   ((symbol? p) (symbol-name p))
                                   (true (error "~S" p)))))))
 
-
+(define (string-starts-with? str prefix)
+  (string-range-equal? str 0 prefix 0 (string-length prefix)))

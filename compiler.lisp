@@ -195,8 +195,6 @@
 (define (varrec-attr-remove varrec attr)
   (attr-remove varrec attr))
 
-(define (varrec-var varrec) (first varrec))
-
 (define (overwrite-form form replacement)
   (rplaca form (car replacement))
   (rplacd form (cdr replacement)))
@@ -525,6 +523,9 @@
     (varrec-attr-set! varrec 'mode 'param))
   (mark-non-top-level-definitions body))
 
+(define (varrec-top-level? varrec)
+  (eq? 'top-level (varrec-attr varrec 'mode)))
+
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
 ;;;
@@ -576,8 +577,7 @@
     (varrec-attr-set! varrec 'boxed false)
     (varrec-attr-set! varrec 'origin false)
     (varrec-attr-set! varrec 'closure-stack
-                      (if (eq? 'top-level (varrec-attr varrec 'mode))
-                          false
+                      (if (varrec-top-level? varrec) false
                           (acons depth varrec ()))))
   (collect-closures-aux-recurse form depth closure-cell)
   (dolist (varrec varrecs)
@@ -725,9 +725,14 @@
 (define-decompose-lambdas (lambda attrs body)
   (decompose-lambda form (gen-label) begin-form))
 
+(define (make-varrec-label varrec prefix)
+  (if (varrec-top-level? varrec)
+      (make-label-for (car varrec) prefix)
+      (gen-label)))
+
 (define-decompose-lambdas (define varrec val)
   (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-      (let* ((label (gen-label)))
+      (let* ((label (make-varrec-label varrec function-label-prefix)))
         (varrec-attr-set! varrec 'lambda-label label)
         (varrec-attr-set! varrec 'no-closure (null? (form-attr val 'closure)))
         (if (varrec-early-function? varrec)
@@ -895,15 +900,15 @@
 
 (define-codegen-sections (begin varrecs . body)
   (dolist (varrec varrecs)
-    (when (eq? 'top-level (varrec-attr varrec 'mode))
-      (varrec-attr-set! varrec 'label 
-                        (codegen-top-level-variable cg (car varrec)))))
+    (when (varrec-top-level? varrec)
+      (let* ((label (make-varrec-label varrec variable-label-prefix)))
+        (varrec-attr-set! varrec 'label label)
+        (codegen-top-level-variable cg (car varrec) label))))
   (codegen-sections-forms body cg))
 
 (define-codegen-sections (define varrec val)
   ;; convert define for top-level variables to set!
-  (when (eq? 'top-level (varrec-attr varrec 'mode))
-    (rplaca form 'set!))
+  (when (varrec-top-level? varrec) (rplaca form 'set!))
   (codegen-sections val cg))
 
 (define (assign-varrec-indices varrecs)

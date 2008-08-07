@@ -87,6 +87,12 @@
   (replace dest src :start1 dest-index :end1 (+ dest-index len)
            :start2 src-index))
 
+(defun string-range-equal? (a astart b bstart len)
+  (equalp (make-array len :element-type 'character 
+:displaced-to a :displaced-index-offset astart)
+          (make-array len :element-type 'character 
+:displaced-to b :displaced-index-offset bstart)))
+
 ;;; Vector primitives
 
 (defun make-vector (len)
@@ -214,4 +220,4 @@
 
 (defun code-character (a) (code-char a))
 (defun character-code (a) (char-code a))
-  
+(defun character-alphanumeric? (a) (alphanumericp a))
