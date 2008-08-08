@@ -327,7 +327,7 @@
 (define-simplify (lambda attrs . body)
   ;; Adjust lambdas so that they only take one body form, wrapped in
   ;; the argument handling code
-  (rplacd (cdr form) (list (wrap-lambda-body attrs body)))
+  (wrap-lambda-body form)
   (simplify-recurse form))
 
 (define-simplify (define varrec . val)
@@ -658,22 +658,33 @@
   (quasiquote (define (unquote varrec) (make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
-  (let* ((box-varrecs ())
-         (box-init-forms ()))
+  ;; Where a parameter should be boxed, we need to replace the
+  ;; substitute the original parameter variable with a temporary
+  ;; parameter variable with a gensymmed name, and then add code to
+  ;; the lambda body to copy the parameter value from the temporary to
+  ;; the original parameter variable.
+  ;;
+  ;; When we add this copying code, we put it at the start of the
+  ;; wrapped-begin form that was provided by wrap-lambda-body.  (We
+  ;; don't want to put it right at the start of the lambda body
+  ;; because that would interfere with the magic of arg-count.)
+  (let* ((wrapped-begin (attr-ref attrs 'wrapped-begin)))
     (nmapfor (varrec (attr-ref attrs 'params))
       (if (varrec-boxed? varrec)
-          (let* ((temprec (cons (gensym) '((mode . param)))))
+          (let* ((temprec (list* (gensym)
+                                 (cons 'origin false)
+                                 (cons 'boxed false)
+                                 '((mode . param)))))
             (varrec-attr-set! varrec 'mode 'local)
-            (set! box-varrecs (cons varrec box-varrecs))
-            (set! box-init-forms (cons (init-boxed-param-form varrec temprec)
-                                       box-init-forms))
+            (rplaca (cdr wrapped-begin) (cons varrec (cadr wrapped-begin)))
+            ;; we just add a simple define - the introduce-boxes on
+            ;; the body below will find it and elaborate it with the
+            ;; make-box form.
+            (rplacd (cdr wrapped-begin)
+                    (cons (list 'define varrec (list 'ref temprec))
+                          (cddr wrapped-begin)))
             temprec)
-          varrec))
-    (unless (null? box-varrecs)
-      (rplaca (cddr form)
-              (quasiquote (begin (unquote box-varrecs)
-                                 (unquote-splicing box-init-forms)
-                                 (unquote body))))))
+          varrec)))
   (introduce-boxes body))
 
 ;;; Decompose lambdas into alloc-closure and fill-closure forms.
@@ -939,27 +950,34 @@
     (codegen-set-have-closure! cg (not (null? closure)))
     (codegen-function (attr-ref attrs 'label) body cg)))
 
-(define (wrap-lambda-body attrs body)
+(define (wrap-lambda-body lambda-form)
   ;; wrap a lambda body with code required to check that the number of
   ;; arguments matches the number of parameters, or to handle varargs
-  (let* ((nparams (length (attr-ref attrs 'params)))
-         (vararg (attr-ref attrs 'vararg)))
-    (if vararg
-        (quasiquote
-          (begin ((raw-arg-count) ((unquote vararg)))
-                 (define raw-arg-count (arg-count ()))
-                 (define (unquote vararg)
-                     (call () (ref handle-varargs) (quote (unquote nparams))
-                           (ref raw-arg-count) (raw-args-base ())))
-                 (varargs-return () (ref raw-arg-count)
-                                 (begin () (unquote-splicing body)))))
-        (quasiquote
-          (return ((nparams . (unquote nparams)))
-            (if () (check-arg-count ((nparams . (unquote nparams))))
-                (begin () (unquote-splicing body))
-                (call () (ref arity-mismatch)
-                      (quote (unquote nparams))
-                      (arg-count ()))))))))
+  (let* ((nparams (length (form-attr lambda-form 'params)))
+         (vararg (form-attr lambda-form 'vararg))
+         (wrapped-begin (list* 'begin () (cddr lambda-form))))
+    ;; wrapped-begin is the begin form that surrounds the original
+    ;; lambda body.  We stash it in an attribute, because the
+    ;; introduce-boxes phase needs to get access to it later.
+    (form-attr-set! lambda-form 'wrapped-begin wrapped-begin)
+    (rplacd (cdr lambda-form)
+      (if vararg
+          (quasiquote
+            ((begin ((raw-arg-count) ((unquote vararg)))
+                    (define raw-arg-count (arg-count ()))
+                    (define (unquote vararg) (call () (ref handle-varargs)
+                                                   (quote (unquote nparams))
+                                                   (ref raw-arg-count)
+                                                   (raw-args-base ())))
+                    (varargs-return () (ref raw-arg-count)
+                                    (unquote wrapped-begin)))))
+          (quasiquote
+            ((return ((nparams . (unquote nparams)))
+                     (if () (check-arg-count ((nparams . (unquote nparams))))
+                         (unquote wrapped-begin)
+                         (call () (ref arity-mismatch)
+                               (quote (unquote nparams))
+                               (arg-count ()))))))))))
 
 (define-trivial-walker reg-use (dest-type))
 (define-trivial-walker codegen (dest out-frame-base regs cg))
