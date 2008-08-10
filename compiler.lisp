@@ -1138,7 +1138,7 @@
       (define-codegen ((unquote name) attrs (unquote-splicing params))
         (operator-args-codegen form regs cg)
         (bind ((unquote-splicing (cdr template))
-               (unquote-splicing supplemental-regs) . others) regs
+               (unquote-splicing supplemental-regs) . spare-regs) regs
           (let* ((result (destination-reg dest regs)))
             (unquote-splicing body)
             (emit-convert-value cg (unquote outreg) dest out-frame-base))))))))
@@ -1177,7 +1177,7 @@
             (begin
               (operator-args-codegen form regs cg)
               (bind ((unquote-splicing (cdr template))
-                     (unquote-splicing supplemental-regs) . others) regs
+                     (unquote-splicing supplemental-regs) . spare-regs) regs
                 (let* ((result (destination-reg dest regs)))
                   (unquote-splicing body)
                   (emit-convert-value cg (unquote outreg) dest
@@ -1208,7 +1208,7 @@
                (emit-reset-frame-base cg out-frame-base)
 
                (bind ((unquote-splicing (cdr template))
-                      (unquote-splicing supplemental-regs) . others)
+                      (unquote-splicing supplemental-regs) . spare-regs)
                      regs
                  (unquote-splicing body)
                  (emit-branch cg (unquote cc) dest)))
@@ -1221,7 +1221,7 @@
                  (operator-args-codegen form args-regs cg)
                  (emit-prepare-convert-cc-value cg (car regs))
                  (bind ((unquote-splicing (cdr template))
-                        (unquote-splicing supplemental-regs) . others)
+                        (unquote-splicing supplemental-regs) . spare-regs)
                        op-regs
                    (unquote-splicing body)
                    (emit-convert-cc-value cg (unquote cc) (car regs))

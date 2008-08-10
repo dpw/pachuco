@@ -113,7 +113,8 @@
 (define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
                                          bodyfunc)
   (operator-args-codegen form regs cg)
-  (bind (before-arg-count after-arg-count bodyfunc retaddr-reg . others) regs
+  (bind (before-arg-count after-arg-count bodyfunc retaddr-reg . spare-regs)
+        regs
     (let* ((retaddr (return-address-slot cg)))
       ;; calculate how far up to move %sp
       (emit-sub cg after-arg-count before-arg-count)
