@@ -44,7 +44,7 @@
 (define (emit-data cg label scale)
   (emit cg ".section .rodata")
   (emit cg ".align ~D" (ash 1 scale))
-  (emit-label cg label))
+  (emit-smart-label cg label))
 
 (define (escape-string-literal str)
   (string-replace (string-replace (string-replace str "\\" "\\\\")
@@ -214,27 +214,85 @@
         (emit-sar cg (- number-tag-bits scale) oper)
         (emit-shl cg (- scale number-tag-bits) oper))))
 
-;;; Branching, jumping, and output handling
-
-;;; Three elements related to optimising flow state are held in the
-;;; codegen object:
+;;; "Smart" branching, jumping, and labels.
 ;;;
-;;; - deferred-jump: A function representing the deferred jump or
-;;; branch.  This function is called to emit the jump in
-;;; flush-labels-and-jumps.  It's false not optimising flow state.
+;;; These do some simple flow control optimizations.  For example,
 ;;;
-;;; - here-labels: The list of labels for this point in the
-;;; instruction stream.
+;;;     (if (and A B) C D)
 ;;;
-;;; - redirect-labels: an alist from labels to the labels there
+;;; which after macro-expansion is
+;;;
+;;;     (if (if A B false) C D)
+;;;
+;;; might naively yield
+;;;
+;;;     <code to yield A as boolean in CC1>
+;;;     jnCC1 L1b ; branch to code for A false
+;;;     jmp L1a   ; jump to code for A true
+;;;
+;;;     L1a:      ; A true
+;;;     <code to yield B as boolean in CC2>
+;;;     jnCC2 L2b ; branch to code for D
+;;;     jmp L2a   ; branch to code for C
+;;;     jmp L1c   ; unreachable branch to code after (if A B false)
+;;;
+;;;     L1b:      ; A false
+;;;     jmp L2b   ; branch to code for D
+;;;
+;;;     L1c:      ; code following (if A B false) would go here... 
+;;;     
+;;;     L2a:
+;;;     <code for C>
+;;;     jmp L2c
+;;;
+;;;     L2b:
+;;;     <code for D>
+;;;
+;;;     L2c:
+;;;
+;;; instead yields
+;;;
+;;;     <code to yield A as boolean in CC1>
+;;;     jnCC1 L1b ; branch to code for A false
+;;;
+;;;     L1a:      ; A true
+;;;     <code to yield B as boolean in CC2>
+;;;     jnCC2 L2b ; branch to code for D
+;;;     
+;;;     L2a:
+;;;     <code for C>
+;;;     jmp L2c
+;;;
+;;;     L1b:      ; A false
+;;;     L2b:
+;;;     <code for D>
+;;;
+;;;     L2c:
+;;;
+;;; The basic order of code is unchanged, but redundant jumps have
+;;; been eliminated, and labels have been moved accordingly.  The key
+;;; thing to notice here is that labels have all been moved later in
+;;; the instruction stream.  This works because the compiler always
+;;; generates jumps/branches forwards, never backwards.
+;;;
+;;; Thus we simply have to maintain a small amonut of state as we
+;;; output instructions to tell us what special treatment is required
+;;; for jumps, branches and labels.  This consists of three slots in
+;;; the codegen object:
+;;;
+;;; - deferred-jump: A function representing the pending jump or
+;;; branch, if any.  This function is called to emit the jump in
+;;; flush-labels-and-jumps.  It's false when not optimising flow.
+;;;
+;;; - here-labels: The list of labels attached to the current point in
+;;; the instruction stream.
+;;;
+;;; - redirect-labels: an alist from labels to the labels they
 ;;; redirect to.  We never change the label of a jump/branch; instead,
-;;; when we emit a label, we also emit all the labels that reidrect to
+;;; when we emit a label, we also emit all the labels that redirect to
 ;;; it.
-;;;
-;;; Bear in mind that jumps/branches always jump forwards, never
-;;; backwards.
 
-(define (emit-jump cg label)
+(define (emit-smart-jump cg label)
   (if (codegen-deferred-jump cg)
       (begin
         ;; there is no direct way to reach this jump, so all the here
@@ -249,7 +307,7 @@
           (unless (member? label (codegen-here-labels cg))
             (emit-jmp label))))))
 
-(define (emit-branch cg cc conddest)
+(define (emit-smart-branch cg cc conddest)
   (flush-labels-and-jumps cg)
   (codegen-set-deferred-jump! cg
     (lambda ()
@@ -264,7 +322,7 @@
              (unless (member? flabel here-labels)
                (emit-jmp flabel))))))))
 
-(define (emit-label cg label)
+(define (emit-smart-label cg label)
   (let* ((here-labels (cons label (nconc (codegen-here-labels cg)
                                          (take-merged-labels cg label)))))
     (if (codegen-deferred-jump cg)
@@ -319,7 +377,7 @@
         ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
          (emit-cmp cg false-representation operand)
-         (emit-branch cg "ne" dest))
+         (emit-smart-branch cg "ne" dest))
         ((dest-discard? dest)
          (emit-reset-frame-base cg out-frame-base))
         (true
@@ -416,7 +474,7 @@
   (emit cg ".text")
   (emit cg ".align ~D" (ash 1 value-scale))
   (emit-literal cg (fixnum-representation closure-size))
-  (emit-label cg label))
+  (emit-smart-label cg label))
 
 (define-reg-use (return attrs body)
   (reg-use body dest-type-value)
@@ -514,7 +572,7 @@
          (emit-reset-frame-base cg out-frame-base))
         ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
-         (emit-jump cg (if (= false-representation (attr-ref attrs 'value))
+         (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
                             (dest-conditional-flabel dest)
                             (dest-conditional-tlabel dest))))
         ((dest-value? dest)
@@ -824,13 +882,13 @@
 (define-reg-use (error-halt attrs message args) 0)
 (define-codegen (error-halt attrs message args)
   (let* ((l (gen-label)))
-    (emit-label cg l)
+    (emit-smart-label cg l)
     (emit-comment cg "error-halt: ~S"
                   (if (eq? 'quote (first message)) 
                       (form-attr message 'quoted)
                       "unknown"))
     (emit cg "hlt")
-    (emit-jump cg l)))
+    (emit-smart-jump cg l)))
 
 (define-pure-operator (fixnum->raw val) val ()
   (emit-sar cg number-tag-bits val))

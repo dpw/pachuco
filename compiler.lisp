@@ -1031,15 +1031,15 @@
          (l3 (gen-label)))
     (codegen test (dest-conditional l1 l2) (codegen-frame-base cg)
              regs cg)
-    (emit-label cg l1)
+    (emit-smart-label cg l1)
     (emit-comment-form cg then)
     (with-saved-frame-base cg
       (codegen then dest out-frame-base regs cg))
-    (emit-jump cg l3)
-    (emit-label cg l2)
+    (emit-smart-jump cg l3)
+    (emit-smart-label cg l2)
     (emit-comment-form cg else)
     (codegen else dest out-frame-base regs cg)
-    (emit-label cg l3)))
+    (emit-smart-label cg l3)))
 
 ;;; Operator support
 
@@ -1211,7 +1211,7 @@
                       (unquote-splicing supplemental-regs) . spare-regs)
                      regs
                  (unquote-splicing body)
-                 (emit-branch cg (unquote cc) dest)))
+                 (emit-smart-branch cg (unquote cc) dest)))
               ((dest-value? dest)
                (let* ((args-count (length (cddr form)))
                       (args-regs (append (sublist (cdr regs) 0 args-count)
