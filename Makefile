@@ -1,12 +1,5 @@
 ARCH=$(shell uname -m | sed -e s/i.86/i386/)
 TARGET=$(ARCH)
-CFLAGS := -Wall -g
-
-ifeq ($(ARCH),x86_64)
-ifeq ($(TARGET),i386)
-CFLAGS := $(CFLAGS) -m32
-endif
-endif
 
 STACK_REGIME=no-fp
 ifeq ($(STACK_REGIME),no-fp)
@@ -22,39 +15,44 @@ COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGE
 CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
-TEST_SOURCES=runtime.lisp test.lisp
+TEST_SOURCES=test.lisp
 
-SL_COMPILER_SOURCES=runtime.lisp $(COMPILER_SOURCES) drivermain.lisp
+RUNTIME_SOURCES=runtime.lisp
+SL_COMPILER_SOURCES=$(COMPILER_SOURCES) drivermain.lisp
 
 # The initial compiler used.  Default to bootstrapping from SBCL
 BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 
+.PHONY: all clean print-compiler-sources
+
 all: stage2-test-run compare-stage3
 
-benchmark: stage1
-	BENCHMARK_ITERATIONS=10 ./stage1 compile $(SL_COMPILER_SOURCES) >/dev/null
+print-compiler-sources:
+	@echo $(COMPILER_SOURCES) drivermain.lisp
 
 define stage_template
-$(2)interp: $(1) $(TEST_SOURCES)
-	$(abspath $(1)) interpret $(TEST_SOURCES)
+.PHONY: $(2)interp $(2)compile $(2)test-run
 
-$(2)compile: $(1) $(TEST_SOURCES)
+$(2)interp: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	$(abspath $(1)) interpret $(RUNTIME_SOURCES) $(TEST_SOURCES)
+
+$(2)compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	$(abspath $(1)) compile $(TEST_SOURCES)
 
-$(2)test.s: $(1) $(TEST_SOURCES)
-	$(abspath $(1)) compile $(TEST_SOURCES) >$$@
+$(2)test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	scripts/compile -C $(1) -S -o $$@ $(TEST_SOURCES)
 
-$(2)test: main.o $(2)test.s
-	gcc $(CFLAGS) $$^ -o $$@
+$(2)test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	scripts/compile -C $(1) -o $$@ $(TEST_SOURCES)
 
 $(2)test-run: $(2)test
 	$(abspath $(2)test)
 
-$(3).s: $(1) $(SL_COMPILER_SOURCES)
-	$(abspath $(1)) compile $(SL_COMPILER_SOURCES) >$$@
+$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	scripts/compile -C $(1) -S -o $$@ $(SL_COMPILER_SOURCES)
 
-$(3): main.o $(3).s
-	gcc $(CFLAGS) $$^ -o $$@
+$(3): $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	scripts/compile -C $(1) -o $$@ $(SL_COMPILER_SOURCES)
 endef
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
