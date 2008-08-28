@@ -12,12 +12,12 @@ endif
 
 COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp $(STACK_SOURCES) codegen-$(TARGET).lisp driver.lisp
 
-CL_COMPILER_SOURCES=cl-dialect.lisp $(COMPILER_SOURCES)
+CL_COMPILER_SOURCES=cl-dialect.lisp runtime2.lisp $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
 TEST_SOURCES=test.lisp
 
-RUNTIME_SOURCES=runtime.lisp
+RUNTIME_SOURCES=runtime.lisp runtime2.lisp
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) drivermain.lisp
 
 # The initial compiler used.  Default to bootstrapping from SBCL
