@@ -45,6 +45,14 @@
   (assert-result (list 1 2 3) '(1 2 3))
   (assert-result (append '(1 2) '(3 4)) '(1 2 3 4))
   
+  (begin
+    (define ht (make-hashtable string-hash string-equal?))
+    (assert-result (hashtable-ref ht "foo") false)
+    (hashtable-set! ht "foo" "bar")
+    (assert-result (hashtable-ref ht "foo") "bar")
+    (hashtable-set! ht "foo" "baz")
+    (assert-result (hashtable-ref ht "foo") "baz"))
+
   (assert-result (string-equal? (symbol-name 'foo) "foo") true)
   (assert-result (eq? (intern "foo") 'foo) true)
   (assert-result (symbol-name (intern "bar")) "bar")

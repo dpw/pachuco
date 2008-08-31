@@ -203,7 +203,7 @@
 (define (quoted-unspecified)
   (list 'quote unspecified))
 
-;;; Gather all symbols used into the program into the interned-symbols
+;;; Gather all symbols used into the program into the initial-symbols
 ;;; definition
 
 (define (gather-symbols-from-quoted-form quoted cell)
@@ -221,7 +221,7 @@
 (define (gather-symbols-forms forms)
   (let* ((cell (cons () ())))
     (gather-symbols-aux-forms forms cell)
-    (cons (quasiquote (define interned-symbols (quote (unquote (car cell)))))
+    (cons (quasiquote (define initial-symbols (quote (unquote (car cell)))))
           forms)))
 
 ;;; Remove the definitions forms, splicing them into the surrounding

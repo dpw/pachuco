@@ -481,6 +481,10 @@
         ((> count 0) (ash (+ n n) (1- count)))
         (true (error "no support for right shifts"))))
 
+(define (mod n div)
+  (define r (rem n div))
+  (if (>= r 0) r (+ r div)))
+
 (defmacro (max init . nums)
   (reduce init nums (lambda (a b)
                       (define avar (gensym))
@@ -520,13 +524,20 @@
 ;;; Symbols
 
 (when-compiling
+  (define symbol-table false)
+
   (define (intern str)
-    (or (findfor (sym interned-symbols)
-                 (string-equal? str (symbol-name sym)))
+    (unless symbol-table
+      (set! symbol-table (make-hashtable string-hash string-equal?))
+      (dolist (sym initial-symbols)
+        (hashtable-set! symbol-table (symbol-name sym) sym)))
+
+    (define res (hashtable-ref symbol-table str))
+    (if res res
         (begin
-          (define sym (raw-make-symbol str))
-          (set! interned-symbols (cons sym interned-symbols))
-          sym))))
+          (define res (raw-make-symbol str))
+          (hashtable-set! symbol-table str res)
+          res))))
 
 ;;; Strings
 
