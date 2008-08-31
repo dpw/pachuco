@@ -8,7 +8,7 @@ cdir=$(readlink -f "$(dirname $0)/..")
 files=
 dest=
 time=
-asmonly=
+leaveasm=
 compiler=$cdir/stage2
 
 while [ $# -gt 0 ] ; do
@@ -35,8 +35,8 @@ while [ $# -gt 0 ] ; do
         shift 2
         ;;
     
-    -S)
-        asmonly="-S"
+    -s)
+        leaveasm=1
         shift 1
         ;;
 
@@ -62,20 +62,21 @@ else
         exit 1
     fi
 
-    if [ -z "$asmonly" ] ; then
+    if [ -z "$leaveasm" ] ; then
         asmout=$TMPDIR/$$.s
         trap 'rm -f $asmout' EXIT
-        eval $cmd >$asmout
-        
-        target=''
-        # bit of a hack: if we are on x86-86, but it looks like the compiler
-        # didn't produce x86-64 asm, assume a i386 target
-        if [[ "$(uname -m)" = x86_64 ]] && ! grep -m1 '^movq' $asmout >/dev/null ; then
-            target='-m32'
-        fi
-        
-        gcc -Wall -g $target $asmout $cdir/main.c -o $dest
     else
-        eval $cmd >$dest
+        asmout=${dest}.s
     fi
+
+    eval $cmd >$asmout
+        
+    target=''
+    # bit of a hack: if we are on x86-86, but it looks like the compiler
+    # didn't produce x86-64 asm, assume a i386 target
+    if [[ "$(uname -m)" = x86_64 ]] && ! grep -m1 '^movq' $asmout >/dev/null ; then
+        target='-m32'
+    fi
+        
+    gcc -Wall -g $target $asmout $cdir/main.c -o $dest
 fi

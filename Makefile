@@ -39,20 +39,14 @@ $(2)interp: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 $(2)compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	$(abspath $(1)) compile $(TEST_SOURCES)
 
-$(2)test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
-	scripts/compile -C $(1) -S -o $$@ $(TEST_SOURCES)
-
 $(2)test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
-	scripts/compile -C $(1) -o $$@ $(TEST_SOURCES)
+	scripts/compile -C $(1) -s -o $$@ $(TEST_SOURCES)
 
 $(2)test-run: $(2)test
 	$(abspath $(2)test)
 
-$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
-	scripts/compile -C $(1) -S -o $$@ $(SL_COMPILER_SOURCES)
-
-$(3): $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
-	scripts/compile -C $(1) -o $$@ $(SL_COMPILER_SOURCES)
+$(3) $(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	scripts/compile -C $(1) -s -o $(3) $(SL_COMPILER_SOURCES)
 endef
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
