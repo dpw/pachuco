@@ -25,7 +25,7 @@ BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 
 .PHONY: all clean print-compiler-sources
 
-all: stage2-test-run compare-stage3
+all: stage0-test-run compare-stage3
 
 print-compiler-sources:
 	@echo $(COMPILER_SOURCES) drivermain.lisp
@@ -60,4 +60,4 @@ compare-stage3: stage2.s stage3.s
 	cmp -s stage2.s stage3.s
 
 clean:
-	rm -f *.s *.o stage0-test stage1 stage1-test stage2 stage2-test
+	rm -f *.s *.o stage0-test stage1 stage1-test stage2 stage2-test stage3
