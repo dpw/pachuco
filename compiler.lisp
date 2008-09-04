@@ -92,7 +92,7 @@
   (list* (car form) () (normalize-forms (cdr form))))
 
 (define (normalize-2 form)
-  (list* (car form) (cadr form) (normalize-forms (cddr form))))
+  (list* (car form) (copy-tree (cadr form)) (normalize-forms (cddr form))))
 
 ;;; A walker is a function which recurses over a program tree,
 ;;; dispatching forms to handlers based on their keywords.
