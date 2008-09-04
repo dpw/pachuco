@@ -74,7 +74,7 @@ else
     target=''
     # bit of a hack: if we are on x86-86, but it looks like the compiler
     # didn't produce x86-64 asm, assume a i386 target
-    if [[ "$(uname -m)" = x86_64 ]] && ! grep -m1 '^movq' $asmout >/dev/null ; then
+    if [ "$(uname -m)" = x86_64 ] && ! grep -m1 '^movq' $asmout >/dev/null ; then
         target='-m32'
     fi
         
