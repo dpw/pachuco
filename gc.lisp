@@ -6,6 +6,9 @@
   ;; the mask to apply to a value to get an index into gc-type-table
   (define gc-raw-tag-mask false)
 
+  ;; are we inside the GC?
+  (define gc-active false)
+
   ;; the limits of from-space and to-space
   (define gc-from-space false)
   (define gc-from-space-end false)
@@ -33,12 +36,21 @@
                    end-addr)))
 
   (define (gc)
-    ;; heap_alloc moves downwards, so from-space is above it, and
-    ;; to-space is below it.
-    (set! gc-from-space (raw-c-global "heap_alloc"))
+    (when gc-active (error "Recursive GC"))
+    (set! gc-active true)
+
+    (set! gc-from-space (raw-c-global "heap_start"))
     (set! gc-from-space-end (raw-c-global "heap_end"))
-    (set! gc-to-space (raw-c-global "heap"))
-    (set! gc-to-space-end gc-from-space)
+
+    (set! gc-to-space (raw-c-global "heap2_start"))
+    (set! gc-to-space-end (raw-c-global "heap2_end"))
+
+    (define old-heap-alloc (raw-c-global "heap_alloc"))
+    (raw-set! (raw-label "heap_alloc") gc-to-space-end)
+    (raw-set! (raw-label "heap_threshold") gc-to-space)
+
+    (when (/= 0 (raw->fixnum (raw-c-global "verbose_gc")))
+      (formout stderr "GC... "))
 
     ;; it's critical that the GC type table is in to-space, so that it
     ;; doesn't get disrupted by copying.  So we construct it afresh at
@@ -48,12 +60,27 @@
     (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
     (gc-root-set (raw-args-base) runtime-main-args-base)
 
-    (formout stderr "GC done, ~D bytes copied~%"
-             (raw->fixnum (raw-- gc-to-space-end (raw-c-global "heap_alloc"))))
+    (define live-bytes
+            (raw->fixnum (raw-- gc-to-space-end (raw-c-global "heap_alloc"))))
 
-    (set! gc-from-space (set! gc-from-space-end
+    (raw-set! (raw-label "heap_start") gc-to-space)
+    (raw-set! (raw-label "heap_end") gc-to-space-end)
+    (raw-set! (raw-label "heap_threshold")
+              (raw-- gc-to-space-end (raw-c-global "heap_threshold_size")))
+    
+    ;; zero from-space.  Do it here, while bits of it may still be in cache
+    (c-call "memset" old-heap-alloc (fixnum->raw 0)
+            (raw-- gc-from-space-end old-heap-alloc))
+    
+    (raw-set! (raw-label "heap2_start") gc-from-space)
+    (raw-set! (raw-label "heap2_end") gc-from-space-end)
+
+    (when (/= 0 (raw->fixnum (raw-c-global "verbose_gc")))
+      (formout stderr "done, ~D bytes live~%" live-bytes))
+
+    (set! gc-active (set! gc-from-space (set! gc-from-space-end
       (set! gc-to-space (set! gc-to-space-end
-        (set! gc-type-table (set! gc-raw-tag-mask false)))))))
+        (set! gc-type-table (set! gc-raw-tag-mask false))))))))
 
   (define (gc-test-copy val)
     ;; a test function that uses the GC machinery to destructively
@@ -63,7 +90,7 @@
     ;; to-space is below it
     (set! gc-from-space (raw-c-global "heap_alloc"))
     (set! gc-from-space-end (raw-c-global "heap_end"))
-    (set! gc-to-space (raw-c-global "heap"))
+    (set! gc-to-space (raw-c-global "heap_start"))
     (set! gc-to-space-end gc-from-space)
     (construct-gc-type-table)
     

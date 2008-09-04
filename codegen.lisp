@@ -155,6 +155,7 @@
 (define-insn-2 emit-or "or")
 (define-insn-2 emit-xor "xor")
 (define-insn-2 emit-cmp "cmp")
+(define-insn-2 emit-test "test")
 (define-insn-2 emit-shl "shl")
 (define-insn-2 emit-sar "sar")
 
@@ -305,7 +306,7 @@
         (lambda ()
           ;; emit a jump, unless we are jumping to a here label
           (unless (member? label (codegen-here-labels cg))
-            (emit-jmp label))))))
+            (emit-jmp cg label))))))
 
 (define (emit-smart-branch cg cc conddest)
   (flush-labels-and-jumps cg)
@@ -320,15 +321,17 @@
             (begin
              (emit-jcc cg cc tlabel)
              (unless (member? flabel here-labels)
-               (emit-jmp flabel))))))))
+               (emit-jmp cg flabel))))))))
+ 
+(define (emit-raw-label cg label)
+  (emit-without-flushing "~A:" label))
 
 (define (emit-smart-label cg label)
   (let* ((here-labels (cons label (nconc (codegen-here-labels cg)
                                          (take-merged-labels cg label)))))
     (if (codegen-deferred-jump cg)
         (codegen-set-here-labels! cg here-labels)
-        (dolist (ml here-labels)
-          (emit-without-flushing "~A:" ml)))))
+        (dolist (ml here-labels) (emit-raw-label cg ml)))))
 
 (define (take-merged-labels cg label)
   ;; extract the labels which lead to label
@@ -358,7 +361,7 @@
 (define (emit-jcc cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
 
-(define (emit-jmp label)
+(define (emit-jmp cg label)
   (emit-without-flushing "jmp ~A" label))
 
 ;;; Dest conversions
@@ -394,12 +397,71 @@
 
 ;;; Heap allocation
 
-(define (emit-alloc cg tag-bits size allocreg . scale)
-  (emit-mov cg (mem "heap_alloc") allocreg)
-  (emit-sub cg size allocreg)
-  (set! scale (if (null? scale) value-scale (car scale)))
-  (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
-  (emit-mov cg allocreg (mem "heap_alloc")))
+(define (register-bit reg)
+  (labels ((scan-regs (all-regs bit)
+             (if (eq? reg (car all-regs)) bit
+                 (scan-regs (cdr all-regs) (+ bit bit)))))
+    (scan-regs general-registers 1)))
+
+(define (register-bitset regs)
+  (reduce~ (register-bit (car regs)) (cdr regs)
+           (lambda (bits reg) (logior bits (register-bit reg)))))
+
+(define (emit-alloc cg tag-bits size allocreg spare-regs . scale)
+  (let* ((again-label (gen-label))
+         (ok-label (gen-label)))
+    (flush-labels-and-jumps cg)
+    (emit-raw-label cg again-label)
+    (emit-mov cg (mem "heap_alloc") allocreg)
+    (emit-sub cg size allocreg)
+    (set! scale (if (null? scale) value-scale (car scale)))
+    (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
+    (emit-cmp cg (mem "heap_threshold") allocreg)
+    (emit-jcc cg "ge" ok-label)
+    (emit-mov cg (register-bitset (cons allocreg spare-regs)) %closure)
+    (emit cg "call heap_exhausted")
+    (emit-restore-%closure cg)
+    (emit-jmp cg again-label)
+    (emit-raw-label cg ok-label)
+    (emit-mov cg allocreg (mem "heap_alloc"))))
+
+(define gc-label (make-label-for 'gc function-label-prefix))
+
+(define (codegen-heap-exhausted cg)
+  (labels ((for-live-registers (regs op)
+             (dolist (reg regs)
+               (let* ((l (gen-label)))
+                 (emit-test cg (register-bit reg) %closure)
+                 (emit-jcc cg "nz" l)
+                 (funcall op cg reg)
+                 (emit-raw-label cg l)))))
+    (emit cg ".text")
+    (emit cg ".globl heap_exhausted")
+    (emit cg "heap_exhausted:")
+    
+    ;; Push live registers onto the stack, guided by the bitset in
+    ;; %closure.  This preserves their values, and also means that
+    ;; they get treated as part of the root set by the GC.
+    (for-live-registers general-registers (function emit-push))
+    
+    ;; We need to save the live reg bitset from %closure, in order to
+    ;; restore the live registers after the GC.  But if we put it on
+    ;; the stack it it's original form, the GC will see it and try to
+    ;; interpret it as an object reference.  So we disguise it as a
+    ;; fixnum first.
+    (emit-shl cg number-tag-bits %closure)
+    (emit-push cg %closure)
+    
+    (emit-mov cg (fixnum-representation 0) %nargs)
+    (emit cg "call ~A" gc-label)
+    
+    (emit-pop cg %closure)
+    (emit-sar cg number-tag-bits %closure)
+  
+    ;; Restore live registers
+    (for-live-registers (reverse general-registers) (function emit-pop))
+
+    (emit cg "ret")))
 
 ;; the gc uses the raw-alloc operation
 
@@ -409,7 +471,7 @@
 (define-pure-operator (raw-alloc size) result (alloc)
   (emit-scale-number cg value-scale size)
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
-              size alloc)
+              size alloc spare-regs)
   (emit-mov cg alloc result))
 
 ;;; Variable access
@@ -449,7 +511,8 @@
 
 (define-pure-operator (alloc-closure) result (alloc)
   (emit-alloc cg closure-tag-bits
-              (* value-size (1+ (length (attr-ref attrs 'closure)))) alloc)
+              (* value-size (1+ (length (attr-ref attrs 'closure))))
+              alloc spare-regs)
   (emit-mov cg (attr-ref attrs 'label) (mem alloc))
   (emit-lea cg (mem1+ alloc closure-tag) result))
 
@@ -655,7 +718,7 @@
 (define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-pure-operator (cons a d) result (alloc)
-  (emit-alloc cg pair-tag-bits (* 2 value-size) alloc)
+  (emit-alloc cg pair-tag-bits (* 2 value-size) alloc spare-regs)
   (emit-mov cg a (mem alloc))
   (emit-mov cg d (mem alloc 1))
   (emit-lea cg (mem1+ alloc pair-tag) result))
@@ -675,7 +738,7 @@
 ;;; Boxes
 
 (define-pure-operator (raw-make-box val) result (alloc)
-  (emit-alloc cg box-tag-bits value-size alloc)
+  (emit-alloc cg box-tag-bits value-size alloc spare-regs)
   (emit-mov cg val (mem alloc))
   (emit-lea cg (mem1+ alloc box-tag) result))
 
@@ -693,7 +756,7 @@
   (emit-mov cg (tagged-mem symbol-tag sym) result))
 
 (define-pure-operator (raw-make-symbol str) result (alloc)
-  (emit-alloc cg symbol-tag-bits value-size alloc)
+  (emit-alloc cg symbol-tag-bits value-size alloc spare-regs)
   (emit-mov cg str (mem alloc))
   (emit-lea cg (mem1+ alloc symbol-tag) result))
 
@@ -774,6 +837,9 @@
         (emit-idiv cg %c)
         (emit-convert-value cg %d dest out-frame-base))))
 
+(define-pure-operator (logior a b) a ()
+  (emit-or cg b a))
+
 ;;; Strings and vectors
 
 (define-tag-check string? string-tag string-tag-bits)
@@ -786,7 +852,7 @@
     (emit-mov cg len saved-len)
     (emit-scale-number cg scale len)
     (emit-add cg value-size len)
-    (emit-alloc cg tag-bits len alloc scale)
+    (emit-alloc cg tag-bits len alloc spare-regs scale)
     (emit-mov cg saved-len (mem alloc))
     (emit-lea cg (mem1+ alloc tag) result)))
 

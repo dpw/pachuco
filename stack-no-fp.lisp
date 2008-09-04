@@ -151,4 +151,6 @@
     (emit-set-ac-flag cg false)
     (emit cg "cld")
     (dolist (reg (reverse c-callee-saved-regs)) (emit-pop cg reg))
-    (emit cg "ret")))
+    (emit cg "ret")
+    
+    (codegen-heap-exhausted cg)))

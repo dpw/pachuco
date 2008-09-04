@@ -32,7 +32,8 @@
     
     pair? car cdr cons rplaca rplacd
     
-    number? < <= > >= = /= + * - rem truncate 
+    number? < <= > >= = /= + * - rem truncate
+    logior
     
     character? character-code code-character
 

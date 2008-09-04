@@ -160,4 +160,6 @@
     (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop cg reg))
     (emit-set-ac-flag cg false)
     (emit cg "cld ; leave")
-    (emit cg "ret")))
+    (emit cg "ret")
+    
+    (codegen-heap-exhausted cg)))
