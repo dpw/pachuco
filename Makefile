@@ -3,71 +3,79 @@ TARGET=$(ARCH)
 
 STACK_REGIME=no-fp
 ifeq ($(STACK_REGIME),no-fp)
-STACK_SOURCES=stack-traditional.lisp stack-no-fp.lisp
+STACK_SOURCES=compiler/stack-traditional.lisp compiler/stack-no-fp.lisp
 else ifeq ($(STACK_REGIME),fp)
-STACK_SOURCES=stack-traditional.lisp stack-fp.lisp
+STACK_SOURCES=compiler/stack-traditional.lisp compiler/stack-fp.lisp
 else
 $(error unknown stack regime $(STACK_REGIME))
 endif
 
-COMPILER_SOURCES=util.lisp expander.lisp interpreter.lisp mach.lisp mach-$(TARGET).lisp compiler.lisp codegen.lisp $(STACK_SOURCES) codegen-$(TARGET).lisp driver.lisp
+COMPILER_SOURCES= \
+    language/util.lisp language/expander.lisp language/interpreter.lisp \
+    compiler/mach.lisp compiler/mach-$(TARGET).lisp compiler/compiler.lisp \
+    compiler/codegen.lisp $(STACK_SOURCES) compiler/codegen-$(TARGET).lisp \
+    compiler/driver.lisp
 
-CL_COMPILER_SOURCES=cl-dialect.lisp runtime2.lisp $(COMPILER_SOURCES)
+CL_COMPILER_SOURCES= \
+    bootstrap/cl-dialect.lisp runtime/runtime2.lisp $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
-TEST_SOURCES=test.lisp
-GC_TEST_SOURCES=gc-test.lisp
+TEST_SOURCES=test/test.lisp
+GC_TEST_SOURCES=test/gc-test.lisp
 
-RUNTIME_SOURCES=runtime.lisp runtime2.lisp gc.lisp
-SL_COMPILER_SOURCES=$(COMPILER_SOURCES) drivermain.lisp
+RUNTIME_SOURCES=runtime/runtime.lisp runtime/runtime2.lisp runtime/gc.lisp
+SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.lisp
 
 # The initial compiler used.  Default to bootstrapping from SBCL
 BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 
-.PHONY: all clean print-compiler-sources
+.PHONY: all clean print-compiler-sources compare-stage3
 
 all: stage0-test-run stage0-gc-test-run compare-stage3
 
 print-compiler-sources:
-	@echo $(COMPILER_SOURCES) drivermain.lisp
+	@echo $(SL_COMPILER_SOURCES)
 
 define stage_template
-.PHONY: $(2)interp $(2)compile $(2)test-run
+.PHONY: $(2)-interp-test $(2)-compile $(2)-test-run
 
-$(2)interp: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
-	$(abspath $(1)) interpret $(RUNTIME_SOURCES) $(TEST_SOURCES)
+$(2)-interp-test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	$(1) interpret $(RUNTIME_SOURCES) $(TEST_SOURCES)
 
-$(2)compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
-	$(abspath $(1)) compile $(TEST_SOURCES)
+$(2)-compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	$(1) compile $(TEST_SOURCES)
 
 
-$(2)test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+build/$(2)-test build/$(2)-test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	mkdir -p build
 	scripts/compile -C $(1) -s -o $$@ $(TEST_SOURCES)
 
-$(2)test-run: $(2)test
-	$(abspath $(2)test)
+$(2)-test-run: build/$(2)-test
+	$$<
 
 
-$(2)gc-test: $(1) $(RUNTIME_SOURCES) $(GC_TEST_SOURCES)
+build/$(2)-gc-test build/$(2)-gc-test.s: $(1) $(RUNTIME_SOURCES) $(GC_TEST_SOURCES)
+	mkdir -p build
 	scripts/compile -C $(1) -s -o $$@ $(GC_TEST_SOURCES)
 
-$(2)gc-test-run: $(2)gc-test
-	$(abspath $(2)gc-test)
+$(2)-gc-test-run: build/$(2)-gc-test
+	$$<
 
 
-$(3) $(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
-	scripts/compile -C $(1) -s -o $(3) $(SL_COMPILER_SOURCES)
+build/$(3) build/$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	mkdir -p build
+	scripts/compile -C $(1) -s -o build/$(3) $(SL_COMPILER_SOURCES)
 endef
+
+clean:
+	rm -rf build
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
 	touch scripts/sbcl-wrapper
 
-$(eval $(call stage_template,$(BOOTSTRAP_COMPILER),stage0-,stage1))
-$(eval $(call stage_template,stage1,stage1-,stage2))
-$(eval $(call stage_template,stage2,stage2-,stage3))
+$(eval $(call stage_template,$(BOOTSTRAP_COMPILER),stage0,stage1))
+$(eval $(call stage_template,build/stage1,stage1,stage2))
+$(eval $(call stage_template,build/stage2,stage2,stage3))
 
-compare-stage3: stage2.s stage3.s
-	cmp -s stage2.s stage3.s
-
-clean:
-	rm -f *.s *.o stage0-test stage0-gc-test stage1 stage1-test stage1-gc-test stage2 stage2-test stage2-gc-test stage3
+compare-stage3: build/stage2.s build/stage3.s
+	cmp -s build/stage2.s build/stage3.s

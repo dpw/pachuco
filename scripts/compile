@@ -1,7 +1,7 @@
 #!/bin/sh - 
 
 set -e
-cdir=$(readlink -f "$(dirname $0)/..")
+basedir=$(readlink -f "$(dirname $0)/..")
 
 [ -z "$TMPDIR" ] && TMPDIR=/tmp
 
@@ -9,7 +9,8 @@ files=
 dest=
 time=
 leaveasm=
-compiler=$cdir/stage2
+compiler=$basedir/build/stage2
+runtimedir=$basedir/runtime
 
 while [ $# -gt 0 ] ; do
     case $1 in 
@@ -24,8 +25,8 @@ while [ $# -gt 0 ] ; do
         ;;
         
     -D)
-        cdir="$2"
-        compiler=$cdir/stage2
+        runtimedir="$2/runtime"
+        compiler="$2/build/stage2"
         shift 2
         ;;
 
@@ -52,7 +53,7 @@ while [ $# -gt 0 ] ; do
     esac
 done
 
-cmd="$compiler compile $cdir/runtime.lisp $cdir/runtime2.lisp $cdir/gc.lisp $files"
+cmd="$compiler compile $runtimedir/runtime.lisp $runtimedir/runtime2.lisp $runtimedir/gc.lisp $files"
 
 if [ -n "$time" ] ; then
     $(which time) -f "%E" $cmd >/dev/null
@@ -78,5 +79,5 @@ else
         target='-m32'
     fi
         
-    gcc -Wall -g $target $asmout $cdir/main.c -o $dest
+    gcc -Wall -g $target $asmout $runtimedir/main.c -o $dest
 fi

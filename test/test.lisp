@@ -228,7 +228,7 @@ y)" '(x y))
     (assert-read "(x ;comment
 )" '(x)))
 
-  (with-open-file-for-reading (f "testfile")
+  (with-open-file-for-reading (f "test/testfile")
     (assert-result (read f) '("hello" world))
     (assert-result (read f false) false)))
 

@@ -1,14 +1,2 @@
-BLOGS
-COMPILER
 *~
-*.o
-*.s
-stage0-test
-stage0-gc-test
-stage1
-stage1-test
-stage1-gc-test
-stage2
-stage2-test
-stage2-gc-test
-stage3
+build/
