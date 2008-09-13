@@ -1,5 +1,5 @@
-;;; Process command line arguments, and call into the driver.lisp
-;;; functions to perform the specified action.
+;;; Process command line arguments, and call into driver.pco functions
+;;; to perform the specified action.
 
 (define (main)
   (define command (second (command-line)))

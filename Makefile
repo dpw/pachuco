@@ -3,28 +3,28 @@ TARGET=$(ARCH)
 
 STACK_REGIME=no-fp
 ifeq ($(STACK_REGIME),no-fp)
-STACK_SOURCES=compiler/stack-traditional.lisp compiler/stack-no-fp.lisp
+STACK_SOURCES=compiler/stack-traditional.pco compiler/stack-no-fp.pco
 else ifeq ($(STACK_REGIME),fp)
-STACK_SOURCES=compiler/stack-traditional.lisp compiler/stack-fp.lisp
+STACK_SOURCES=compiler/stack-traditional.pco compiler/stack-fp.pco
 else
 $(error unknown stack regime $(STACK_REGIME))
 endif
 
 COMPILER_SOURCES= \
-    language/util.lisp language/expander.lisp language/interpreter.lisp \
-    compiler/mach.lisp compiler/mach-$(TARGET).lisp compiler/compiler.lisp \
-    compiler/codegen.lisp $(STACK_SOURCES) compiler/codegen-$(TARGET).lisp \
-    compiler/driver.lisp
+    language/util.pco language/expander.pco language/interpreter.pco \
+    compiler/mach.pco compiler/mach-$(TARGET).pco compiler/compiler.pco \
+    compiler/codegen.pco $(STACK_SOURCES) compiler/codegen-$(TARGET).pco \
+    compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
-    bootstrap/cl-dialect.lisp runtime/runtime2.lisp $(COMPILER_SOURCES)
+    bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
-TEST_SOURCES=test/test.lisp
-GC_TEST_SOURCES=test/gc-test.lisp
+TEST_SOURCES=test/test.pco
+GC_TEST_SOURCES=test/gc-test.pco
 
-RUNTIME_SOURCES=runtime/runtime.lisp runtime/runtime2.lisp runtime/gc.lisp
-SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.lisp
+RUNTIME_SOURCES=runtime/runtime.pco runtime/runtime2.pco runtime/gc.pco
+SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 
 # The initial compiler used.  Default to bootstrapping from SBCL
 BOOTSTRAP_COMPILER=scripts/sbcl-wrapper

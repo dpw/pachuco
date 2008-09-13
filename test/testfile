@@ -1,2 +1,2 @@
-;;; This is a file with test data used by test.lisp
+;;; This is a file with test data used by test.pco
 ("hello" world)
