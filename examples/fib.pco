@@ -1,0 +1,11 @@
+;;; A simple fibonacci function
+
+(define (fib n)
+  (if (< n 2) 1
+      (+ (fib (- n 1)) (fib (- n 2)))))
+
+(define (atoi str)
+  (read-integer (make-string-istream str) 10))
+
+(define (main)
+  (formout stdout "~D~%" (fib (atoi (second (command-line))))))
