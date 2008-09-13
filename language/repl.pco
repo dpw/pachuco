@@ -1,0 +1,34 @@
+;;; A simple REPL built on the interpreter
+
+(define (main)
+  (define eof (cons () ()))
+
+  ;; create environment
+  (define dual-env (cons (make-initial-macro-env)
+                         (make-initial-interpreter-env)))
+  (eval-body-form '(define compiling false) (cdr dual-env))
+
+  (define (eval form)
+   (eval-body-form (expand-body-form form dual-env) (cdr dual-env)))
+
+  ;; process runtime files
+  (dolist (file (cdr (command-line)))
+    (formout stderr "Reading ~A~%" file)
+    (with-open-file-for-reading (in file)
+      (define (eval-form-from-file)
+        (define form (read in eof))
+        (unless (eq? form eof)
+          (eval form)
+          (eval-form-from-file)))
+      (eval-form-from-file)))
+
+  ;; now the repl
+  (define (rep)
+    (formout stdout ">>> ")
+    (flush-ostream stdout)
+    (define form (read stdin eof))
+    (unless (eq? form eof)
+      (formout stdout "~A~%" (eval form))
+      (flush-ostream stdout)
+      (rep)))
+  (rep))
