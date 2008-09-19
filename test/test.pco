@@ -230,7 +230,18 @@ y)" '(x y))
 
   (with-open-file-for-reading (f "test/testfile")
     (assert-result (read f) '("hello" world))
-    (assert-result (read f false) false)))
+    (assert-result (read f false) false))
+  
+  ;; check that body forms at the end of bodies are evaluated correctly
+  (assert-result (begin (define x true) (define y x)) true)
+  (assert-result (begin
+                   (define x true)
+                   (definitions (set! x false) (define y x)))
+                 false)
+  (assert-result (begin
+                   (define (f) (set! f false) (define x f))
+                   (f))
+                 false))
 
 (define (main)
   (tests)
