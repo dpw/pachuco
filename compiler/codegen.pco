@@ -1,22 +1,11 @@
 ;;; Code generation
 
-(define (make-codegen) (list false true false ()))
-
-(define (codegen-frame-base cg) (first cg))
-(define (codegen-set-frame-base! cg frame-base) (rplaca cg frame-base))
-
-(define (codegen-have-closure cg) (second cg))
-(define (codegen-set-have-closure! cg have-closure)
-  (rplaca (cdr cg) have-closure))
-
-(define (codegen-deferred-jump cg) (third cg))
-(define (codegen-set-deferred-jump! cg jump) (rplaca (cddr cg) jump))
-
-(define (codegen-here-labels cg) (fourth cg))
-(define (codegen-set-here-labels! cg labels) (rplaca (cdddr cg) labels))
-
-(define (codegen-redirect-labels cg) (cddddr cg))
-(define (codegen-set-redirect-labels! cg rl) (rplacd (cdddr cg) rl))
+(define-struct codegen
+  (frame-base false)
+  (have-closure true)
+  (deferred-jump false)
+  (here-labels ())
+  (redirect-labels ()))
 
 
 (define label-counter 0)
