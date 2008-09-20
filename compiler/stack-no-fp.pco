@@ -33,7 +33,8 @@
   (codegen-function-intro label closure-size cg)
   (when (codegen-have-closure cg) (emit-push cg %closure))
   (codegen body dest-discard (if (codegen-have-closure cg) -1 0)
-           general-registers cg))
+           general-registers cg)
+  (codegen-do-out-of-line cg))
 
 (define-codegen (return attrs body)
   (codegen body (dest-value %funcres) out-frame-base general-registers cg)
@@ -153,4 +154,5 @@
     (dolist (reg (reverse c-callee-saved-regs)) (emit-pop cg reg))
     (emit cg "ret")
     
+    (codegen-do-out-of-line cg)
     (codegen-heap-exhausted cg)))

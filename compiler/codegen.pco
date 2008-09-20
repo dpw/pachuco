@@ -5,7 +5,23 @@
   (have-closure true)
   (deferred-jump false)
   (here-labels ())
-  (redirect-labels ()))
+  (redirect-labels ())
+  (out-of-line ()))
+
+(define (codegen-push-out-of-line cg f)
+  ;; When we push an out-of-line function, we need to save the
+  ;; relevant coedegen state.  Currently this amounts to the
+  ;; frame-base
+  (codegen-set-out-of-line! cg (cons (cons f (codegen-frame-base cg))
+                                     (codegen-out-of-line cg))))
+
+(define (codegen-do-out-of-line cg)
+  (let* ((ool (codegen-out-of-line cg)))
+    (unless (null? ool)
+      (codegen-set-frame-base! cg (cdar ool))
+      (funcall (caar ool))
+      (codegen-set-out-of-line! cg (cdr ool))
+      (codegen-do-out-of-line cg))))
 
 
 (define label-counter 0)
@@ -398,7 +414,7 @@
 
 (define (emit-alloc cg tag-bits size allocreg spare-regs . scale)
   (let* ((again-label (gen-label))
-         (ok-label (gen-label)))
+         (exhausted-label (gen-label)))
     (flush-labels-and-jumps cg)
     (emit-raw-label cg again-label)
     (emit-mov cg (mem "heap_alloc") allocreg)
@@ -406,13 +422,16 @@
     (set! scale (if (null? scale) value-scale (car scale)))
     (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
     (emit-cmp cg (mem "heap_threshold") allocreg)
-    (emit-jcc cg "ge" ok-label)
-    (emit-mov cg (register-bitset (cons allocreg spare-regs)) %closure)
-    (emit cg "call heap_exhausted")
-    (emit-restore-%closure cg)
-    (emit-jmp cg again-label)
-    (emit-raw-label cg ok-label)
-    (emit-mov cg allocreg (mem "heap_alloc"))))
+    (emit-jcc cg "be" exhausted-label)
+    (emit-mov cg allocreg (mem "heap_alloc"))
+
+    (codegen-push-out-of-line cg
+      (lambda ()
+        (emit-raw-label cg exhausted-label)
+        (emit-mov cg (register-bitset (cons allocreg spare-regs)) %closure)
+        (emit cg "call heap_exhausted")
+        (emit-restore-%closure cg)
+        (emit-jmp cg again-label)))))
 
 (define gc-label (make-label-for 'gc function-label-prefix))
 
