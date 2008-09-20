@@ -103,8 +103,12 @@
 
 (defun vector-ref (vec index)
   (elt vec index))
+(defun raw-vector-ref (vec index)
+  (elt vec index))
 
 (defun vector-set! (vec index val)
+  (setf (elt vec index) val))
+(defun raw-vector-set! (vec index val)
   (setf (elt vec index) val))
 
 (defun vector-copy (src src-index dest dest-index len)
