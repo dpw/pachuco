@@ -1,6 +1,6 @@
 ;;; Code generation
 
-(define-struct codegen
+(define-struct codegen ()
   (frame-base false)
   (have-closure true)
   (deferred-jump false)
