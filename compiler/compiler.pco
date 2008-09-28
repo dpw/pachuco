@@ -984,7 +984,13 @@
                                (quote (unquote nparams))
                                (arg-count ()))))))))))
 
+;; reg-use returns the number of registers needed to generate code for
+;; the form, in order to yield the result into the given dest-type.
+;;
+;; The result should not be greater than general-register-count.
 (define-trivial-walker reg-use (dest-type))
+
+;; codegen emits the code for the form.
 (define-trivial-walker codegen (dest out-frame-base regs cg))
 
 ;;; Begin
@@ -1047,85 +1053,88 @@
 ;;; Operator support
 
 (define (operator-args-reg-use form)
-  ;; find the number of registers required for evaluation of the
+  ;; Find the number of registers required for evaluation of the
   ;; arguments of an operator
-  (let* ((index-count 0)
-         (args-ru (mapfor (arg (cddr form))
-                    (let* ((index index-count))
-                      (set! index-count (1+ index-count))
-                      (cons (reg-use arg dest-type-value) index))))
-         (trashy-args-ru (filterfor (arg-ru args-ru)
-                           (>= (car arg-ru) general-register-count)))
-         (non-trashy-args-ru (sort (filterfor (arg-ru args-ru)
-                                     (< (car arg-ru) general-register-count))
-                                   (lambda (a b) (< (car a) (car b)))))
-         (ru 0))
-    (unless (null? non-trashy-args-ru)
-      ;; some of the non-trashy-args-ru may in fact be trashy once we
-      ;; account for the need to hold other args in registers
-      (set! ru (caar args-ru))
-      (labels ((find-trashy-args (args-ru)
-                 (unless (null? (cdr args-ru))
-                   (let* ((arg (cadr args-ru)))
-                     (set! ru (max (car arg) (1+ ru)))
-                     (if (< ru general-register-count)
-                         (find-trashy-args (cdr args-ru))
-                         (begin
-                           (set! trashy-args-ru
-                                 (nconc (cdr args-ru) trashy-args-ru))
-                           (rplacd args-ru ())))))))
-        (find-trashy-args non-trashy-args-ru)))
-    
-    (rplaca (cdr form) (list* (cons 'trashy-args-ru trashy-args-ru)
-                              (cons 'non-trashy-args-ru non-trashy-args-ru)
+  (let* ((count 0)
+         ;; calcuate the reg-use of each argument, and sort them into
+         ;; descending order - this is more-or-less the order we will
+         ;; evaluate them in operator-args-codegen
+         (args-ru (sort (mapfor (arg (cddr form))
+                          (let* ((index count))
+                            (set! count (1+ count))
+                            (cons index (reg-use arg dest-type-value))))
+                        (lambda (a b) (> (cdr a) (cdr b)))))
+         (trashy-args ())
+         (non-trashy-args ())
+         (intermediates 0)
+         (max-ru 0))
+    ;; We now proceed through the arguments, clasifying them into
+    ;; non-trashy-args (whose results can be kept in registers) and
+    ;; trashy-args (whose results must be put on the stack).
+    ;; intermediates holds the number of registers needed to hold
+    ;; intermediate results during the evaluation of each argument.
+    (dolist (arg-ru args-ru)
+      (let* ((ru (+ intermediates (cdr arg-ru))))
+        (when (> ru max-ru) (set! max-ru ru))
+        (if (> ru general-register-count)
+          (begin
+            ;; we cannot satisfy the register requirements of the
+            ;; argument while holding the intermediates, so classify
+            ;; it as trashy
+            (rplacd arg-ru trashy-args)
+            (set! trashy-args arg-ru))
+          (begin
+            (rplacd arg-ru non-trashy-args)
+            (set! non-trashy-args arg-ru)
+            (set! intermediates (1+ intermediates))))))
+
+    ;; Stash the trashy-args and non-trashy-args lists for
+    ;; operator-args-codegen.  Note that they are left in descending
+    ;; order of reg-use, i.e. the reverse of the order of evaluation.
+    (rplaca (cdr form) (list* (cons 'trashy-args trashy-args)
+                              (cons 'non-trashy-args non-trashy-args)
                               (cadr form)))
-    (if (null? trashy-args-ru) ru general-register-count)))
+    (min max-ru general-register-count)))
 
 (define (operator-args-codegen form regs cg)
-  ;; generate the code to evaluate the arguments of an operator
-  (let* ((trashy-args-ru (form-attr form 'trashy-args-ru))
-         (non-trashy-args-ru (form-attr form 'non-trashy-args-ru))
+  ;; Generate the code to evaluate the arguments of an operator
+  (let* ((trashy-args (form-attr form 'trashy-args))
+         (non-trashy-args (form-attr form 'non-trashy-args))
          (args (cddr form)))
     (when (> (length args) (length regs))
       (error "more operator arguments than available registers in ~S"
              (comment-form form)))
 
-    (unless (null? trashy-args-ru)
-      ;; First, the trashy args.  We save the results of all but one
-      ;; of these on the stack.  The result of the last one can reside
-      ;; in a register, so we reclassify it as non-trashy.
-      (set! non-trashy-args-ru
-            (nconc non-trashy-args-ru (list (car trashy-args-ru))))
-      (set! trashy-args-ru (cdr trashy-args-ru))
+    ;; First, evaluate the trashy args, saving their results on the
+    ;; stack.
+    (dolist (arg trashy-args)
+      (codegen (elt args arg) (dest-value (first regs)) (codegen-frame-base cg)
+               regs cg)
+      (emit-frame-push cg (first regs)))
 
-      (dolist (arg-ru trashy-args-ru)
-        (codegen (elt args (cdr arg-ru)) (dest-value (first regs))
-                 (codegen-frame-base cg) regs cg)
-        (emit-frame-push cg (first regs))))
-    
+    ;; Work out the register list for evaluating the non-trashy args,
+    ;; so that the result of each evaluation ends up in the correct
+    ;; register.  Note that operator-args-reg-use left the
+    ;; non-trashy-arg list in reverse order of evaluation,
     (let* ((non-trashy-regs (copy-list regs))
            (result-regs ()))
-      ;; work cg the register list for the non-trashy args.  this is
-      ;; derived from the target registers of each arg.  Note that
-      ;; operator-args-reg-use left the non-trashy-arg list in reverse
-      ;; order of evaluation
-      (dolist (arg-ru non-trashy-args-ru)
-        (let* ((c (nthcdr (cdr arg-ru) non-trashy-regs)))
+      (dolist (arg non-trashy-args)
+        (let* ((c (nthcdr arg non-trashy-regs)))
           (set! result-regs (cons (car c) result-regs))
           (rplaca c false)))
 
       (set! non-trashy-regs (nconc result-regs (delete false non-trashy-regs)))
       
-      ;; now generate code for non-trashy args, reducing the registers
-      ;; available for each one
-      (dolist (arg-ru (reverse non-trashy-args-ru))
-        (codegen (elt args (cdr arg-ru)) (dest-value (first non-trashy-regs))
+      ;; Now generate code for non-trashy args, reducing the available
+      ;; registers after each one.
+      (dolist (arg (reverse non-trashy-args))
+        (codegen (elt args arg) (dest-value (first non-trashy-regs))
                  (codegen-frame-base cg) non-trashy-regs cg)
         (set! non-trashy-regs (cdr non-trashy-regs))))
   
     ;; reload trashy arg results from stack
-    (dolist (arg-ru (reverse trashy-args-ru))
-      (emit-frame-pop cg (elt regs (cdr arg-ru))))))
+    (dolist (arg (reverse trashy-args))
+      (emit-frame-pop cg (elt regs arg)))))
 
 (defmarco (define-operator template outreg supplemental-regs . body)
   ;; define how to generate code for an operator
