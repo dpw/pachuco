@@ -566,7 +566,7 @@
               (value-sized (tagged-mem closure-tag %closure)) comment))))
 
 (define-reg-use ((call tail-call varargs-tail-call) attrs . args)
-  (reg-use-recurse form dest-type-value)
+  (dolist (arg args) (reg-use arg dest-type-value))
   general-register-count)
 
 (define (codegen-call-args cg func args)

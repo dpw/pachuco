@@ -64,8 +64,6 @@
                             make-vec vec-length vec-address
                             copy-mem))
 
-(define all-keywords (append keywords-2 internal-keywords keywords-1))
-
 ;;; Transform a program so that every form begins with a
 ;;; distinguishing keyword:
 ;;;
@@ -125,9 +123,7 @@
                (a (assoc kw (unquote alist-name))))
           (if a
               (funcall (cdr a) form (unquote-splicing implicit-vars))
-              (if (member? kw all-keywords)
-                  ((unquote recurse-name) form (unquote-splicing implicit-vars))
-                  (error "unknown form ~S" form)))))
+              ((unquote recurse-name) form (unquote-splicing implicit-vars)))))
 
       (defmarco ((unquote define-name) template . body)
         (quasiquote
@@ -988,10 +984,14 @@
 ;; the form, in order to yield the result into the given dest-type.
 ;;
 ;; The result should not be greater than general-register-count.
-(define-trivial-walker reg-use (dest-type))
+(define-walker reg-use (dest-type))
+(define (reg-use-recurse form dest-type)
+  (error "reg-use on unknown form ~S" (car form)))
 
 ;; codegen emits the code for the form.
-(define-trivial-walker codegen (dest out-frame-base regs cg))
+(define-walker codegen (dest out-frame-base regs cg))
+(define (codegen-recurse form dest-out-frame-base regs cg)
+  (error "codegen on unknown form ~S" (car form)))
 
 ;;; Begin
 
