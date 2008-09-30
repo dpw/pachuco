@@ -371,9 +371,6 @@
 
 ;;; Dest conversions
 
-(define (convert-value-reg-use dest-type)
-  (if (dest-type-conditional? dest-type) 1 0))
-
 (define (destination-reg dest regs)
   (if (dest-value? dest) (dest-value-reg dest) (first regs)))
 
@@ -636,28 +633,26 @@
 
 ;;; Quote
 
-(define-reg-use (quote attrs) (convert-value-reg-use dest-type))
+(define-reg-use (quote attrs) 0)
 
 (define-codegen (quote attrs)
   (cond ((dest-discard? dest)
          (emit-reset-frame-base cg out-frame-base))
         ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
-         (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
-                            (dest-conditional-flabel dest)
-                            (dest-conditional-tlabel dest))))
+         (emit-smart-jump cg
+                          (if (= false-representation (attr-ref attrs 'value))
+                              (dest-conditional-flabel dest)
+                              (dest-conditional-tlabel dest))))
         ((dest-value? dest)
-         (let* ((reg (destination-reg dest regs)))
-           (emit-mov cg (attr-ref attrs 'value) reg)
-           (emit-convert-value cg reg dest out-frame-base)))
+         (emit-convert-value cg (attr-ref attrs 'value) dest out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
 
 ;;; Variables
 
 (define-reg-use (set! varrec val)
-  (max (reg-use val dest-type-value)
-       (convert-value-reg-use dest-type)))
+  (reg-use val dest-type-value))
 
 (define-codegen (set! varrec val)
   (let* ((reg (destination-reg dest regs)))
@@ -665,7 +660,7 @@
     (emit-mov cg reg (varrec-operand varrec cg))
     (emit-convert-value cg reg dest out-frame-base)))
 
-(define-reg-use (ref varrec) (convert-value-reg-use dest-type))
+(define-reg-use (ref varrec) 0)
 
 (define-codegen (ref varrec)
   (emit-convert-value cg (varrec-operand varrec cg) dest out-frame-base))
@@ -968,8 +963,7 @@
 (define-simplify ((raw-c-global raw-label) name)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-reg-use ((raw-c-global raw-label) attrs)
-  (convert-value-reg-use dest-type))
+(define-reg-use ((raw-c-global raw-label) attrs) 0)
 
 (define-codegen (raw-c-global attrs)
   (emit-convert-value cg (mem (attr-ref attrs 'name)) dest out-frame-base))

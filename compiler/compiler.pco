@@ -1144,8 +1144,7 @@
     (quasiquote (definitions
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (max (operator-args-reg-use form)
-             (unquote body-ru)
-             (convert-value-reg-use dest-type)))
+             (unquote body-ru)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
         (operator-args-codegen form regs cg)
