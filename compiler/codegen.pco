@@ -476,7 +476,7 @@
 (define-simplify (raw-alloc tag-bits-ccsym size)
   (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
 
-(define-pure-operator (raw-alloc size) result (alloc)
+(define-operator (raw-alloc size) result (alloc)
   (emit-scale-number cg value-scale size)
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
               size alloc spare-regs)
@@ -517,7 +517,7 @@
 
 ;;; Functions and closures
 
-(define-pure-operator (alloc-closure) result (alloc)
+(define-operator (alloc-closure) result (alloc)
   (emit-alloc cg closure-tag-bits
               (* value-size (1+ (length (attr-ref attrs 'closure))))
               alloc spare-regs)
@@ -686,10 +686,10 @@
 (define-cc-operator (check-arg-count) "e" ()
   (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs))
 
-(define-pure-operator (arg-count) result ()
+(define-operator (arg-count) result ()
   (emit-mov cg %nargs result))
 
-(define-pure-operator (raw-args-base) result ()
+(define-operator (raw-args-base) result ()
   (emit-lea cg (param-slot cg 0) result))
 
 ;;; Apply support
@@ -719,16 +719,16 @@
 
 (define-tag-check pair? pair-tag pair-tag-bits)
 
-(define-pure-operator (cons a d) result (alloc)
+(define-operator (cons a d) result (alloc)
   (emit-alloc cg pair-tag-bits (* 2 value-size) alloc spare-regs)
   (emit-mov cg a (mem alloc))
   (emit-mov cg d (mem alloc 1))
   (emit-lea cg (mem1+ alloc pair-tag) result))
 
-(define-pure-operator (car a) result ()
+(define-operator (car a) result ()
   (emit-mov cg (tagged-mem pair-tag a) result))
 
-(define-pure-operator (cdr a) result ()
+(define-operator (cdr a) result ()
   (emit-mov cg (tagged-mem pair-tag a 1) result))
 
 (define-operator (rplaca c a) c ()
@@ -739,7 +739,7 @@
 
 ;;; Boxes
 
-(define-pure-operator (raw-make-box val) result (alloc)
+(define-operator (raw-make-box val) result (alloc)
   (emit-alloc cg box-tag-bits value-size alloc spare-regs)
   (emit-mov cg val (mem alloc))
   (emit-lea cg (mem1+ alloc box-tag) result))
@@ -754,10 +754,10 @@
 
 (define-tag-check symbol? symbol-tag symbol-tag-bits)
 
-(define-pure-operator (symbol-name sym) result ()
+(define-operator (symbol-name sym) result ()
   (emit-mov cg (tagged-mem symbol-tag sym) result))
 
-(define-pure-operator (raw-make-symbol str) result (alloc)
+(define-operator (raw-make-symbol str) result (alloc)
   (emit-alloc cg symbol-tag-bits value-size alloc spare-regs)
   (emit-mov cg str (mem alloc))
   (emit-lea cg (mem1+ alloc symbol-tag) result))
@@ -781,11 +781,11 @@
                                         (list '(unquote op) () a b)))))))))
 
 (define-simplify-binary-op + 0 begin) 
-(define-pure-operator (+ a b) a ()
+(define-operator (+ a b) a ()
   (emit-add cg b a))
 
 (define-simplify-binary-op * 1 begin) 
-(define-pure-operator (* a b) a ()
+(define-operator (* a b) a ()
   (emit-sar cg number-tag-bits a)
   (emit-imul cg b a))
 
@@ -795,51 +795,40 @@
       (overwrite-form form
                       (reduce~ a args (lambda (a b) (list '- () a b))))))
 
-(define-pure-operator (negate a) a ()
+(define-operator (negate a) a ()
   (emit-neg cg a))
 
-(define-pure-operator (- a b) a ()
+(define-operator (- a b) a ()
   (emit-sub cg b a))
 
 (define (div-operator-reg-use form dest-type)
-  (if (dest-type-discard? dest-type)
-      (operator-args-reg-use-discarding form)
-      (begin
-        (operator-args-reg-use form)
-        general-register-count)))
+  (operator-args-reg-use form)
+  general-register-count)
 
 (define-reg-use (truncate attrs a b)
   (div-operator-reg-use form dest-type))
 
 (define-codegen (truncate attrs a b)
-  (if (dest-discard? dest)
-      (operator-args-codegen-discarding form out-frame-base general-registers
-                                        cg)
-      (begin
-        (operator-args-codegen form
+  (operator-args-codegen form
                          (move-regs-to-front (list %a %c) general-registers) cg)
-        (emit-mov cg %a %d)
-        (emit-extend-sign-bit cg %d)
-        (emit-idiv cg %c)
-        (emit-shl cg number-tag-bits %a)
-        (emit-convert-value cg %a dest out-frame-base))))
+  (emit-mov cg %a %d)
+  (emit-extend-sign-bit cg %d)
+  (emit-idiv cg %c)
+  (emit-shl cg number-tag-bits %a)
+  (emit-convert-value cg %a dest out-frame-base))
 
 (define-reg-use (rem attrs a b)
   (div-operator-reg-use form dest-type))
 
 (define-codegen (rem attrs a b)
-  (if (dest-discard? dest)
-      (operator-args-codegen-discarding form out-frame-base general-registers
-                                        cg)
-      (begin
-        (operator-args-codegen form
+  (operator-args-codegen form
                          (move-regs-to-front (list %a %c) general-registers) cg)
-        (emit-mov cg %a %d)
-        (emit-extend-sign-bit cg %d)
-        (emit-idiv cg %c)
-        (emit-convert-value cg %d dest out-frame-base))))
+  (emit-mov cg %a %d)
+  (emit-extend-sign-bit cg %d)
+  (emit-idiv cg %c)
+  (emit-convert-value cg %d dest out-frame-base))
 
-(define-pure-operator (logior a b) a ()
+(define-operator (logior a b) a ()
   (emit-or cg b a))
 
 ;;; Strings and vectors
@@ -847,7 +836,7 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define-pure-operator (make-vec len) result (alloc saved-len)
+(define-operator (make-vec len) result (alloc saved-len)
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
@@ -858,18 +847,18 @@
     (emit-mov cg saved-len (mem alloc))
     (emit-lea cg (mem1+ alloc tag) result)))
 
-(define-pure-operator (vec-length vec) result ()
+(define-operator (vec-length vec) result ()
   (emit-mov cg (tagged-mem (attr-ref attrs 'tag) vec) result))
 
 (define (vec-slot attrs vec index)
   (mem1+ (tagged-mem (attr-ref attrs 'tag) vec index)
          (attr-ref attrs 'header-size)))
 
-(define-pure-operator (vec-address vec index) result ()
+(define-operator (vec-address vec index) result ()
   (emit-scale-number cg (attr-ref attrs 'scale) index)
   (emit-lea cg (vec-slot attrs vec index) result))
 
-(define-pure-operator (raw-vec-ref vec index) result ()
+(define-operator (raw-vec-ref vec index) result ()
   (let* ((scale (attr-ref attrs 'scale)))
     (emit-scale-number cg scale index)
     (emit-movzx cg (vec-slot attrs vec index) result scale)))
@@ -928,7 +917,7 @@
 
 ;;; Raw memory access
 
-(define-pure-operator (raw-ref addr) result ()
+(define-operator (raw-ref addr) result ()
   (emit-movzx cg (mem addr) result (attr-ref attrs 'scale)))
 
 (define-operator (raw-set! addr val) val ()
@@ -936,13 +925,13 @@
 
 ;;; Raw ops for the GC
 
-(define-pure-operator (raw-logand a b) a ()
+(define-operator (raw-logand a b) a ()
   (emit-and cg b a))
 
-(define-pure-operator (raw-- a b) a ()
+(define-operator (raw-- a b) a ()
   (emit-sub cg b a))
 
-(define-pure-operator (raw-+ a b) a ()
+(define-operator (raw-+ a b) a ()
   (emit-add cg b a))
 
 ;;; Misc. runtime
@@ -958,10 +947,10 @@
     (emit cg "hlt")
     (emit-smart-jump cg l)))
 
-(define-pure-operator (fixnum->raw val) val ()
+(define-operator (fixnum->raw val) val ()
   (emit-sar cg number-tag-bits val))
 
-(define-pure-operator (raw->fixnum val) val ()
+(define-operator (raw->fixnum val) val ()
   (emit-shl cg number-tag-bits val))
 
 (define (emit-set-ac-flag cg enable)
