@@ -1004,28 +1004,17 @@
     (block-reg-use (car body) (cdr body) 0)))
 
 (define-codegen (begin varrecs . body)
+  (unless out-frame-base
+    (set! out-frame-base (codegen-frame-base cg)))
+
   (labels ((block-codegen (form forms)
              (emit-comment-form cg form)
              (if (null? forms)
                  (codegen form dest out-frame-base regs cg)
                  (begin
-                   (if (eq? 'define (car form))
-                       (let* ((varrec (second form)))
-                         (varrec-attr-set! varrec 'index
-                                           (codegen-frame-base cg))
-                         (codegen (third form) (dest-value (first regs))
-                                  (codegen-frame-base cg) regs cg)
-                         (emit-frame-push cg (first regs)))
-                       (codegen form dest-discard (codegen-frame-base cg)
-                                regs cg))
+                   (codegen form dest-discard false regs cg)
                    (block-codegen (car forms) (cdr forms))))))
     (block-codegen (car body) (cdr body))))
-
-;; Most defines occur within a non-final position of a begin, and so
-;; get handled by the codegen for begin above.  The rest get handled
-;; by this.
-(define-reg-use (define varrec val) (reg-use val dest-type-value))
-(define-codegen (define varrec val) (codegen val dest out-frame-base regs cg))
 
 ;;; If
 

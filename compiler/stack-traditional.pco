@@ -27,7 +27,8 @@
   (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
 
 (define (emit-reset-frame-base cg out-frame-base)
-  (let* ((in-frame-base (codegen-frame-base cg)))
-    (unless (= in-frame-base out-frame-base)
-      (emit-add cg (* value-size (- in-frame-base out-frame-base)) %sp)
-      (codegen-set-frame-base! cg out-frame-base))))
+  (when out-frame-base
+    (let* ((in-frame-base (codegen-frame-base cg)))
+      (unless (= in-frame-base out-frame-base)
+        (emit-add cg (* value-size (- in-frame-base out-frame-base)) %sp)
+        (codegen-set-frame-base! cg out-frame-base)))))

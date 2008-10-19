@@ -651,6 +651,16 @@
 
 ;;; Variables
 
+(define-reg-use (define varrec val)
+  (reg-use val dest-type-value))
+
+(define-codegen (define varrec val)
+  (let* ((reg (first regs)))
+    (varrec-attr-set! varrec 'index (codegen-frame-base cg))
+    (codegen val (dest-value reg) (codegen-frame-base cg) regs cg)
+    (emit-frame-push cg reg)
+    (emit-convert-value cg reg dest out-frame-base)))
+
 (define-reg-use (set! varrec val)
   (reg-use val dest-type-value))
 
