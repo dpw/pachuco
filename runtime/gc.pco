@@ -141,7 +141,10 @@
             (set! i (+ i step)))))))
 
   (defmacro (gc-identity-type tag bits)
-    'identity)
+    ;; this could just be 'identity, except that the identity closure
+    ;; currently lives on the heap, and we want to avoid references to
+    ;; established type-table when we construct gc-type-table
+    '(lambda (x) x))
 
   (defmacro (gc-address-type tag bits . copier)
     ;; a type that involves copying
