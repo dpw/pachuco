@@ -62,6 +62,9 @@ $(2)-gc-test-run: build/$(2)-gc-test
 	$$<
 
 
+$(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	$(1) expand $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+
 build/$(3) build/$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	mkdir -p build
 	scripts/compile -C $(1) -s -o build/$(3) $(SL_COMPILER_SOURCES)
