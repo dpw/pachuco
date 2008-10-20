@@ -851,8 +851,8 @@
   (list 'if (comment-form test) 'etc.))
 
 (define-comment-form (ref varrec) (list 'ref (car varrec)))
-(define-comment-form ((set! define) varrec val)
-  (list (car form) (car varrec) (comment-form val)))
+(define-comment-form ((set! define) attrs val)
+  (list (car form) (car (attr-ref attrs 'varrec)) (comment-form val)))
 
 (define-comment-form (quote attrs)
   (let* ((val (attr-ref attrs 'quoted)))
@@ -917,11 +917,6 @@
         (varrec-attr-set! varrec 'label label)
         (codegen-top-level-variable cg (car varrec) label))))
   (codegen-sections-forms body cg))
-
-(define-codegen-sections (define varrec val)
-  ;; convert define for top-level variables to set!
-  (when (varrec-top-level? varrec) (rplaca form 'set!))
-  (codegen-sections val cg))
 
 (define (assign-varrec-indices varrecs)
   ;; assign slot indices to varrecs

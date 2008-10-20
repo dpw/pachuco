@@ -651,24 +651,26 @@
 
 ;;; Variables
 
-(define-reg-use (define varrec val)
-  (reg-use val dest-type-value))
+(define-codegen-sections (define varrec val)
+  ;; convert define for top-level variables to set!
+  (when (varrec-top-level? varrec) (rplaca form 'set!))
+  ;; make the varrec into a normal attribute, in order to use
+  ;; define-operator
+  (rplaca (cdr form) (acons 'varrec varrec ()))
+  (codegen-sections val cg))
 
-(define-codegen (define varrec val)
-  (let* ((reg (first regs)))
-    (varrec-attr-set! varrec 'index (codegen-frame-base cg))
-    (codegen val (dest-value reg) (codegen-frame-base cg) regs cg)
-    (emit-frame-push cg reg)
-    (emit-convert-value cg reg dest out-frame-base)))
+(define-operator (define val) val ()
+  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
+  (emit-frame-push cg val))
 
-(define-reg-use (set! varrec val)
-  (reg-use val dest-type-value))
+(define-codegen-sections (set! varrec val)
+  ;; make the varrec into a normal attribute, in order to use
+  ;; define-operator
+  (rplaca (cdr form) (acons 'varrec varrec ()))
+  (codegen-sections val cg))
 
-(define-codegen (set! varrec val)
-  (let* ((reg (destination-reg dest regs)))
-    (codegen val (dest-value reg) (codegen-frame-base cg) regs cg)
-    (emit-mov cg reg (varrec-operand varrec cg))
-    (emit-convert-value cg reg dest out-frame-base)))
+(define-operator (set! val) val ()
+  (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg)))
 
 (define-reg-use (ref varrec) 0)
 
