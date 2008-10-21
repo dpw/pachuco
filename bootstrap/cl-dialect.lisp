@@ -2,6 +2,8 @@
 ;;; dialect under Common Lisp implementations.
 
 (declaim (optimize (debug 2)))
+(declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
+(declaim (sb-ext:muffle-conditions style-warning))
 
 (define-symbol-macro true t)
 (define-symbol-macro false nil)
