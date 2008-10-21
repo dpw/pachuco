@@ -964,9 +964,8 @@
   (emit-pushf cg)
   (if enable
       (emit-or cg #x40000 (mem %sp) 2)
-      (begin
         ;; we can't use an immediate mask value, due to fixnum limitations
-        (define reg (first general-registers))
+      (let* ((reg (first general-registers)))
         (emit-mov cg #x40000 reg 2)
         (emit-not cg reg 2)
         (emit-and cg reg (mem %sp) 2)))
