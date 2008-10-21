@@ -56,3 +56,6 @@
       (let* (((unquote orig-frame-base) (codegen-frame-base (unquote cg))))
         (unquote-splicing body)
         (codegen-set-frame-base! (unquote cg) (unquote orig-frame-base))))))
+
+(define function-label-prefix "lf_")
+(define variable-label-prefix "lv_")

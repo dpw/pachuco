@@ -35,9 +35,6 @@
         (and (or (character-alphanumeric? ch) (eq? ch #\-))
              (label-name-ok? name (1+ i))))))
 
-(define function-label-prefix "lf_")
-(define variable-label-prefix "lv_")
-
 (define (make-label-for sym prefix)
   ;; map a lisp symbol to an assembly label, returning a gen-labelled
   ;; label if necessary
