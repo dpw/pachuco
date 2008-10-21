@@ -12,7 +12,7 @@
 ;;; Parameters are always passed immediately above the return address
 ;;; slot
 (define (param-slot cg index)
-  (mem (return-address-slot cg) (+ 1 index)))
+  (mem (return-address-slot cg) (1+ index)))
 
 ;;; Locals always come below the closure address slot
 (define (local-slot cg index)
