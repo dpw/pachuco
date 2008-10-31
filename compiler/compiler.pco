@@ -1022,8 +1022,7 @@
   (let* ((l1 (gen-label))
          (l2 (gen-label))
          (l3 (gen-label)))
-    (codegen test (dest-conditional l1 l2) (codegen-frame-base cg)
-             regs cg)
+    (codegen test (dest-conditional l1 l2) false regs cg)
     (emit-smart-label cg l1)
     (emit-comment-form cg then)
     (with-saved-frame-base cg
@@ -1092,8 +1091,7 @@
     ;; First, evaluate the trashy args, saving their results on the
     ;; stack.
     (dolist (arg trashy-args)
-      (codegen (elt args arg) (dest-value (first regs)) (codegen-frame-base cg)
-               regs cg)
+      (codegen (elt args arg) (dest-value (first regs)) false regs cg)
       (emit-frame-push cg (first regs)))
 
     ;; Work out the register list for evaluating the non-trashy args,
@@ -1113,7 +1111,7 @@
       ;; registers after each one.
       (dolist (arg (reverse non-trashy-args))
         (codegen (elt args arg) (dest-value (first non-trashy-regs))
-                 (codegen-frame-base cg) non-trashy-regs cg)
+                 false non-trashy-regs cg)
         (set! non-trashy-regs (cdr non-trashy-regs))))
   
     ;; reload trashy arg results from stack

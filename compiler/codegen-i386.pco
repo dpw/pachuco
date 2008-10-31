@@ -10,8 +10,8 @@
 (define-codegen (c-call attrs . args)
   (dolist (arg (reverse args))
     (reg-use arg dest-type-value)
-    (codegen arg (dest-value (first general-registers))
-             (codegen-frame-base cg) general-registers cg)
+    (codegen arg (dest-value (first general-registers)) false general-registers
+             cg)
     (emit-frame-push cg (first general-registers)))
 
   (emit cg "cld")

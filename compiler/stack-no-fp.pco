@@ -97,8 +97,7 @@
          (retaddr (return-address-slot cg)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
-    (codegen arg-count (dest-value in-arg-count-reg)
-             (codegen-frame-base cg) general-registers cg)
+    (codegen arg-count (dest-value in-arg-count-reg) false general-registers cg)
     (emit-scale-number cg value-scale in-arg-count-reg)
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
@@ -147,7 +146,7 @@
 
     (codegen-set-frame-base! cg 0)
     (codegen-set-have-closure! cg false)
-    (codegen program dest-discard 0 general-registers cg)
+    (codegen program dest-discard false general-registers cg)
 
     (emit-set-ac-flag cg false)
     (emit cg "cld")

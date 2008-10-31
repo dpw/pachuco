@@ -526,11 +526,9 @@
   (let* ((closure-reg (first regs))
          (ref-reg (second regs))
          (index 0))
-    (codegen closure (dest-value closure-reg) (codegen-frame-base cg) regs
-             cg)
+    (codegen closure (dest-value closure-reg) false regs cg)
     (dolist (ref refs)
-      (codegen ref (dest-value ref-reg) (codegen-frame-base cg) (cdr regs)
-               cg)
+      (codegen ref (dest-value ref-reg) false (cdr regs) cg)
       (emit-mov cg ref-reg (closure-slot closure-reg index))
       (set! index (1+ index)))
     (emit-convert-value cg closure-reg dest out-frame-base)))
@@ -565,14 +563,13 @@
 
 (define (codegen-call-args cg func args)
   (dolist (arg (reverse args))
-    (codegen arg (dest-value (first general-registers))
-             (codegen-frame-base cg) general-registers cg)
+    (codegen arg (dest-value (first general-registers)) false general-registers
+             cg)
     (emit-frame-push cg (first general-registers)))
   (unless (and (eq? 'ref (first func))
                (varrec-origin-attr (second func) 'lambda-label)
                (varrec-origin-attr (second func) 'no-closure))
-    (codegen func (dest-value %closure) (codegen-frame-base cg)
-             general-registers cg)))
+    (codegen func (dest-value %closure) false general-registers cg)))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
