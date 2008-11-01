@@ -30,5 +30,5 @@
   (when out-frame-base
     (let* ((in-frame-base (codegen-frame-base cg)))
       (unless (= in-frame-base out-frame-base)
-        (emit-add cg (* value-size (- in-frame-base out-frame-base)) %sp)
+        (emit-lea cg (mem %sp (- in-frame-base out-frame-base)) %sp)
         (codegen-set-frame-base! cg out-frame-base)))))

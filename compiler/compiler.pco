@@ -1163,15 +1163,11 @@
         (if (dest-conditional? dest)
             (begin
               (operator-args-codegen form regs cg)
-               
-              ;; Adjust the frame base here, since it could mess with the ccs
-              ;; later on.  This assumes that cc ops don't depend on %sp
-              (emit-reset-frame-base cg out-frame-base)
-
               (bind ((unquote-splicing (cdr template))
                      (unquote-splicing supplemental-regs) . spare-regs)
                     regs
                 (unquote-splicing body)
+                (emit-reset-frame-base cg out-frame-base)
                 (emit-smart-branch cg (unquote cc) dest)))
             (let* ((args-count (length (cddr form)))
                    (args-regs (append (sublist (cdr regs) 0 args-count)
