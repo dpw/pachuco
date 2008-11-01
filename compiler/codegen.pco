@@ -374,14 +374,12 @@
 (define (emit-convert-value cg operand dest out-frame-base)
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
-           (unless (eq? operand dr) (emit-mov cg operand dr)))
-         (emit-reset-frame-base cg out-frame-base))
+           (unless (eq? operand dr) (emit-mov cg operand dr))))
         ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
          (emit-cmp cg false-representation operand)
          (emit-smart-branch cg "ne" dest))
-        ((dest-discard? dest)
-         (emit-reset-frame-base cg out-frame-base))
+        ((dest-discard? dest))
         (true
          (error "can't handle dest ~S" dest))))
 
@@ -630,8 +628,7 @@
 (define-reg-use (quote attrs) 0)
 
 (define-codegen (quote attrs)
-  (cond ((dest-discard? dest)
-         (emit-reset-frame-base cg out-frame-base))
+  (cond ((dest-discard? dest))
         ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
          (emit-smart-jump cg
@@ -913,8 +910,7 @@
           (emit-lea cg (tagged-mem (ash 1 scale) %si %a) %si)
           (emit-lea cg (tagged-mem (ash 1 scale) %di %a) %di)))
     (emit-sar cg number-tag-bits %c)
-    (emit-rep-movs cg scale)
-    (emit-reset-frame-base cg out-frame-base)))
+    (emit-rep-movs cg scale)))
 
 ;;; Raw memory access
 

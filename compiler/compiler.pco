@@ -1009,7 +1009,13 @@
                  (begin
                    (codegen form dest-discard false regs cg)
                    (block-codegen (car forms) (cdr forms))))))
-    (block-codegen (car body) (cdr body))))
+    (block-codegen (car body) (cdr body)))
+
+  ;; Always reset the frame-base at the end of a begin.  Sometimes
+  ;; this will be unnecessary, because the last form in the begin will
+  ;; have taken care of it (e.g. a nested begin).  But checking here
+  ;; means that most forms don't need to worry
+  (emit-reset-frame-base cg out-frame-base))
 
 ;;; If
 
@@ -1026,11 +1032,13 @@
     (emit-smart-label cg l1)
     (emit-comment-form cg then)
     (with-saved-frame-base cg
-      (codegen then dest out-frame-base regs cg))
+      (codegen then dest out-frame-base regs cg)
+      (emit-reset-frame-base cg out-frame-base))
     (emit-smart-jump cg l3)
     (emit-smart-label cg l2)
     (emit-comment-form cg else)
     (codegen else dest out-frame-base regs cg)
+    (emit-reset-frame-base cg out-frame-base)
     (emit-smart-label cg l3)))
 
 ;;; Operator support

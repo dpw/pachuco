@@ -38,6 +38,7 @@
 
 (define-codegen (return attrs body)
   (codegen body (dest-value %funcres) out-frame-base general-registers cg)
+  (emit-reset-frame-base cg out-frame-base)
   (emit-ret cg (* value-size (attr-ref attrs 'nparams))))
 
 (define-codegen (varargs-return attrs arg-count body)
@@ -58,7 +59,8 @@
     (emit-mov cg retaddr-reg (mem %sp))
     (emit cg "ret")))
 
-(define (codegen-tail-call func retaddr out-arg-count out-retaddr regs cg)
+(define (codegen-tail-call func retaddr out-arg-count out-retaddr
+                           out-frame-base regs cg)
   (let* ((tmpreg (first regs))
          (retaddr-reg (second regs)))
     (emit-mov cg retaddr retaddr-reg)
@@ -69,7 +71,8 @@
     ;; in general-regs and so might be the same as one of our temp
     ;; regs
     (emit-mov cg (fixnum-representation out-arg-count) %nargs)
-    (emit-call-or-jump cg "jmp" func)))
+    (emit-call-or-jump cg "jmp" func)
+    (codegen-set-frame-base! cg out-frame-base)))
 
 (define-codegen (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -88,7 +91,7 @@
           (emit-mov cg (fixnum-representation out-arg-count) %nargs)
           (emit-call-or-jump cg "jmp" func))
         (codegen-tail-call func retaddr out-arg-count out-retaddr
-                           general-registers cg))))
+                           out-frame-base general-registers cg))))
 
 (define-codegen (varargs-tail-call attrs arg-count func . args)
   (codegen-call-args cg func args)
@@ -102,7 +105,7 @@
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
     (codegen-tail-call func retaddr out-arg-count in-arg-count-reg 
-                       (cdr general-registers) cg)))
+                       out-frame-base (cdr general-registers) cg)))
 
 ;;; Apply support
 
