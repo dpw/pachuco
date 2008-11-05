@@ -110,16 +110,16 @@
 
 (define (insn-operand x scale)
   (cond ((immediate? x) (format~ false "$~A" x))
-        ((vector? x) (vector-ref x scale))
+        ((vector? x) (register-operand x scale))
         ((pair? x)
          (cond ((null? (cdr x)) (indirect-operand (car x)))
                ((null? (cddr x))
                 (format~ false "~A(~A)" (if (eq? 0 (car x)) "" (car x))
-                         (vector-ref (second x) value-scale)))
+                         (register-operand (second x) value-scale)))
                (true
                 (format~ false "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
-                         (vector-ref (second x) value-scale)
-                         (vector-ref (third x) value-scale)))))
+                         (register-operand (second x) value-scale)
+                         (register-operand (third x) value-scale)))))
         (true (error "strange operand ~S" x))))
 
 (define (value-sized operand)
@@ -393,12 +393,6 @@
   (emit-or cg special-tag reg 0))
 
 ;;; Heap allocation
-
-(define (register-bit reg)
-  (labels ((scan-regs (all-regs bit)
-             (if (eq? reg (car all-regs)) bit
-                 (scan-regs (cdr all-regs) (+ bit bit)))))
-    (scan-regs general-registers 1)))
 
 (define (register-bitset regs)
   (reduce~ (register-bit (car regs)) (cdr regs)

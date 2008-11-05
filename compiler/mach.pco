@@ -7,7 +7,17 @@
 (defmarco (define-register name . variants)
   (quasiquote 
     (define (unquote name)
-      (make-vector-from-list (quote (unquote variants))))))
+      (make-vector-from-list
+        (quote ((unquote name) false (unquote-splicing variants)))))))
+
+(define (register-operand reg scale)
+  (vector-ref reg (+ 2 scale)))
+
+(define (register-name reg)
+  (vector-ref reg 0))
+
+(define (register-bit reg)
+  (vector-ref reg 1))
 
 (define general-registers ())
 (define general-register-count 0)
@@ -19,7 +29,10 @@
 (define %nargs)
 
 (define (add-general-registers regs)
-  (set! general-register-count (+ general-register-count (length regs)))
+  (dolist (reg regs)
+    (vector-set! reg 1 (ash 1 general-register-count))
+    (set! general-register-count (1+ general-register-count)))
+
   (set! general-registers (nconc general-registers regs))
   (set! %nargs (last-elem general-registers)))
 
