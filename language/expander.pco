@@ -1,37 +1,57 @@
 ;;; Macro expansion
 
-(define builtin-expanders ())
+(define builtin-expanders (make-symboltable))
 
 ;; The macro environment consists of a pair of lalists, the first for
 ;; normal macro expanders, the second for symbol macro expansions.
 
 (define (make-initial-macro-env)
-  (cons (list builtin-expanders) (list ())))
+  (list (cons builtin-expanders false)))
 
 (defmarco (define-form-expander keyword . body)
   (quasiquote
-    (push (cons (unquote keyword) (lambda (form keyword args dual-env)
-                                    (unquote-splicing body)))
-          builtin-expanders)))
+    (symboltable-set! builtin-expanders (unquote keyword)
+                      (lambda (form keyword args dual-env)
+                        (unquote-splicing body)))))
 
 (define (add-form-expander macro-env keyword expander)
-  (lapush keyword expander (car macro-env)))
+  (unless (caar macro-env) (rplaca (car macro-env) (make-symboltable)))
+  (symboltable-set! (caar macro-env) keyword expander))
+
+(define (macro-env-expander macro-env keyword)
+  (and (not (null? macro-env))
+       (let* ((res (and (caar macro-env)
+                        (symboltable-ref (caar macro-env) keyword))))
+         (or res (macro-env-expander (cdr macro-env) keyword)))))
 
 (define (add-symbol-expansion macro-env sym expansion)
-  (lapush sym expansion (cdr macro-env)))
+  (unless (cdar macro-env) (rplacd (car macro-env) (make-symboltable)))
+  (symboltable-set! (cdar macro-env) sym (cons expansion ())))
+
+(define (macro-env-expansion-cell macro-env sym)
+  (and (not (null? macro-env))
+       (let* ((res (and (cdar macro-env)
+                        (symboltable-ref (cdar macro-env) sym))))
+         (or res (macro-env-expansion-cell (cdr macro-env) sym)))))
 
 ;; A dual environment consits of a pair of the macro environment and
 ;; the evaluation environment for evaluation of macros.
 
 (define (expand-form form dual-env)
-  (if (pair? form)
-      (let* ((keyword (car form))
-             (expander (lassoc keyword (caar dual-env))))
-        (if expander
-            (funcall (cdr expander) form keyword (cdr form) dual-env)
-            (mapfor (subform form) (expand-form subform dual-env))))
-      (let* ((expansion (lassoc form (cdar dual-env))))
-        (if expansion (expand-form (cdr expansion) dual-env) form))))
+  (cond ((pair? form) 
+         (let* ((keyword (car form))
+                (expander (and (symbol? keyword)
+                               (macro-env-expander (car dual-env) keyword))))
+           (if expander
+               (funcall expander form keyword (cdr form) dual-env)
+               (mapfor (subform form) (expand-form subform dual-env)))))
+        ((symbol? form)
+         (let* ((cell (macro-env-expansion-cell (car dual-env) form)))
+           (if cell
+               (expand-form (car cell) dual-env)
+               form)))
+        (true
+         form)))
 
 (define (expand-define keyword args dual-env)
   ;; normalize and expand a let/set!/define/defmacro
