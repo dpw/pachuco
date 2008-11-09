@@ -10,11 +10,12 @@
                       (lambda (keyword args env in-body)
                         (unquote-splicing body)))))
 
-(define interpreter-builtin-vars ())
+(define interpreter-builtin-vars (make-symboltable))
 
 (defmarco (define-interpreter-builtin-var name val)
   (quasiquote
-    (push (cons '(unquote name) (unquote val)) interpreter-builtin-vars)))
+    (symboltable-set! interpreter-builtin-vars
+                      '(unquote name) (cons '(unquote val) ()))))
 
 (define (make-initial-interpreter-env) (list interpreter-builtin-vars))
 
@@ -29,9 +30,9 @@
                (funcall builtin keyword args env in-body)
                (eval-call form env))))
         ((symbol? form)
-         (let* ((var (lassoc form env)))
-           (if var (cdr var)
-               (error "unbound variable ~S" form))))
+         (let* ((cell (symboltable-list-ref env form)))
+           (unless cell (error "unbound variable ~S" form))
+           (car cell)))
         (true form)))
 
 (define (eval-form form env)
@@ -46,47 +47,50 @@
       (set! result (eval-body-form form env)))
     result))
 
-(define (make-lambda-alist formals actuals)
+(define (add-lambda-vars vars formals actuals)
   (cond ((null? formals)
          (if (null? actuals) ()
              (error "surplus arguments ~S" actuals)))
         ((symbol? formals)
-         (acons formals actuals ()))
+         (symboltable-set! vars formals (cons actuals ())))
         (true
-         (if (null? actuals) (error "insufficient arguments")
-             (acons (car formals) (car actuals)
-                    (make-lambda-alist (cdr formals) (cdr actuals)))))))
+         (when (null? actuals) (error "insufficient arguments"))
+         (symboltable-set! vars (car formals) (cons (car actuals) ()))
+         (add-lambda-vars vars (cdr formals) (cdr actuals)))))
 
 (define-interpreter-builtin-form lambda
   (lambda (actuals)
-    (eval-body (cdr args) (cons (make-lambda-alist (car args) actuals) env))))
+    (let* ((vars (make-symboltable)))
+      (add-lambda-vars vars (car args) actuals)
+      (eval-body (cdr args) (cons vars env)))))
 
 (define (eval-call form env)
   (let* ((evaled-subforms (mapfor (subform form) (eval-form subform env))))
     (funcall (car evaled-subforms) (cdr evaled-subforms))))
 
 (define-interpreter-builtin-form begin
-  (eval-body args (cons () env)))
+  (eval-body args (cons (make-symboltable) env)))
 
 (define-interpreter-builtin-form definitions
   (unless in-body (error "definitions not in body"))
   (eval-body args env))
 
 (define-interpreter-builtin-form define
-  (unless in-body (error "definitions not in body"))
+  (unless in-body (error "define not in body"))
   (let* ((var (first args))
          (val (if (null? (cdr args)) unspecified
                   (eval-form (second args) env))))
     (unless (symbol? var) (error "bad variable name ~S" var))
-    (when (assoc var (car env)) (error "variable ~S already bound" var))
-    (lapush var val env)
+    (when (symboltable-ref (car env) var)
+      (error "variable ~S already bound" var))
+    (symboltable-set! (car env) var (cons val ()))
     val))
 
 (define-interpreter-builtin-form set!
   (let* ((val (eval-form (second args) env))
-         (var (lassoc (first args) env)))
-    (if var (rplacd var val)
-        (error "unbound variable ~S" (first args)))
+         (cell (symboltable-list-ref env (first args))))
+    (unless cell (error "unbound variable ~S" (first args)))
+    (rplaca cell val)
     val))
 
 (define-interpreter-builtin-form if

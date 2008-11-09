@@ -46,7 +46,7 @@
 (defmarco (symboltable-set! st sym val) (list 'hashtable-set! st sym val))
 
 (define (symboltable-list-ref l sym)
-  (let* ((res (symboltable-ref (car l) sym)))
-    (or res (let* ((parent (cdr l)))
-              (and (not (null? parent))
-                   (symboltable-list-ref parent sym))))))
+  (if (null? l)
+      false
+      (let* ((res (symboltable-ref (car l) sym)))
+        (or res (symboltable-list-ref (cdr l) sym)))))
