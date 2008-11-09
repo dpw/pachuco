@@ -35,3 +35,18 @@
 
 (define (string-starts-with? str prefix)
   (string-range-equal? str 0 prefix 0 (string-length prefix)))
+
+
+;;; Symbol tables
+
+(define (make-symboltable)
+  (make-hashtable (function symbol-id) (function eq?)))
+
+(defmarco (symboltable-ref st sym) (list 'hashtable-ref st sym))
+(defmarco (symboltable-set! st sym val) (list 'hashtable-set! st sym val))
+
+(define (symboltable-list-ref l sym)
+  (let* ((res (symboltable-ref (car l) sym)))
+    (or res (let* ((parent (cdr l)))
+              (and (not (null? parent))
+                   (symboltable-list-ref parent sym))))))
