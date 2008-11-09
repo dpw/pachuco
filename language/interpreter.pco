@@ -64,8 +64,11 @@
       (add-lambda-vars vars (car args) actuals)
       (eval-body (cdr args) (cons vars env)))))
 
+(define (eval-forms forms env)
+  (mapfor (form forms) (eval-form form env)))
+
 (define (eval-call form env)
-  (let* ((evaled-subforms (mapfor (subform form) (eval-form subform env))))
+  (let* ((evaled-subforms (eval-forms form env)))
     (funcall (car evaled-subforms) (cdr evaled-subforms))))
 
 (define-interpreter-builtin-form begin
@@ -104,7 +107,7 @@
 (defmarco (define-interpreter-builtin-op op . body)
   (quasiquote
     (define-interpreter-builtin-form (unquote op)
-      (let* ((evaled-args (mapfor (arg args) (eval-form arg env))))
+      (let* ((evaled-args (eval-forms args env)))
         (unquote (cond ((null? body)
                         (quasiquote
                           (apply (function (unquote op)) evaled-args)))
@@ -119,8 +122,7 @@
 (defmarco (define-interpreter-builtin-boolean-op op)
   (quasiquote
     (define-interpreter-builtin-form (unquote op)
-      (if (apply (function (unquote op))
-                 (mapfor (arg args) (eval-form arg env)))
+      (if (apply (function (unquote op)) (eval-forms args env))
          'true 'false))))
 
 (define-interpreter-builtin-op error-halt)
