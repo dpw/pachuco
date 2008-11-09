@@ -91,9 +91,12 @@
 (define-form-expander 'lambda
   (list* keyword (car args) (expand-body (cdr args) dual-env)))
 
-(dolist (k '(begin definitions))
-  (define-form-expander k
-    (cons keyword (expand-body args dual-env))))
+(define-form-expander 'begin
+  (cons keyword (expand-body args (cons (cons (cons false false) (car dual-env))
+                                        (cdr dual-env)))))
+
+(define-form-expander 'definitions
+  (cons keyword (expand-body args dual-env)))
 
 (dolist (k '(define let set!))
   (define-form-expander k
