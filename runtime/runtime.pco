@@ -109,6 +109,7 @@
 
 (reify (symbol? a))
 (reify (symbol-name a))
+(reify (symbol-id a))
 
 (reify (pair? a))
 (reify (null? a))
@@ -525,6 +526,7 @@
 
 (when-compiling
   (define symbol-table false)
+  (define symbol-id-counter 0)
 
   (define (intern str)
     (unless symbol-table
@@ -535,7 +537,8 @@
     (define res (hashtable-ref symbol-table str))
     (if res res
         (begin
-          (define res (raw-make-symbol str))
+          (define res (raw-make-symbol str
+                              (set! symbol-id-counter (1- symbol-id-counter))))
           (hashtable-set! symbol-table str res)
           res))))
 

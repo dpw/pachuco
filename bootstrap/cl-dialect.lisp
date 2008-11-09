@@ -33,6 +33,13 @@
   (if (member a '(false true () unspecified)) false
       (symbolp a)))
 
+(defvar symbol-id-counter 0)
+
+(defun symbol-id (sym)
+  (let* ((id (get sym 'id)))
+    (or id
+        (setf (get sym 'id) (setq symbol-id-counter (1+ symbol-id-counter))))))
+
 (defmacro mapfor (decl &rest body)
   (let ((var (first decl))
         (l (second decl)))

@@ -28,7 +28,7 @@
     
     eq? function?
     
-    symbol? symbol-name raw-make-symbol
+    symbol? symbol-name symbol-id raw-make-symbol
     
     pair? car cdr cons rplaca rplacd
     

@@ -200,9 +200,10 @@
       copy)
     
     (symbol gc-address-type
-      ;; This won't work for a symbol with its name slot set to the
-      ;; symbol.  But that would be really perverse.
-      (define copy (raw-make-symbol (gc-live (symbol-name val))))
+      ;; This won't work for a symbol a circular name or id slot.  But
+      ;; that would be really perverse.
+      (define copy (raw-make-symbol (gc-live (symbol-name val))
+                                    (gc-live (symbol-id val))))
       (raw-set! addr copy)
       copy)
 

@@ -89,8 +89,10 @@
 
   (begin
     (define str "test-symbol")
-    (define sym (raw-make-symbol str))
-    (assert-result (symbol-name (gc-test-copy sym)) str))
+    (define sym (raw-make-symbol str 1234))
+    (define symcopy (gc-test-copy sym))
+    (assert-result (symbol-name symcopy) str)
+    (assert-result (symbol-id symcopy) 1234))
 
   (assert (loopy-equal? (gc-test-copy (looped-list 1 2 3)) (looped-list 1 2 3)))
   (assert (loopy-equal? (gc-test-copy (looped-vector)) (looped-vector)))

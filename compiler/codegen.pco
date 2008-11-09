@@ -604,6 +604,7 @@
     (format~ false "~A+~D" label string-tag)))
 
 (define emitted-symbols ())
+(define emitted-symbol-counter 0)
 
 (define (codegen-quoted-symbol sym cg)
   (let* ((emitted (assoc sym emitted-symbols)))
@@ -613,6 +614,8 @@
                                             cg)))
           (emit-data cg label symbol-tag-bits)
           (emit-literal cg name)
+          (emit-literal cg (fixnum-representation
+                    (set! emitted-symbol-counter (1+ emitted-symbol-counter))))
           (let* ((lit (format~ false "~A+~D" label symbol-tag)))
             (set! emitted-symbols (acons sym lit emitted-symbols))
             lit)))))
@@ -749,9 +752,13 @@
 (define-operator (symbol-name sym) result ()
   (emit-mov cg (tagged-mem symbol-tag sym) result))
 
-(define-operator (raw-make-symbol str) result (alloc)
-  (emit-alloc cg symbol-tag-bits value-size alloc spare-regs)
+(define-operator (symbol-id sym) result ()
+  (emit-mov cg (tagged-mem symbol-tag sym 1) result))
+
+(define-operator (raw-make-symbol str id) result (alloc)
+  (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc spare-regs)
   (emit-mov cg str (mem alloc))
+  (emit-mov cg id (mem alloc 1))
   (emit-lea cg (mem1+ alloc symbol-tag) result))
 
 ;;;  Numbers
