@@ -398,7 +398,7 @@
 (define-trivial-walker resolve-variables-aux (frames))
 
 (define (resolve-variable var frames)
-  (let* ((varrec (lassoc var frames)))
+  (let* ((varrec (symboltable-list-ref frames var)))
     (unless varrec (error "unbound variable ~S" var))
     varrec))
 
@@ -413,15 +413,22 @@
   (rplaca (cdr form) (resolve-variable var frames))
   (resolve-variables-aux val frames))
 
+(define (make-frame varrecs)
+  (let* ((frame (make-symboltable)))
+    (dolist (varrec varrecs)
+      (symboltable-set! frame (car varrec) varrec))
+    frame))
+
 (define-resolve-variables-aux (begin varrecs . body)
-  (resolve-variables-aux-recurse form (cons varrecs frames)))
+  (resolve-variables-aux-recurse form (cons (make-frame varrecs) frames)))
 
 (define-resolve-variables-aux (lambda attrs body)
-  (resolve-variables-aux body (cons (attr-ref attrs 'params) frames)))
+  (resolve-variables-aux body (cons (make-frame (attr-ref attrs 'params))
+                                    frames)))
 
 (define (resolve-variables form)
   (resolve-variables-aux form ()))
-            
+
 ;;; Classify all variables into read-only and (potentially)
 ;;; read-write, or early function (a read-only variable with a
 ;;; function value that is potential ready before its definition).
