@@ -112,6 +112,8 @@
   (setf (elt vec index) val))
 (defun raw-vector-set! (vec index val)
   (setf (elt vec index) val))
+(defun vector-set-range! (vec index len val)
+  (fill vec val :start index :end (+ index len)))
 
 (defun vector-copy (src src-index dest dest-index len)
   (replace dest src :start1 dest-index :end1 (+ dest-index len)
