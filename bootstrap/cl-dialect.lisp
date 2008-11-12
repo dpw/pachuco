@@ -26,7 +26,7 @@
 (defun character? (a) (characterp a))
 (defun string? (a) (stringp a))
 (defun vector? (a) (vectorp a))
-(defun error-halt (message args) (apply #'error (cons message args)))
+(defun error-halt () (error "error-halt"))
 
 ;;; This provides the subject language semantics
 (defun symbol? (a)

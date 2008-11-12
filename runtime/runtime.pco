@@ -102,8 +102,6 @@
 (defmacro (reify form)
   (quasiquote (define (unquote form) (unquote form))))
 
-(reify (error-halt message args))
-
 (reify (eq? a b))
 (reify (function? a))
 
@@ -158,6 +156,7 @@
 
 (when-interpreting
   ;; Provide function forms for some interpreter builtins
+  (reify (error-halt))
   (reify (intern a))
 
   ;; Gensym is an interesting case.  We need it early on for macros.
@@ -211,9 +210,12 @@
 ;;; The real definition of error requires formatted output, which is a
 ;;; bit late in the day.  So put a stub definition in place here.
 (define (error message . args)
-  (error-halt message args))
+  (error-halt))
 
 (when-compiling
+  (define (error-halt)
+    (c-call "abort"))
+
   (define (arity-mismatch nparams nargs)
     (error "expected ~S arguments, got ~S" nparams nargs))
 
@@ -1026,7 +1028,7 @@
 
 (set! (error message . args)
   (formout stderr "~A~%" (format-list message args))
-  (error-halt message args))
+  (error-halt))
 
 (when-compiling
   (define gensym-counter 0)

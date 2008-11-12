@@ -24,8 +24,6 @@
 (define keywords-1
   '(begin definitions if
 
-    error-halt
-    
     eq? function?
     
     symbol? symbol-name symbol-id raw-make-symbol

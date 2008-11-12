@@ -934,17 +934,6 @@
 
 ;;; Misc. runtime
 
-(define-reg-use (error-halt attrs message args) 0)
-(define-codegen (error-halt attrs message args)
-  (let* ((l (gen-label)))
-    (emit-smart-label cg l)
-    (emit-comment cg "error-halt: ~S"
-                  (if (eq? 'quote (first message)) 
-                      (form-attr message 'quoted)
-                      "unknown"))
-    (emit cg "hlt")
-    (emit-smart-jump cg l)))
-
 (define-operator (fixnum->raw val) val ()
   (emit-sar cg number-tag-bits val))
 
