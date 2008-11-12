@@ -15,7 +15,7 @@
 (defmarco (define-interpreter-builtin-var name val)
   (quasiquote
     (symboltable-set! interpreter-builtin-vars
-                      '(unquote name) (cons '(unquote val) ()))))
+                      '(unquote name) (cons (unquote val) ()))))
 
 (define (make-initial-interpreter-env) (list interpreter-builtin-vars))
 
