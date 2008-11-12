@@ -83,8 +83,8 @@ $(eval $(call stage_template,build/stage2,stage2,stage3))
 compare-stage3: build/stage2.s build/stage3.s
 	cmp -s build/stage2.s build/stage3.s
 
-build/repl: language/repl.pco language/util.pco language/interpreter.pco language/expander.pco | build/stage2
-	scripts/compile $^ -o $@
+build/repl build/repl.s: language/repl.pco language/util.pco language/interpreter.pco language/expander.pco | build/stage2
+	scripts/compile $^ -s -o $@
 
 .PHONY: repl
 repl: build/repl
