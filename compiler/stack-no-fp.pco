@@ -46,8 +46,8 @@
          (retaddr (return-address-slot cg))
          (arg-count-reg (first regs-without-%funcres))
          (retaddr-reg (second regs-without-%funcres)))
-    (operator-args-codegen form
-                  (list* arg-count-reg %funcres (cdr regs-without-%funcres)) cg)
+    (operator-args-codegen form cg
+                     (list* arg-count-reg %funcres (cdr regs-without-%funcres)))
     ;; We need to clean up the stack before returning, but the return
     ;; address is on the top.  And we can't simply pop the return
     ;; address and later do an indirect branch to it, because that is
@@ -111,7 +111,7 @@
 
 (define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
                                          bodyfunc)
-  (operator-args-codegen form regs cg)
+  (operator-args-codegen form cg regs)
   (bind (before-arg-count after-arg-count bodyfunc retaddr-reg . spare-regs)
         regs
     (let* ((retaddr (return-address-slot cg)))
@@ -128,8 +128,8 @@
 (define-codegen (raw-apply-jump attrs func arg-count)
   (let* ((regs-without-%nargs (remove %nargs regs))
          (func (first regs-without-%nargs)))
-    (operator-args-codegen form (list* func %nargs (cddr regs-without-%nargs))
-                           cg)
+    (operator-args-codegen form cg
+                           (list* func %nargs (cddr regs-without-%nargs)))
     (emit-reset-frame-base cg out-frame-base)
     (emit-mov cg func %closure)
     (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure)))))

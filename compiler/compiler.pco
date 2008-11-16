@@ -872,26 +872,16 @@
 (defconstant dest-type-value
   ;; the result of the expression should end up in a register
   'dest-type-value)
-(defconstant dest-type-conditional
-  ;; the result of the expression is used to branch
-  'dest-type-conditional)
 
 (define (dest-type-value? dest-type)
   (eq? dest-type dest-type-value))
-(define (dest-type-conditional? dest-type)
-  (eq? dest-type dest-type-conditional))
 
 ;;; dests fully describe the destination of the result 
 
 (define (dest-value reg) (cons 'dest-value reg))
 (define (dest-value-reg dest) (cdr dest))
 
-(define (dest-conditional tlabel flabel) (list 'dest-conditional tlabel flabel))
-(define (dest-conditional-tlabel dest) (second dest))
-(define (dest-conditional-flabel dest) (third dest))
-
 (define (dest-value? dest) (and dest (eq? (car dest) 'dest-value)))
-(define (dest-conditional? dest) (and dest (eq? (car dest) 'dest-conditional)))
 
 ;;; Top-level sections:  Lambdas and quoted forms
 
@@ -988,6 +978,14 @@
 ;; where the resulting value is not used.
 (define-walker codegen-discarding (cg out-frame-base regs))
 
+;; reg-use-discarding returns the number of registers needed to
+;; evaluate the form, in a conditional context.
+(define-walker reg-use-conditional ())
+
+;; codegen-discarding emits code to evaluate the form, in a
+;; conditional context.
+(define-walker codegen-conditional (cg out-frame-base regs tlabel flabel))
+
 ;;; Begin
 
 (define (reg-use-begin forms max-ru reg-use-last)
@@ -1017,8 +1015,7 @@
   (reg-use-begin body 0 (lambda (form) (reg-use form dest-type))))
 
 (define-codegen (begin varrecs . body)
-  (unless out-frame-base
-    (set! out-frame-base (codegen-frame-base cg)))
+  (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
   (codegen (codegen-begin-non-final cg body regs) dest out-frame-base regs cg)
   (emit-reset-frame-base cg out-frame-base))
 
@@ -1026,11 +1023,20 @@
   (reg-use-begin body 0 (function reg-use-discarding)))
 
 (define-codegen-discarding (begin varrecs . body)
-  (unless out-frame-base
-    (set! out-frame-base (codegen-frame-base cg)))
+  (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
   (codegen-discarding (codegen-begin-non-final cg body regs)
                       cg out-frame-base regs)
   (emit-reset-frame-base cg out-frame-base))
+
+(define-reg-use-conditional (begin varrecs . body)
+  (reg-use-begin body 0 (function reg-use-conditional)))
+
+(define-codegen-conditional (begin varrecs . body)
+  (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
+  (codegen-conditional (codegen-begin-non-final cg body regs)
+                       cg out-frame-base regs tlabel flabel)
+  ;; codegen-conditional should always handle the reset-frame-base
+  )
 
 ;;; If
 
@@ -1038,7 +1044,7 @@
   (let* ((l1 (gen-label))
          (l2 (gen-label))
          (l3 (gen-label)))
-    (codegen test (dest-conditional l1 l2) false regs cg)
+    (codegen-conditional test cg false regs l1 l2)
     (emit-smart-label cg l1)
     (with-saved-frame-base cg
       (emit-comment-form cg then)
@@ -1052,7 +1058,7 @@
     (emit-smart-label cg l3)))
 
 (define-reg-use (if attrs test then else)
-  (max (reg-use test dest-type-conditional)
+  (max (reg-use-conditional test)
        (reg-use then dest-type)
        (reg-use else dest-type)))
 
@@ -1061,13 +1067,23 @@
               (lambda (form) (codegen form dest out-frame-base regs cg))))
 
 (define-reg-use-discarding (if attrs test then else)
-  (max (reg-use test dest-type-conditional)
+  (max (reg-use-conditional test)
        (reg-use-discarding then)
        (reg-use-discarding else)))
 
 (define-codegen-discarding (if attrs test then else)
   (codegen-if test then else cg out-frame-base regs
               (lambda (form) (codegen-discarding form cg out-frame-base regs))))
+
+(define-reg-use-conditional (if attrs test then else)
+  (max (reg-use-conditional test)
+       (reg-use-conditional then)
+       (reg-use-conditional else)))
+
+(define-codegen-conditional (if attrs test then else)
+  (codegen-if test then else cg out-frame-base regs
+    (lambda (form)
+      (codegen-conditional form cg out-frame-base regs tlabel flabel))))
 
 ;;; Operator support
 
@@ -1115,7 +1131,7 @@
                               (cadr form)))
     (min max-ru general-register-count)))
 
-(define (operator-args-codegen form regs cg)
+(define (operator-args-codegen form cg regs)
   ;; Generate the code to evaluate the arguments of an operator
   (let* ((trashy-args (form-attr form 'trashy-args))
          (non-trashy-args (form-attr form 'non-trashy-args))
@@ -1181,7 +1197,7 @@
                        (position result regs))
               (set! regs (ninsert (delete result (copy-list regs))
                                   (unquote outpos) result)))))))
-          (operator-args-codegen form regs cg)
+          (operator-args-codegen form cg regs)
           (bind ((unquote-splicing (cdr template))
                  (unquote-splicing supplemental-regs) . spare-regs) regs
             (unquote-splicing body)
@@ -1192,39 +1208,40 @@
   ;; side-effects and produces its result in a condition code
   (let* ((body-ru (+ (length (cdr template)) (length supplemental-regs)))
          (name (car template))
-         (params (cdr template)))
+         (params (cdr template))
+         (params-count (length params)))
     (quasiquote (definitions
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         ;; converting from a CC to a reg value needs an extra register
         ;; over the body
-        (max (if (dest-type-conditional? dest-type)
-                 (unquote body-ru)
-                 (unquote (1+ body-ru)))
-             (operator-args-reg-use form)))
+        (max (unquote (1+ body-ru)) (operator-args-reg-use form)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
-        (if (dest-conditional? dest)
-            (begin
-              (operator-args-codegen form regs cg)
-              (bind ((unquote-splicing (cdr template))
-                     (unquote-splicing supplemental-regs) . spare-regs)
-                    regs
-                (unquote-splicing body)
-                (emit-reset-frame-base cg out-frame-base)
-                (emit-smart-branch cg (unquote cc) dest)))
-            (let* ((args-count (length (cddr form)))
-                   (args-regs (append (sublist (cdr regs) 0 args-count)
-                                      (list (car regs))
-                                      (sublist (cdr regs) args-count))))
-                 (operator-args-codegen form args-regs cg)
-                 (emit-prepare-convert-cc-value cg (car regs))
-                 (bind ((unquote-splicing (cdr template))
-                        (unquote-splicing supplemental-regs) . spare-regs)
-                       (cdr regs)
-                   (unquote-splicing body)
-                   (emit-convert-cc-value cg (unquote cc) (car regs))
-                   (emit-convert-value cg (car regs) dest
-                                       out-frame-base)))))))))
+        (operator-args-codegen form cg
+                          (append (sublist (cdr regs) 0 (unquote params-count))
+                                  (list (car regs))
+                                  (sublist (cdr regs) (unquote params-count))))
+        (bind ((unquote-splicing (cdr template))
+               (unquote-splicing supplemental-regs) . spare-regs)
+              (cdr regs)
+          (emit-prepare-convert-cc-value cg (car regs))
+          (unquote-splicing body)
+          (emit-convert-cc-value cg (unquote cc) (car regs))
+          (emit-convert-value cg (car regs) dest out-frame-base)))
+
+      (define-reg-use-conditional ((unquote name) attrs
+                                   (unquote-splicing params))
+        (max (unquote body-ru) (operator-args-reg-use form)))
+
+      (define-codegen-conditional ((unquote name) attrs
+                                   (unquote-splicing params))
+        (operator-args-codegen form cg regs)
+        (bind ((unquote-splicing (cdr template))
+               (unquote-splicing supplemental-regs) . spare-regs)
+              regs
+          (unquote-splicing body)
+          (emit-reset-frame-base cg out-frame-base)
+          (emit-smart-branch cg (unquote cc) tlabel flabel)))))))
 
 ;;; Strings and vectors
 

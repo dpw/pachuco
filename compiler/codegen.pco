@@ -310,13 +310,11 @@
           (unless (member? label (codegen-here-labels cg))
             (emit-jmp cg label))))))
 
-(define (emit-smart-branch cg cc conddest)
+(define (emit-smart-branch cg cc tlabel flabel)
   (flush-labels-and-jumps cg)
   (codegen-set-deferred-jump! cg
     (lambda ()
-      (let* ((here-labels (codegen-here-labels cg))
-             (tlabel (dest-conditional-tlabel conddest))
-             (flabel (dest-conditional-flabel conddest)))
+      (let* ((here-labels (codegen-here-labels cg)))
         (if (member? tlabel here-labels)
             (unless (member? flabel here-labels)
               (emit-jcc cg (negate-cc cc) flabel))
@@ -374,6 +372,15 @@
 (define (codegen-discarding-recurse form cg out-frame-base regs)
   (codegen form (dest-value (first regs)) out-frame-base regs cg))
 
+(define (reg-use-conditional-recurse form)
+  (max 1 (reg-use form dest-type-value)))
+
+(define (codegen-conditional-recurse form cg out-frame-base regs tlabel flabel)
+  (codegen form (dest-value (first regs)) out-frame-base regs cg)
+  (emit-cmp cg false-representation (first regs))
+  (emit-reset-frame-base cg out-frame-base)
+  (emit-smart-branch cg "ne" tlabel flabel))
+
 ;;; Dest conversions
 
 (define (destination-reg dest regs)
@@ -383,10 +390,6 @@
   (cond ((dest-value? dest)
          (let* ((dr (dest-value-reg dest)))
            (unless (eq? operand dr) (emit-mov cg operand dr))))
-        ((dest-conditional? dest)
-         (emit-reset-frame-base cg out-frame-base)
-         (emit-cmp cg false-representation operand)
-         (emit-smart-branch cg "ne" dest))
         (true
          (error "can't handle dest ~S" dest))))
 
@@ -632,18 +635,19 @@
 (define-reg-use (quote attrs) 0)
 
 (define-codegen (quote attrs)
-  (cond ((dest-conditional? dest)
-         (emit-reset-frame-base cg out-frame-base)
-         (emit-smart-jump cg
-                          (if (= false-representation (attr-ref attrs 'value))
-                              (dest-conditional-flabel dest)
-                              (dest-conditional-tlabel dest))))
-        ((dest-value? dest)
+  (cond ((dest-value? dest)
          (emit-convert-value cg (attr-ref attrs 'value) dest out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
 
+(define-reg-use-discarding (quote attrs) 0)
 (define-codegen-discarding (quote attrs))
+
+(define-codegen-conditional (quote attrs) 0)
+(define-codegen-conditional (quote attrs)
+  (emit-reset-frame-base cg out-frame-base)
+  (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
+                          flabel tlabel)))
 
 ;;; Variables
 
@@ -816,8 +820,8 @@
   (div-operator-reg-use form dest-type))
 
 (define-codegen (truncate attrs a b)
-  (operator-args-codegen form
-                         (move-regs-to-front (list %a %c) general-registers) cg)
+  (operator-args-codegen form cg
+                         (move-regs-to-front (list %a %c) general-registers))
   (emit-mov cg %a %d)
   (emit-extend-sign-bit cg %d)
   (emit-idiv cg %c)
@@ -828,8 +832,8 @@
   (div-operator-reg-use form dest-type))
 
 (define-codegen (rem attrs a b)
-  (operator-args-codegen form
-                         (move-regs-to-front (list %a %c) general-registers) cg)
+  (operator-args-codegen form cg
+                         (move-regs-to-front (list %a %c) general-registers))
   (emit-mov cg %a %d)
   (emit-extend-sign-bit cg %d)
   (emit-idiv cg %c)
@@ -905,8 +909,8 @@
 (define-codegen (copy-mem attrs src-addr dest-addr len)
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form
-                    (move-regs-to-front (list %si %di %c) general-registers) cg)
+    (operator-args-codegen form cg
+                    (move-regs-to-front (list %si %di %c) general-registers))
     (if (attr-ref attrs 'forward)
         (emit cg "cld")
         (begin
