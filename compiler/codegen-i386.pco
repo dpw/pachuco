@@ -17,4 +17,4 @@
   (emit cg "call ~A" (attr-ref attrs 'c-function-name))
   (emit-set-ac-flag cg true)
   (unless (member? %closure c-callee-saved-regs) (emit-restore-%closure cg))
-  (emit-mov-maybe cg %a reg))
+  %a)

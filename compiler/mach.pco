@@ -8,7 +8,7 @@
   (quasiquote 
     (define (unquote name)
       (make-vector-from-list
-        (quote ((unquote name) false (unquote-splicing variants)))))))
+        (quote ((unquote name) (unquote false) (unquote-splicing variants)))))))
 
 (define (register-operand reg scale)
   (vector-ref reg (+ 2 scale)))

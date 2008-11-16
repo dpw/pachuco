@@ -174,9 +174,6 @@
         (true
          (emit-insn-2 cg "mov" src dest scale))))
 
-(define (emit-mov-maybe cg src dest)
-  (unless (eq? src dest) (emit-mov cg src dest)))
-
 (define (emit-push cg reg)
   (emit cg "push~A ~A" value-insn-size-suffix (value-sized reg)))
 
@@ -369,20 +366,25 @@
 
 ;;; codegen and reg-use fallbacks
 
+(define (codegen-into-reg form cg out-frame-base regs reg)
+  (let* ((res (codegen form cg out-frame-base regs reg)))
+    (unless (eq? res reg) (emit-mov cg res reg))))
+
 (define (reg-use-discarding-recurse form)
-  (max 1 (reg-use form)))
+  (reg-use form))
 
 (define (codegen-discarding-recurse form cg out-frame-base regs)
-  (codegen-into-reg form cg out-frame-base regs (first regs)))
+  (codegen form cg out-frame-base regs (if (null? regs) false (first regs))))
 
 (define (reg-use-conditional-recurse form)
-  (max 1 (reg-use form)))
+  (reg-use form))
 
 (define (codegen-conditional-recurse form cg out-frame-base regs tlabel flabel)
-  (codegen-into-reg form cg out-frame-base regs (first regs))
-  (emit-cmp cg false-representation (first regs))
-  (emit-reset-frame-base cg out-frame-base)
-  (emit-smart-branch cg "ne" tlabel flabel))
+  (let* ((res (codegen form cg out-frame-base regs
+                       (if (null? regs) false (first regs)))))
+    (emit-cmp cg false-representation res)
+    (emit-reset-frame-base cg out-frame-base)
+    (emit-smart-branch cg "ne" tlabel flabel)))
 
 (define (emit-prepare-convert-cc-value cg reg)
   (emit-clear cg reg))
@@ -523,7 +525,7 @@
       (codegen-into-reg ref cg false (cdr regs) ref-reg)
       (emit-mov cg ref-reg (closure-slot closure-reg index))
       (set! index (1+ index)))
-    (emit-mov-maybe cg closure-reg reg)))
+    closure-reg))
 
 (define (codegen-function-intro label closure-size cg)
   (emit cg ".text")
@@ -572,7 +574,7 @@
     (emit-mov cg (fixnum-representation (length args)) %nargs)
     (emit-call-or-jump cg "call" func))
   (emit-restore-%closure cg)
-  (emit-mov-maybe cg %funcres reg))
+  %funcres)
 
 (define (emit-restore-%closure cg)
   (when (codegen-have-closure cg)
@@ -626,12 +628,7 @@
 ;;; Quote
 
 (define-reg-use (quote attrs) 0)
-
-(define-codegen (quote attrs)
-  (emit-mov cg (attr-ref attrs 'value) reg))
-
-(define-reg-use-discarding (quote attrs) 0)
-(define-codegen-discarding (quote attrs))
+(define-codegen (quote attrs) (attr-ref attrs 'value))
 
 (define-codegen-conditional (quote attrs) 0)
 (define-codegen-conditional (quote attrs)
@@ -663,9 +660,7 @@
   (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg)))
 
 (define-reg-use (ref varrec) 0)
-
-(define-codegen (ref varrec)
-  (emit-mov-maybe cg (varrec-operand varrec cg) reg))
+(define-codegen (ref varrec) (varrec-operand varrec cg))
 
 ;;; Operator definitions
 
@@ -817,7 +812,7 @@
   (emit-extend-sign-bit cg %d)
   (emit-idiv cg %c)
   (emit-shl cg number-tag-bits %a)
-  (emit-mov-maybe cg %a reg))
+  %a)
 
 (define-reg-use (rem attrs a b)
   (operator-args-reg-use form)
@@ -829,7 +824,7 @@
   (emit-mov cg %a %d)
   (emit-extend-sign-bit cg %d)
   (emit-idiv cg %c)
-  (emit-mov-maybe cg %d reg))
+  %d)
 
 (define-operator (logior a b) a ()
   (emit-or cg b a))
@@ -913,7 +908,8 @@
           (emit-lea cg (tagged-mem (ash 1 scale) %si %a) %si)
           (emit-lea cg (tagged-mem (ash 1 scale) %di %a) %di)))
     (emit-sar cg number-tag-bits %c)
-    (emit-rep-movs cg scale)))
+    (emit-rep-movs cg scale)
+    false))
 
 ;;; Raw memory access
 
@@ -957,9 +953,5 @@
   (rplaca (cdr form) (list (cons 'name name))))
 
 (define-reg-use ((raw-c-global raw-label) attrs) 0)
-
-(define-codegen (raw-c-global attrs)
-  (emit-mov cg (mem (attr-ref attrs 'name)) reg))
-
-(define-codegen (raw-label attrs)
-  (emit-mov cg (attr-ref attrs 'name) reg))
+(define-codegen (raw-c-global attrs) (mem (attr-ref attrs 'name)))
+(define-codegen (raw-label attrs) (attr-ref attrs 'name))
