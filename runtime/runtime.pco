@@ -477,6 +477,13 @@
                  (error "sublist fell off the end of the list"))))
         (copy-partial-list (nthcdr start l) (- (first end) start)))))
 
+(define (position x l)
+  (define (aux n l)
+    (cond ((null? l) false)
+          ((eq? x (car l)) n)
+          (true (aux (1+ n) (cdr l)))))
+  (aux 0 l))
+
 ;;; Numbers again
 
 ;; We only support left shifts, because that is all the compiler needs

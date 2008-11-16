@@ -1154,23 +1154,38 @@
     (dolist (arg (reverse trashy-args))
       (emit-frame-pop cg (elt regs arg)))))
 
-(defmarco (define-operator template outreg supplemental-regs . body)
+(define (ninsert l index e)
+  (if (= 0 index)
+      (cons e l)
+      (let* ((pre (nthcdr (1- index) l)))
+        (rplacd pre (cons e (cdr pre)))
+        l)))
+
+(defmarco (define-operator template out supplemental-regs . body)
   ;; define how to generate code for an operator
   (let* ((body-ru (max (+ (length (cdr template)) (length supplemental-regs))))
          (name (car template))
-         (params (cdr template)))
+         (params (cdr template))
+         (outpos (position out params)))
     (quasiquote (definitions
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (max (operator-args-reg-use form)
              (unquote body-ru)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
-        (operator-args-codegen form regs cg)
-        (bind ((unquote-splicing (cdr template))
-               (unquote-splicing supplemental-regs) . spare-regs) regs
-          (let* ((result (destination-reg dest regs)))
+        (let* ((result (destination-reg dest regs)))
+          (unquote-splicing (if (eq? out 'result) () (quasiquote (
+            ;; if necessary, shuffle regs so that the result reg
+            ;; corresponds to the output parameter
+            (when (and (not (eq? result (elt regs (unquote outpos))))
+                       (position result regs))
+              (set! regs (ninsert (delete result (copy-list regs))
+                                  (unquote outpos) result)))))))
+          (operator-args-codegen form regs cg)
+          (bind ((unquote-splicing (cdr template))
+                 (unquote-splicing supplemental-regs) . spare-regs) regs
             (unquote-splicing body)
-            (emit-convert-value cg (unquote outreg) dest out-frame-base))))))))
+            (emit-convert-value cg (unquote out) dest out-frame-base))))))))
 
 (defmarco (define-cc-operator template cc supplemental-regs . body)
   ;; define how to generate code for an operator that is free of
