@@ -31,4 +31,4 @@
   
   (emit-set-ac-flag cg true)
   (unless (member? %closure c-callee-saved-regs) (emit-restore-%closure cg))
-  (emit-convert-value cg %a dest out-frame-base))
+  (emit-mov-maybe cg %a reg))

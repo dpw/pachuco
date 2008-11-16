@@ -36,12 +36,12 @@
                       general-registers)
   (codegen-do-out-of-line cg))
 
-(define-codegen (return attrs body)
-  (codegen body (dest-value %funcres) out-frame-base general-registers cg)
+(define-codegen-discarding (return attrs body)
+  (codegen-into-reg body cg out-frame-base general-registers %funcres)
   (emit cg "leave")
   (emit-ret cg (* value-size (attr-ref attrs 'nparams))))
 
-(define-codegen (varargs-return attrs arg-count body)
+(define-codegen-discarding (varargs-return attrs arg-count body)
   (let* ((regs-without-%funcres (remove %funcres general-registers))
          (retaddr (return-address-slot cg))
          (arg-count-reg (first regs-without-%funcres))
@@ -62,14 +62,14 @@
     (emit-mov cg retaddr-reg (mem %sp))
     (emit cg "ret")))
 
-(define (codegen-tail-call func retaddr out-arg-count out-retaddr
-                           out-frame-base regs cg)
+(define (codegen-tail-call cg func retaddr out-arg-count out-retaddr
+                           out-frame-base regs)
   (let* ((tmpreg (first regs))
          (retaddr-reg (second regs))
          (saved-fp-reg (third regs)))
     (emit-mov cg retaddr retaddr-reg)
     (emit-mov cg (mem %bp) saved-fp-reg)
-    (copy-tail-call-args out-arg-count out-retaddr tmpreg cg)
+    (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
     (emit-lea cg (mem out-retaddr) %sp)
     (emit-mov cg retaddr-reg (mem %sp))
     (emit-mov cg saved-fp-reg %bp)
@@ -80,7 +80,7 @@
     (emit-call-or-jump cg "jmp" func)
     (codegen-set-frame-base! cg out-frame-base)))
 
-(define-codegen (tail-call attrs func . args)
+(define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
   (let* ((in-arg-count (attr-ref attrs 'nparams))
          (out-arg-count (length args))
@@ -88,32 +88,32 @@
          (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
         (begin 
-          (copy-tail-call-args out-arg-count out-retaddr 
-                               (first general-registers) cg)
+          (copy-tail-call-args cg out-arg-count out-retaddr 
+                               (first general-registers))
           (emit-mov cg (fixnum-representation out-arg-count) %nargs)
           (emit cg "leave")
           (emit-call-or-jump cg "jmp" func))
-        (codegen-tail-call func retaddr out-arg-count out-retaddr
-                           out-frame-base general-registers cg))))
+        (codegen-tail-call cg func retaddr out-arg-count out-retaddr
+                           out-frame-base general-registers))))
 
-(define-codegen (varargs-tail-call attrs arg-count func . args)
+(define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
   (codegen-call-args cg func args)
   (let* ((in-arg-count-reg (first general-registers))
          (out-arg-count (length args))
          (retaddr (return-address-slot cg)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
-    (codegen arg-count (dest-value in-arg-count-reg) false general-registers cg)
+    (codegen-into-reg arg-count cg false general-registers in-arg-count-reg)
     (emit-scale-number cg value-scale in-arg-count-reg)
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
-    (codegen-tail-call func retaddr out-arg-count in-arg-count-reg 
-                       out-frame-base (cdr general-registers) cg)))
+    (codegen-tail-call cg func retaddr out-arg-count in-arg-count-reg 
+                       out-frame-base (cdr general-registers))))
 
 ;;; Apply support
 
-(define-codegen (raw-jump-with-arg-space attrs before-arg-count after-arg-count
-                                         bodyfunc)
+(define-codegen-discarding (raw-jump-with-arg-space attrs before-arg-count
+                                                    after-arg-count bodyfunc)
   (operator-args-codegen form cg regs)
   (bind (before-arg-count after-arg-count bodyfunc retaddr-reg . spare-regs)
         regs
@@ -129,7 +129,7 @@
       (emit-clear cg %nargs)
       (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc))))))
 
-(define-codegen (raw-apply-jump attrs func arg-count)
+(define-codegen-discarding (raw-apply-jump attrs func arg-count)
   (let* ((regs-without-%nargs (remove %nargs regs))
          (func (first regs-without-%nargs)))
     (operator-args-codegen form cg
