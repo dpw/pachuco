@@ -366,9 +366,11 @@
 
 ;;; codegen and reg-use fallbacks
 
+(define (emit-mov-maybe cg src dst)
+  (unless (eq? src dst) (emit-mov cg src dst)))
+
 (define (codegen-into-reg form cg out-frame-base regs reg)
-  (let* ((res (codegen form cg out-frame-base regs reg)))
-    (unless (eq? res reg) (emit-mov cg res reg))))
+  (emit-mov-maybe cg (codegen form cg out-frame-base regs reg) reg))
 
 (define (reg-use-discarding-recurse form)
   (reg-use form))
@@ -568,7 +570,8 @@
   (unless (and (eq? 'ref (first func))
                (varrec-origin-attr (second func) 'lambda-label)
                (varrec-origin-attr (second func) 'no-closure))
-    (codegen-into-reg func cg false general-registers %closure)))
+    (emit-mov-maybe cg (codegen func cg false general-registers 
+                                (first general-registers)) %closure)))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg

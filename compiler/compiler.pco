@@ -1044,9 +1044,7 @@
     (emit-smart-label cg l3)))
 
 (define-reg-use (if attrs test then else)
-  (max (reg-use-conditional test)
-       (reg-use then)
-       (reg-use else)))
+  (max 1 (reg-use-conditional test) (reg-use then) (reg-use else)))
 
 (define-codegen (if attrs test then else)
   (codegen-if test then else cg out-frame-base regs
@@ -1054,8 +1052,7 @@
   reg)
 
 (define-reg-use-discarding (if attrs test then else)
-  (max (reg-use-conditional test)
-       (reg-use-discarding then)
+  (max (reg-use-conditional test) (reg-use-discarding then)
        (reg-use-discarding else)))
 
 (define-codegen-discarding (if attrs test then else)
@@ -1063,8 +1060,7 @@
               (lambda (form) (codegen-discarding form cg out-frame-base regs))))
 
 (define-reg-use-conditional (if attrs test then else)
-  (max (reg-use-conditional test)
-       (reg-use-conditional then)
+  (max (reg-use-conditional test) (reg-use-conditional then)
        (reg-use-conditional else)))
 
 (define-codegen-conditional (if attrs test then else)
