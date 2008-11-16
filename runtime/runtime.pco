@@ -583,16 +583,14 @@
 ;;; Vectors
 
 (define (check-vector-index vec index)
-  (define vec-len (vector-length vec))
-  (unless (and (>= index 0) (< index vec-len))
+  (unless (and (>= index 0) (< index (vector-length vec)))
     (error "vector index out of bounds (index: ~A, vector length: ~A)"
-           index vec-len)))
+           index (vector-length vec))))
 
 (define (check-vector-range vec offset len)
-  (define vec-len (vector-length vec))
-  (unless (and (>= offset 0) (<= (+ offset len) vec-len))
+  (unless (and (>= offset 0) (<= (+ offset len) (vector-length vec)))
     (error "vector range out of bounds (offset: ~A, length: ~A, vector length ~A)"
-           offset len vec-len)))
+           offset len (vector-length vec))))
 
 (define (vector-ref vec index)
   (check-vector-index vec index)
