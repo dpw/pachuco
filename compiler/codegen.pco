@@ -684,9 +684,7 @@
   (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs)
   "e")
 
-(define-operator (arg-count) ()
-  (emit-mov cg %nargs result)
-  result)
+(define-operator (arg-count) () %nargs)
 
 (define-operator (raw-args-base) ()
   (emit-lea cg (param-slot cg 0) result)
@@ -731,13 +729,8 @@
   (emit-lea cg (mem1+ alloc pair-tag) result)
   result)
 
-(define-operator (car a) ()
-  (emit-mov cg (tagged-mem pair-tag a) result)
-  result)
-
-(define-operator (cdr a) ()
-  (emit-mov cg (tagged-mem pair-tag a 1) result)
-  result)
+(define-operator (car a) () (tagged-mem pair-tag a))
+(define-operator (cdr a) () (tagged-mem pair-tag a 1))
 
 (define-operator (rplaca c a) ()
   (emit-mov cg a (tagged-mem pair-tag c))
@@ -759,21 +752,14 @@
   (emit-mov cg val (tagged-mem box-tag box))
   val)
 
-(define-operator (raw-box-ref box) ()
-  (emit-mov cg (tagged-mem box-tag box) result)
-  result)
+(define-operator (raw-box-ref box) () (tagged-mem box-tag box))
 
 ;;; Symbols
 
 (define-tag-check symbol? symbol-tag symbol-tag-bits)
 
-(define-operator (symbol-name sym) ()
-  (emit-mov cg (tagged-mem symbol-tag sym) result)
-  result)
-
-(define-operator (symbol-id sym) ()
-  (emit-mov cg (tagged-mem symbol-tag sym 1) result)
-  result)
+(define-operator (symbol-name sym) () (tagged-mem symbol-tag sym))
+(define-operator (symbol-id sym) () (tagged-mem symbol-tag sym 1))
 
 (define-operator (raw-make-symbol str id) (alloc)
   (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc spare-regs)
@@ -871,9 +857,7 @@
     (emit-lea cg (mem1+ alloc tag) result))
   result)
 
-(define-operator (vec-length vec) ()
-  (emit-mov cg (tagged-mem (attr-ref attrs 'tag) vec) result)
-  result)
+(define-operator (vec-length vec) () (tagged-mem (attr-ref attrs 'tag) vec))
 
 (define (vec-slot attrs vec index)
   (mem1+ (tagged-mem (attr-ref attrs 'tag) vec index)
