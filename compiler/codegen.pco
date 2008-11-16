@@ -366,6 +366,14 @@
 (define (emit-jmp cg label)
   (emit-without-flushing "jmp ~A" label))
 
+;;; codegen and reg-use fallbacks
+
+(define (reg-use-discarding-recurse form)
+  (max 1 (reg-use form dest-type-value)))
+
+(define (codegen-discarding-recurse form cg out-frame-base regs)
+  (codegen form (dest-value (first regs)) out-frame-base regs cg))
+
 ;;; Dest conversions
 
 (define (destination-reg dest regs)
@@ -379,7 +387,6 @@
          (emit-reset-frame-base cg out-frame-base)
          (emit-cmp cg false-representation operand)
          (emit-smart-branch cg "ne" dest))
-        ((dest-discard? dest))
         (true
          (error "can't handle dest ~S" dest))))
 
@@ -625,8 +632,7 @@
 (define-reg-use (quote attrs) 0)
 
 (define-codegen (quote attrs)
-  (cond ((dest-discard? dest))
-        ((dest-conditional? dest)
+  (cond ((dest-conditional? dest)
          (emit-reset-frame-base cg out-frame-base)
          (emit-smart-jump cg
                           (if (= false-representation (attr-ref attrs 'value))
@@ -636,6 +642,8 @@
          (emit-convert-value cg (attr-ref attrs 'value) dest out-frame-base))
         (true
          (error "can't handle dest ~S" dest))))
+
+(define-codegen-discarding (quote attrs))
 
 ;;; Variables
 
@@ -895,8 +903,6 @@
   general-register-count)
 
 (define-codegen (copy-mem attrs src-addr dest-addr len)
-  (unless (dest-discard? dest)
-    (error "mem-copy result not discarded"))
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
     (operator-args-codegen form

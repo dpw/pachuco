@@ -32,8 +32,8 @@
 (define (codegen-function label closure-size body cg) 
   (codegen-function-intro label closure-size cg)
   (when (codegen-have-closure cg) (emit-push cg %closure))
-  (codegen body dest-discard (if (codegen-have-closure cg) -1 0)
-           general-registers cg)
+  (codegen-discarding body cg (if (codegen-have-closure cg) -1 0)
+                      general-registers)
   (codegen-do-out-of-line cg))
 
 (define-codegen (return attrs body)
@@ -139,7 +139,7 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
     (codegen-program-sections program cg)
-    (reg-use program dest-type-discard)
+    (reg-use-discarding program)
     
     (emit cg ".text")
     (emit cg ".globl lisp")
@@ -149,7 +149,7 @@
 
     (codegen-set-frame-base! cg 0)
     (codegen-set-have-closure! cg false)
-    (codegen program dest-discard false general-registers cg)
+    (codegen-discarding program cg false general-registers)
 
     (emit-set-ac-flag cg false)
     (emit cg "cld")

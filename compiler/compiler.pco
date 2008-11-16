@@ -869,9 +869,6 @@
 ;;; expression, with enough information to determine the number of
 ;;; registers needs by the code for the expression.
 
-(defconstant dest-type-discard
-  ;; the result of the expression is not needed
-  'dest-type-discard)
 (defconstant dest-type-value
   ;; the result of the expression should end up in a register
   'dest-type-value)
@@ -879,16 +876,12 @@
   ;; the result of the expression is used to branch
   'dest-type-conditional)
 
-(define (dest-type-discard? dest-type)
-  (eq? dest-type dest-type-discard))
 (define (dest-type-value? dest-type)
   (eq? dest-type dest-type-value))
 (define (dest-type-conditional? dest-type)
   (eq? dest-type dest-type-conditional))
 
 ;;; dests fully describe the destination of the result 
-
-(defconstant dest-discard false)
 
 (define (dest-value reg) (cons 'dest-value reg))
 (define (dest-value-reg dest) (cdr dest))
@@ -897,7 +890,6 @@
 (define (dest-conditional-tlabel dest) (second dest))
 (define (dest-conditional-flabel dest) (third dest))
 
-(define (dest-discard? dest) (not dest))
 (define (dest-value? dest) (and dest (eq? (car dest) 'dest-value)))
 (define (dest-conditional? dest) (and dest (eq? (car dest) 'dest-conditional)))
 
@@ -987,36 +979,77 @@
 (define (codegen-recurse form dest-out-frame-base regs cg)
   (error "codegen on unknown form ~S" (car form)))
 
+;; reg-use-discarding returns the number of registers needed to
+;; evaluate the form, in a context where the resulting value is not
+;; used.
+(define-walker reg-use-discarding ())
+
+;; codegen-discarding emits code to evaluate the form, in a context
+;; where the resulting value is not used.
+(define-walker codegen-discarding (cg out-frame-base regs))
+
 ;;; Begin
 
+(define (reg-use-begin forms max-ru reg-use-last)
+  ;; work out the reg-use of forms, using reg-use-last to evaluate the
+  ;; reg-use of the last form
+  (if (null? (cdr forms))
+      (max max-ru (funcall reg-use-last (car forms)))
+      (reg-use-begin (cdr forms) (max max-ru (reg-use-discarding (car forms)))
+                     reg-use-last)))
+
+(define (codegen-begin-non-final cg forms regs)
+  (if (null? (cdr forms))
+      (begin
+        (emit-comment-form cg (car forms))
+        (car forms))
+      (begin
+        (emit-comment-form cg (car forms))
+        (codegen-discarding (car forms) cg false regs)
+        (codegen-begin-non-final cg (cdr forms) regs))))
+
+;; We always reset the frame-base at the end of a begin.  Sometimes
+;; this will be unnecessary, because the last form in the begin will
+;; have taken care of it (e.g. a nested begin).  But checking there
+;; means that most forms can ignore out-frame-base
+
 (define-reg-use (begin varrecs . body)
-  (labels ((block-reg-use (form forms max-ru)
-             (if (null? forms) (max (reg-use form dest-type) max-ru)
-                 (block-reg-use (car forms) (cdr forms)
-                                (max (reg-use form dest-type-discard)
-                                     max-ru)))))
-    (block-reg-use (car body) (cdr body) 0)))
+  (reg-use-begin body 0 (lambda (form) (reg-use form dest-type))))
 
 (define-codegen (begin varrecs . body)
   (unless out-frame-base
     (set! out-frame-base (codegen-frame-base cg)))
+  (codegen (codegen-begin-non-final cg body regs) dest out-frame-base regs cg)
+  (emit-reset-frame-base cg out-frame-base))
 
-  (labels ((block-codegen (form forms)
-             (emit-comment-form cg form)
-             (if (null? forms)
-                 (codegen form dest out-frame-base regs cg)
-                 (begin
-                   (codegen form dest-discard false regs cg)
-                   (block-codegen (car forms) (cdr forms))))))
-    (block-codegen (car body) (cdr body)))
+(define-reg-use-discarding (begin varrecs . body)
+  (reg-use-begin body 0 (function reg-use-discarding)))
 
-  ;; Always reset the frame-base at the end of a begin.  Sometimes
-  ;; this will be unnecessary, because the last form in the begin will
-  ;; have taken care of it (e.g. a nested begin).  But checking here
-  ;; means that most forms don't need to worry
+(define-codegen-discarding (begin varrecs . body)
+  (unless out-frame-base
+    (set! out-frame-base (codegen-frame-base cg)))
+  (codegen-discarding (codegen-begin-non-final cg body regs)
+                      cg out-frame-base regs)
   (emit-reset-frame-base cg out-frame-base))
 
 ;;; If
+
+(define (codegen-if test then else cg out-frame-base regs codegen-clause)
+  (let* ((l1 (gen-label))
+         (l2 (gen-label))
+         (l3 (gen-label)))
+    (codegen test (dest-conditional l1 l2) false regs cg)
+    (emit-smart-label cg l1)
+    (with-saved-frame-base cg
+      (emit-comment-form cg then)
+      (funcall codegen-clause then)
+      (emit-reset-frame-base cg out-frame-base))
+    (emit-smart-jump cg l3)
+    (emit-smart-label cg l2)
+    (emit-comment-form cg else)
+    (funcall codegen-clause else)
+    (emit-reset-frame-base cg out-frame-base)
+    (emit-smart-label cg l3)))
 
 (define-reg-use (if attrs test then else)
   (max (reg-use test dest-type-conditional)
@@ -1024,21 +1057,17 @@
        (reg-use else dest-type)))
 
 (define-codegen (if attrs test then else)
-  (let* ((l1 (gen-label))
-         (l2 (gen-label))
-         (l3 (gen-label)))
-    (codegen test (dest-conditional l1 l2) false regs cg)
-    (emit-smart-label cg l1)
-    (emit-comment-form cg then)
-    (with-saved-frame-base cg
-      (codegen then dest out-frame-base regs cg)
-      (emit-reset-frame-base cg out-frame-base))
-    (emit-smart-jump cg l3)
-    (emit-smart-label cg l2)
-    (emit-comment-form cg else)
-    (codegen else dest out-frame-base regs cg)
-    (emit-reset-frame-base cg out-frame-base)
-    (emit-smart-label cg l3)))
+  (codegen-if test then else cg out-frame-base regs
+              (lambda (form) (codegen form dest out-frame-base regs cg))))
+
+(define-reg-use-discarding (if attrs test then else)
+  (max (reg-use test dest-type-conditional)
+       (reg-use-discarding then)
+       (reg-use-discarding else)))
+
+(define-codegen-discarding (if attrs test then else)
+  (codegen-if test then else cg out-frame-base regs
+              (lambda (form) (codegen-discarding form cg out-frame-base regs))))
 
 ;;; Operator support
 
