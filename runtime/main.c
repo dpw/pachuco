@@ -25,7 +25,7 @@ char **lisp_argv;
 static unsigned long alloc_heap(unsigned long size)
 {
         void *heap = mmap(NULL, HEAP_SIZE, PROT_READ|PROT_WRITE,
-                          MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+                          MAP_PRIVATE|MAP_ANON, -1, 0);
         if (heap == MAP_FAILED)
                 perror("mmap heap");
 
