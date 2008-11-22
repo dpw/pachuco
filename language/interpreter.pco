@@ -157,6 +157,7 @@
 (define-interpreter-builtin-op *)
 (define-interpreter-builtin-op rem)
 (define-interpreter-builtin-op truncate)
+(define-interpreter-builtin-op logior)
 
 (define-interpreter-builtin-boolean-op character?)
 (define-interpreter-builtin-op character-code)
