@@ -162,7 +162,7 @@
   ;; Gensym is an interesting case.  We need it early on for macros.
   ;; So when interpreting, we get it from the host.  When compiling,
   ;; we introduce it much later
-  (reify (gensym a)))
+  (reify (gensym)))
 
 ;;; Numbers
 
