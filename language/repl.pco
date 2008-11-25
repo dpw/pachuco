@@ -12,7 +12,7 @@
    (eval-body-form (expand-body-form form dual-env) (cdr dual-env)))
 
   ;; process runtime files
-  (dolist (file (cdr (command-line)))
+  (dolist (file (cdr command-line-args))
     (formout stderr "Reading ~A~%" file)
     (with-open-file-for-reading (in file)
       (define (eval-form-from-file)

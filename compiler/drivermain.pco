@@ -2,8 +2,8 @@
 ;;; to perform the specified action.
 
 (define (main)
-  (define command (second (command-line)))
-  (define files (cddr (command-line)))
+  (define command (second command-line-args))
+  (define files (cddr command-line-args))
   (cond ((string-equal? command "expand")
          (do-expand-files files))
         ((string-equal? command "interpret")

@@ -1386,34 +1386,31 @@
 
 ;;; Command line access
 
-(define (copy-c-string addr)
-  (define (strlen addr)
-    (define (aux offset)
-        (if (= 0 (raw->fixnum (raw-1-vec-ref addr offset)))
-            offset
-            (aux (1+ offset))))
+(when-compiling
+  (define (copy-c-string addr)
+    (define (strlen addr)
+      (define (aux offset)
+          (if (= 0 (raw->fixnum (raw-1-vec-ref addr offset)))
+              offset
+              (aux (1+ offset))))
+      (aux 0))
+
+    (define len (strlen addr))
+    (define str (make-string len))
+    (raw-1-copy addr (raw-string-address str 0) len)
+    str)
+
+  (define (c-string-array-to-list addr)
+    (define (aux index)
+        (define str-addr (raw-vec-ref addr index))
+      (if (eq? 0 str-addr)
+          ()
+          (cons (copy-c-string str-addr) (aux (1+ index)))))
     (aux 0))
 
-  (define len (strlen addr))
-  (define str (make-string len))
-  (raw-1-copy addr (raw-string-address str 0) len)
-  str)
+  (define command-line-args
+          (c-string-array-to-list (raw-c-global "lisp_argv"))))
 
-(define (c-string-array-to-list addr)
-  (define (aux index)
-    (define str-addr (raw-vec-ref addr index))
-    (if (eq? 0 str-addr)
-        ()
-        (cons (copy-c-string str-addr) (aux (1+ index)))))
-  (aux 0))
-
-(define saved-command-line false)
-
-(define (command-line)
-  (unless saved-command-line
-    (set! saved-command-line
-      (c-string-array-to-list (raw-c-global "lisp_argv"))))
-  saved-command-line)
 
 ;;; Entry point function
 

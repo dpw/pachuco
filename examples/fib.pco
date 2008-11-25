@@ -8,4 +8,4 @@
   (read-integer (make-string-istream str) 10))
 
 (define (main)
-  (formout stdout "~D~%" (fib (atoi (second (command-line))))))
+  (formout stdout "~D~%" (fib (atoi (second command-line-args)))))
