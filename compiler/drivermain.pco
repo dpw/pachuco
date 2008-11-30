@@ -7,6 +7,10 @@
   (cond ((string-equal? command "expand")
          (do-expand-files files))
         ((string-equal? command "interpret")
+         (define separator (positionfor (arg files) (string-equal? arg "--")))
+         (when separator
+           (set! interpreter-command-line-args (sublist files separator))
+           (set! files (sublist files 0 separator)))
          (do-interpret-files files '(runtime-main)))
         ((string-equal? command "compile")
          (do-compile-files files '(runtime-main)))))

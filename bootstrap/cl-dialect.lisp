@@ -131,6 +131,7 @@
 (defvar raw-stdout *standard-output*)
 (defvar raw-stderr *error-output*)
 (defvar raw-stdin *standard-input*)
+(defvar stderr *error-output*)
 
 (defun raw-write-substring (fd str pos len)
   (write-sequence str fd :start pos :end (+ pos len)))
@@ -144,6 +145,9 @@
 
 (defun close-file (f)
   (close f))
+
+(defun get-interpreter-command-line-args ()
+  (cons "--" (cdr sb-ext:*posix-argv*)))
 
 ;; Quasiquote
 

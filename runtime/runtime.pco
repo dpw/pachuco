@@ -405,6 +405,21 @@
                      ((unquote loopf) (cdr (unquote l)))))))
     ((unquote loopf) (unquote (second binding))))))
 
+(defmacro (positionfor binding . body)
+  (define loopf (gensym))
+  (define l (gensym))
+  (define pos (gensym))
+  (quasiquote (begin
+    (define ((unquote loopf) (unquote l) (unquote pos))
+      (if (null? (unquote l)) false
+          (begin (define (unquote (first binding)) (car (unquote l)))
+                 (if (begin (unquote-splicing body)) (unquote pos)
+                     ((unquote loopf) (cdr (unquote l)) (1+ (unquote pos)))))))
+    ((unquote loopf) (unquote (second binding)) 0))))
+
+(define (position x l)
+  (positionfor (e l) (eq? e x)))
+
 (defmacro (filterfor binding . body)
   (quasiquote
     (flatten*-mapfor (unquote binding)
@@ -955,9 +970,12 @@
          (write-string ostr "#<function>"))
         (true
          (define special (assoc obj special-printed-forms))
-         (if special
-             (write-string ostr (cdr special))
-             (error "cannot print object")))))
+         (cond (special
+                (write-string ostr (cdr special)))
+               ((character? obj)
+                (write-character ostr obj))
+               (true
+                (error "cannot print object"))))))
 
 ;;; Formatted IO
 
@@ -1411,6 +1429,8 @@
   (define command-line-args
           (c-string-array-to-list (raw-c-global "lisp_argv"))))
 
+(when-interpreting
+  (define command-line-args (get-interpreter-command-line-args)))
 
 ;;; Entry point function
 
@@ -1462,6 +1482,11 @@
         (true (apply formout out args))))
 
 (define (reduce~ initial l f) (reduce initial l f))
+
+;; To support the interpreter
+
+(define interpreter-command-line-args ())
+(define (get-interpreter-command-line-args) interpreter-command-line-args)
 
 ;; Not a full destructuring-bind  
 (defmacro (bind vars values . body)

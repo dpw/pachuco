@@ -184,6 +184,7 @@
 (define-interpreter-builtin-var raw-stdin raw-stdin)
 (define-interpreter-builtin-op open-file-for-reading)
 (define-interpreter-builtin-op close-file)
+(define-interpreter-builtin-op get-interpreter-command-line-args)
 
 (define-interpreter-builtin-op apply (func . args)
   (funcall func (apply (function list*) args)))

@@ -9,8 +9,21 @@ func=$1
 shift
 
 form=
-for f in $* ; do
-    form="$form \"$f\""
+otherargs=
+while [ $# -gt 0 ] ; do
+    case $1 in 
+    --)
+        while [ $# -gt 1 ] ; do
+            shift 1
+            otherargs="$otherargs $1"
+        done
+        break
+        ;;
+    *)
+        form="$form \"$1\""
+        shift 1
+        ;;
+    esac
 done
 
 case $func in
@@ -28,4 +41,4 @@ expand)
     exit 1
 esac
 
-sbcl $command --eval "(progn $form (quit))"
+sbcl $command --eval "(progn $form (quit))" $otherargs
