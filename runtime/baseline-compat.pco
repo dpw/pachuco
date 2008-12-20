@@ -1,0 +1,6 @@
+;;; Definitions to provides compatibility with the baseline branch,
+;;; used for performance comparisions.
+;;;
+;;; These are obsolete, and should not be used in other code.
+
+(define (command-line) command-line-args)
