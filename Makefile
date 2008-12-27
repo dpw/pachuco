@@ -43,7 +43,7 @@ $(2)-interp-test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	$(1) interpret $(RUNTIME_SOURCES) $(TEST_SOURCES)
 
 $(2)-compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
-	$(1) compile $(TEST_SOURCES)
+	$(1) compile $(RUNTIME_SOURCES) $(TEST_SOURCES)
 
 
 build/$(2)-test build/$(2)-test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
