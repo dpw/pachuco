@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 
@@ -36,7 +37,6 @@ int main(int argc, char **argv)
 {
         heap_start = alloc_heap(HEAP_SIZE);
         heap_end = heap_start + HEAP_SIZE;
-        heap_threshold = heap_end - heap_threshold_size;
 
         heap2_start = alloc_heap(HEAP_SIZE);
         heap2_end = heap2_start + HEAP_SIZE;
@@ -47,12 +47,16 @@ int main(int argc, char **argv)
         char *iterations = getenv("BENCHMARK_ITERATIONS");
         if (iterations == NULL) {
                 heap_alloc = heap_end;
+                heap_threshold = heap_end - heap_threshold_size;
                 lisp();
         }
         else {
                 int i;
                 for (i = atoi(iterations); i > 0; i--) {
                         heap_alloc = heap_end;
+                        heap_threshold = heap_end - heap_threshold_size;
+                        memset((void *)heap_start, 0, heap_end - heap_start);
+                        memset((void *)heap2_start, 0, heap2_end - heap2_start);
                         lisp();
                 }
         }
