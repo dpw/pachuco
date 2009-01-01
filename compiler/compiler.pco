@@ -54,14 +54,6 @@
 (define keywords-2 '(define lambda set! quote
                      c-call raw-c-global raw-label compiler-constant raw-alloc))
 
-(define internal-keywords '(ref call return varargs-return
-                            tail-call varargs-tail-call
-                            alloc-closure fill-closure
-                            check-arg-count arg-count
-                            negate
-                            make-vec vec-length vec-address
-                            copy-mem))
-
 ;;; Transform a program so that every form begins with a
 ;;; distinguishing keyword:
 ;;;
