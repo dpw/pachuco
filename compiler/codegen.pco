@@ -876,7 +876,7 @@
              (da-name (gensym))
              (len-name (gensym)))
         (quasiquote
-          (begin (((unquote sa-name)) ((unquote da-name)) ((unquote len-name)))
+          (begin ()
             (define (unquote sa-name) (unquote src-addr))
             (define (unquote da-name) (unquote dest-addr))
             (define (unquote len-name) (unquote len))

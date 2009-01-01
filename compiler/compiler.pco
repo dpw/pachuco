@@ -9,8 +9,8 @@
   (set! program (list* 'begin () program))
   (replace-empty-bodies program)
   (normalize-lambdas program)
-  (collect-defines program)
   (simplify program)
+  (collect-defines program)
   (resolve-variables program)
   (classify-variables program)
   (mark-top-level-definitions program)
@@ -330,6 +330,8 @@
   (when (null? else)
     (rplacd (cdddr form) (list (quoted-unspecified))))
   (simplify-recurse form))
+
+;;; return propogation and tail call identification
 
 (define-walker propogate (operator))
 
@@ -956,7 +958,7 @@
     (rplacd (cdr lambda-form)
       (if vararg
           (quasiquote
-            ((begin ((raw-arg-count) ((unquote vararg)))
+            ((begin ()
                     (define raw-arg-count (arg-count ()))
                     (define (unquote vararg) (call () (ref handle-varargs)
                                                    (quote (unquote nparams))
