@@ -1190,7 +1190,7 @@
           (let* ((result reg))
             (unquote-splicing body))))))))
 
-(defmarco (define-cc-operator template cc supplemental-regs . body)
+(defmarco (define-cc-operator template supplemental-regs . body)
   ;; define how to generate code for an operator that is free of
   ;; side-effects and produces its result in a condition code
   (let* ((name (car template))
@@ -1216,8 +1216,7 @@
                  (unquote-splicing supplemental-regs) . spare-regs)
                 body-regs
             (emit-prepare-convert-cc-value cg reg)
-            (unquote-splicing body)
-            (emit-convert-cc-value cg (unquote cc) reg)
+            (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
             reg)))
 
       (define-reg-use-conditional ((unquote name) attrs
@@ -1230,9 +1229,9 @@
         (bind ((unquote-splicing params)
                (unquote-splicing supplemental-regs) . spare-regs)
               regs
-          (unquote-splicing body)
-          (emit-reset-frame-base cg out-frame-base)
-          (emit-smart-branch cg (unquote cc) tlabel flabel)))))))
+          (let* ((cc (begin (unquote-splicing body))))
+            (emit-reset-frame-base cg out-frame-base)
+            (emit-smart-branch cg cc tlabel flabel))))))))
 
 ;;; Strings and vectors
 

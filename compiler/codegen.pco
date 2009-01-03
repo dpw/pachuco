@@ -670,17 +670,19 @@
 
 (defmarco (define-tag-check name tag tag-bits)
   (quasiquote
-    (define-cc-operator ((unquote name) val) "e" ()
+    (define-cc-operator ((unquote name) val) ()
       ;; just check the low-order byte
       (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
-      (emit-cmp cg (unquote tag) val 0))))
+      (emit-cmp cg (unquote tag) val 0)
+      "e")))
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
 ;;; Function call-related internals
 
-(define-cc-operator (check-arg-count) "e" ()
-  (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs))
+(define-cc-operator (check-arg-count) ()
+  (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs)
+  "e")
 
 (define-operator (arg-count) ()
   (emit-mov cg %nargs result)
@@ -706,8 +708,9 @@
 ;;; Comparisons
 
 (defmarco (define-cmp-operator name cc)
-  (quasiquote (define-cc-operator ((unquote name) a b) (unquote cc) () 
-                (emit-cmp cg b a))))
+  (quasiquote (define-cc-operator ((unquote name) a b) () 
+                (emit-cmp cg b a)
+                (unquote cc))))
  
 (define-cmp-operator eq? "e")
 (define-cmp-operator = "e")
