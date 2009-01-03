@@ -1157,38 +1157,38 @@
     (dolist (arg (reverse trashy-args))
       (emit-frame-pop cg (elt regs arg)))))
 
-(define (ninsert l index e)
-  (if (= 0 index)
-      (cons e l)
-      (let* ((pre (nthcdr (1- index) l)))
-        (rplacd pre (cons e (cdr pre)))
-        l)))
+(define (move-to-position l index item)
+   (if (= 0 index)
+      (cons item (remove item l))
+      (let* ((l2 (delete item (copy-list l)))
+             (pre (nthcdr (1- index) l2)))
+        (rplacd pre (cons item (cdr pre)))
+        l2)))
 
-(defmarco (define-operator template out supplemental-regs . body)
+(defmarco (define-operator template supplemental-regs . body)
   ;; define how to generate code for an operator
   (let* ((name (car template))
          (params (cdr template))
          (body-ru (max (+ (length params) (length supplemental-regs))))
-         (outpos (position out params)))
+         (out (last-elem body))
+         (outpos (and (symbol? out) (position out params))))
     (quasiquote (definitions
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (max (operator-args-reg-use form)
              (unquote body-ru)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
-        (unquote-splicing (if (eq? out 'result) () (quasiquote (
-          ;; if necessary, shuffle regs so that the result reg
-          ;; corresponds to the output parameter
-          (when (and (not (eq? reg (elt regs (unquote outpos))))
-                     (position reg regs))
-            (set! regs (ninsert (delete reg (copy-list regs))
-                                (unquote outpos) reg)))))))
+        ;; if necessary, shuffle regs so that the result reg
+        ;; corresponds to the output parameter
+        (unquote (if outpos
+                     (quasiquote
+                       (set! regs (move-to-position regs (unquote outpos) reg)))
+                     '(begin)))
         (operator-args-codegen form cg regs)
         (bind ((unquote-splicing params)
                (unquote-splicing supplemental-regs) . spare-regs) regs
           (let* ((result reg))
-            (unquote-splicing body)
-            reg)))))))
+            (unquote-splicing body))))))))
 
 (defmarco (define-cc-operator template cc supplemental-regs . body)
   ;; define how to generate code for an operator that is free of
