@@ -108,6 +108,12 @@
   (let* ((m (mem-list args)))
     (cons (- (car m) tag) (cdr m))))
 
+(define (mem-offset m offset)
+  (set! m (mem1 m))
+  (if (register? offset)
+      (list* (car m) offset (cdr m))
+      (cons (+ (car m) offset) (cdr m))))
+
 (define (insn-operand x scale)
   (cond ((immediate? x) (format~ false "$~A" x))
         ((vector? x) (register-operand x scale))
@@ -212,10 +218,20 @@
 (define-insn-0 emit-popf "popf")
 
 (define (emit-scale-number cg scale oper)
-  (unless (= scale number-tag-bits)
-    (if (< scale number-tag-bits)
-        (emit-sar cg (- number-tag-bits scale) oper)
-        (emit-shl cg (- scale number-tag-bits) oper))))
+  (cond ((= scale number-tag-bits)
+         oper)
+        ((number? oper)
+         (ash oper (- scale number-tag-bits)))
+        ((< scale number-tag-bits)
+         (let* ((shift (- number-tag-bits scale)))
+           (if (register? oper)
+               (begin (emit-sar cg shift oper) oper)
+               (format~ true "~A>>~A" oper shift))))
+        (true
+         (let* ((shift (- scale number-tag-bits)))
+           (if (register? oper)
+               (begin (emit-shl cg shift oper) oper)
+               (format~ true "~A<<~A" oper shift))))))
 
 ;;; "Smart" branching, jumping, and labels.
 ;;;
@@ -467,10 +483,9 @@
 (define-simplify (raw-alloc tag-bits-ccsym size)
   (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
 
-(define-operator (raw-alloc size) (alloc)
-  (emit-scale-number cg value-scale size)
+(define-operator (raw-alloc (size reg-imm)) (alloc)
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
-              size alloc spare-regs)
+              (emit-scale-number cg value-scale size) alloc spare-regs)
   (emit-mov cg alloc result)
   result)
 
@@ -863,24 +878,27 @@
 (define-operator (vec-length vec) () (tagged-mem (attr-ref attrs 'tag) vec))
 
 (define (vec-slot attrs vec index)
-  (mem1+ (tagged-mem (attr-ref attrs 'tag) vec index)
-         (attr-ref attrs 'header-size)))
+  (mem-offset (mem-offset vec (- (attr-ref attrs 'header-size)
+                                 (attr-ref attrs 'tag)))
+              index))
 
-(define-operator (vec-address vec index) ()
-  (emit-scale-number cg (attr-ref attrs 'scale) index)
-  (emit-lea cg (vec-slot attrs vec index) result)
+(define-operator (vec-address vec (index reg-imm)) ()
+  (let* ((scaled-index (emit-scale-number cg (attr-ref attrs 'scale) index)))
+    (emit-lea cg (vec-slot attrs vec scaled-index) result))
   result)
 
-(define-operator (raw-vec-ref vec index) ()
-  (let* ((scale (attr-ref attrs 'scale)))
-    (emit-scale-number cg scale index)
-    (emit-movzx cg (vec-slot attrs vec index) result scale))
-  result)
+(define-operator (raw-vec-ref vec (index reg-imm)) ()
+  (let* ((scale (attr-ref attrs 'scale))
+         (slot (vec-slot attrs vec (emit-scale-number cg scale index))))
+    (if (and (= scale value-scale) (immediate? index))
+        ;; the slot is a suitable memory operand to return directly
+        slot
+        (begin (emit-movzx cg slot result scale) result))))
 
-(define-operator (raw-vec-set! vec index val) ()
+(define-operator (raw-vec-set! vec (index reg-imm) (val reg-imm)) ()
   (let* ((scale (attr-ref attrs 'scale)))
-    (emit-scale-number cg scale index)
-    (emit-mov cg val (vec-slot attrs vec index) scale))
+    (emit-mov cg val (vec-slot attrs vec (emit-scale-number cg scale index))
+              scale))
   val)
 
 (define-simplify (copy-mem attrs src-addr dest-addr len)

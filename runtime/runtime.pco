@@ -490,7 +490,7 @@
 (define (ash n count)
   (cond ((= count 0) n)
         ((> count 0) (ash (+ n n) (1- count)))
-        (true (error "no support for right shifts"))))
+        ((< count 0) (truncate n (ash 1 (- count))))))
 
 (define (mod n div)
   (define r (rem n div))

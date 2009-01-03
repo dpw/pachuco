@@ -69,7 +69,8 @@
 
   (assert-result (1+ 1) 2)
   (assert-result (1- 1) 0)
-  (assert-result (ash 2 3) 16)
+  (assert-result (ash 48 2) 192)
+  (assert-result (ash 48 -2) 12)
 
   (assert-result (copy-tree '((1 . 2) 3)) '((1 . 2) 3))
 
