@@ -1153,6 +1153,69 @@
     (dolist (arg (reverse trashy-args))
       (emit-frame-pop cg (elt regs arg)))))
 
+(define (operator-args-codegen-new form cg regs operand-constraints)
+  ;; Generate the code to evaluate the arguments of an operator
+  (let* ((trashy-args (form-attr form 'trashy-args))
+         (non-trashy-args (form-attr form 'non-trashy-args))
+         (args (cddr form)))
+    (when (> (length args) (length regs))
+      (error "more operator arguments than available registers in ~S"
+             (comment-form form)))
+
+    ;; First, evaluate the trashy args, saving their results on the
+    ;; stack.
+    (dolist (arg trashy-args)
+      (emit-frame-push cg (codegen (elt args arg) cg false regs (first regs))))
+
+    ;; Work out the register list for evaluating the non-trashy args,
+    ;; so that the result of each evaluation ends up in the correct
+    ;; register.  Note that operator-args-reg-use left the
+    ;; non-trashy-arg list in reverse order of evaluation,
+    (let* ((non-trashy-regs (copy-list regs))
+           (result-regs ())
+           (output-regs (copy-list regs)))
+      (dolist (arg non-trashy-args)
+        (let* ((c (nthcdr arg non-trashy-regs)))
+          (push (car c) result-regs)
+          (rplaca c false)))
+
+      (set! non-trashy-regs (nconc result-regs (delete false non-trashy-regs)))
+      
+      ;; Now generate code for non-trashy args, reducing the available
+      ;; registers after each one.
+      (dolist (arg (reverse non-trashy-args))
+        (let* ((c (nthcdr arg output-regs)))
+          (rplaca c (funcall (elt operand-constraints arg) cg
+                             (codegen (elt args arg) cg false non-trashy-regs
+                                      (first non-trashy-regs))
+                             (car c)))
+          (set! non-trashy-regs (cdr non-trashy-regs))))
+  
+      ;; reload trashy arg results from stack
+      (dolist (arg (reverse trashy-args))
+        (emit-frame-pop cg (elt regs arg)))
+
+      output-regs)))
+
+(define (reg-operand-constraint cg operand reg)
+  (emit-mov-maybe cg operand reg)
+  reg)
+
+(define (reg-mem-imm-operand-constraint cg operand reg)
+  (if (and (register? operand) (not (eq? operand reg)))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
+(define (reg-imm-operand-constraint cg operand reg)
+  (if (or (mem? operand)
+          (and (register? operand) (not (eq? operand reg))))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
 (define (move-to-position l index item)
    (if (= 0 index)
       (cons item (remove item l))
@@ -1164,11 +1227,20 @@
 (defmarco (define-operator template supplemental-regs . body)
   ;; define how to generate code for an operator
   (let* ((name (car template))
-         (params (cdr template))
+         (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
+         (param-operand-constraints
+           (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
          (body-ru (max (+ (length params) (length supplemental-regs))))
          (out (last-elem body))
-         (outpos (and (symbol? out) (position out params))))
+         (outpos (and (symbol? out) (position out params)))
+         (operand-constraints-name
+                               (compound-symbol name "-operand-constraints")))
     (quasiquote (definitions
+      (define (unquote operand-constraints-name)
+        (list (unquote-splicing
+          (mapfor (oc param-operand-constraints)
+            (list 'function (compound-symbol oc "-operand-constraint"))))))
+
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         (max (operator-args-reg-use form)
              (unquote body-ru)))
@@ -1180,9 +1252,10 @@
                      (quasiquote
                        (set! regs (move-to-position regs (unquote outpos) reg)))
                      '(begin)))
-        (operator-args-codegen form cg regs)
         (bind ((unquote-splicing params)
-               (unquote-splicing supplemental-regs) . spare-regs) regs
+               (unquote-splicing supplemental-regs) . spare-regs)
+              (operator-args-codegen-new form cg regs
+                                         (unquote operand-constraints-name))
           (let* ((result reg))
             (unquote-splicing body))))))))
 
@@ -1190,30 +1263,33 @@
   ;; define how to generate code for an operator that is free of
   ;; side-effects and produces its result in a condition code
   (let* ((name (car template))
-         (params (cdr template))
+         (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
+         (param-operand-constraints
+           (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
          (params-count (length params))
-         (body-ru (+ params-count (length supplemental-regs))))
+         (body-ru (+ params-count (length supplemental-regs)))
+         (operand-constraints-name
+           (compound-symbol name "-operand-constraints")))
     (quasiquote (definitions
+      (define (unquote operand-constraints-name)
+        (list (unquote-splicing
+          (mapfor (oc param-operand-constraints)
+            (list 'function (compound-symbol oc "-operand-constraint"))))))
+
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         ;; converting from a CC to a reg value needs an extra register
         ;; over the body
         (max (unquote (1+ body-ru)) (operator-args-reg-use form)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
-        (let* ((body-regs (remove reg regs))
-               (arg-regs
-                 (if (eq? body-regs regs)
-                     regs
-                     (append (sublist body-regs 0 (unquote params-count))
-                             (list reg)
-                             (sublist body-regs (unquote params-count))))))
-          (operator-args-codegen form cg arg-regs)
-          (bind ((unquote-splicing params)
-                 (unquote-splicing supplemental-regs) . spare-regs)
-                body-regs
-            (emit-prepare-convert-cc-value cg reg)
-            (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
-            reg)))
+        (set! regs (move-to-position regs (unquote params-count) reg))
+        (bind ((unquote-splicing params) result
+               (unquote-splicing supplemental-regs) . spare-regs)
+              (operator-args-codegen-new form cg regs
+                                         (unquote operand-constraints-name))
+          (emit-prepare-convert-cc-value cg reg)
+          (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
+          reg))
 
       (define-reg-use-conditional ((unquote name) attrs
                                    (unquote-splicing params))
@@ -1221,10 +1297,10 @@
 
       (define-codegen-conditional ((unquote name) attrs
                                    (unquote-splicing params))
-        (operator-args-codegen form cg regs)
         (bind ((unquote-splicing params)
                (unquote-splicing supplemental-regs) . spare-regs)
-              regs
+              (operator-args-codegen-new form cg regs
+                                         (unquote operand-constraints-name))
           (let* ((cc (begin (unquote-splicing body))))
             (emit-reset-frame-base cg out-frame-base)
             (emit-smart-branch cg cc tlabel flabel))))))))
