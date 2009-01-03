@@ -1189,7 +1189,8 @@
                              (codegen (elt args arg) cg false non-trashy-regs
                                       (first non-trashy-regs))
                              (car c)))
-          (set! non-trashy-regs (cdr non-trashy-regs))))
+          (when (operand-using-reg? (car c) (first non-trashy-regs))
+            (set! non-trashy-regs (cdr non-trashy-regs)))))
   
       ;; reload trashy arg results from stack
       (dolist (arg (reverse trashy-args))

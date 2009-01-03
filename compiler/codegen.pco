@@ -134,6 +134,11 @@
 (define (move-regs-to-front regs all-regs)
   (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
 
+(define (operand-using-reg? o r)
+  (cond ((register? o) (eq? o r))
+        ((mem? o) (member? r (cdr o)))
+        (true false)))
+
 ;;; Condition codes
 
 (define (negate-cc cc)
