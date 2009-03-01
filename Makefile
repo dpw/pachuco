@@ -13,7 +13,7 @@ endif
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
     compiler/mach.pco compiler/mach-$(TARGET).pco compiler/compiler.pco \
-    compiler/codegen.pco $(STACK_SOURCES) compiler/codegen-$(TARGET).pco \
+    compiler/codegen-x86.pco $(STACK_SOURCES) compiler/codegen-$(TARGET).pco \
     compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
