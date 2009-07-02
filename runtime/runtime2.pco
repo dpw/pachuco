@@ -6,6 +6,54 @@
                                   ((symbol? p) (symbol-name p))
                                   (true (error "~S" p)))))))
 
+;;; Simple option list support
+;;;
+;;; The options-bind macro takes an options specification
+;;; (option-specs, unevaluated), an options list (evaluated), and a
+;;; body (evaluated).  Each option-spec creates a variable binding,
+;;; and indicates how to obtain the value from the options list.
+;;;
+;;; Each option (element of the evaluated options list) denotes an
+;;; option name and a value as follows: If the option is a symbol, its
+;;; name is the symbol, and its value is true.  If the option is a
+;;; list, its name is in the car, and its value is the cdr.  Only one
+;;; option may appear for a given option name.
+;;;
+;;; Each option-spec is a list of length two, giving the option name
+;;; and default value.  It creates a binding of a variable with the
+;;; option name to the value given by the option with the same name,
+;;; or the default value if no such option appears.
+
+(defmarco (options-bind option-specs options . body)
+  (let* ((opts-state (gensym))          ; the state of each option
+         (opt (gensym))                 ; the option being considered
+         (name (gensym))                ; the option name
+         (val (gensym))                 ; the option value
+         (state (gensym)))              ; state of the current option
+    (quasiquote
+      (let* (((unquote opts-state)
+              (list (unquote-splicing
+                      (mapfor (os option-specs)
+                        (quasiquote (list* '(unquote (first os)) false
+                                           (unquote (second os)))))))))
+        (dolist ((unquote opt) (unquote options))
+          (let* (((unquote val) true)
+                 ((unquote name) (if (pair? (unquote opt))
+                                     (begin (set! (unquote val)
+                                                  (cdr (unquote opt)))
+                                            (car (unquote opt)))
+                                     (unquote opt)))
+                 ((unquote state) (assoc (unquote name) (unquote opts-state))))
+            (unless (unquote state)
+              (error "unknown option ~S" (unquote name)))
+            (when (second (unquote state))
+              (error "repeated option ~S" (unquote name)))
+            (rplaca (cdr (unquote state)) true)
+            (rplacd (cdr (unquote state)) (unquote val))))
+        (bind (unquote (mapfor (os option-specs) (first os)))
+              (nmapfor (x (unquote opts-state)) (cddr x))
+          (unquote-splicing body))))))
+
 ;;; Simple struct support - just vectors with accessor functions
 
 (define (struct-field-initializers fields n)
@@ -41,24 +89,25 @@
         (struct-field-position f (cdr fields) (1+ n)))))
 
 (defmarco (define-struct struct options . fields)
-  (let* ((num-fields (length fields))
-         (constr-opt (assoc 'constructor options))
-         (constr-name (if constr-opt
-                          (second constr-opt)
-                          (compound-symbol "make-" struct)))
-         (constr-params (if constr-opt
-                            (cddr constr-opt)
-                            ())))
-    (quasiquote (definitions
-      (define ((unquote constr-name) (unquote-splicing constr-params))
-        (let* ((s (make-vector (unquote num-fields))))
-          (unquote-splicing (struct-field-initializers fields 0))
-          (unquote-splicing
-           (mapfor (cp constr-params)
-             (list 'raw-vector-set! 's (struct-field-position cp fields 0) cp)))
-          s))
+  (options-bind ((constructor false)) options
+    (let* ((num-fields (length fields))
+           (constr-name (if constructor
+                            (first constructor)
+                            (compound-symbol "make-" struct)))
+           (constr-params (if constructor
+                              (cdr constructor)
+                              ())))
+      (quasiquote (definitions
+        (define ((unquote constr-name) (unquote-splicing constr-params))
+            (let* ((s (make-vector (unquote num-fields))))
+              (unquote-splicing (struct-field-initializers fields 0))
+              (unquote-splicing
+                (mapfor (cp constr-params)
+                  (list 'raw-vector-set! 's
+                        (struct-field-position cp fields 0) cp)))
+              s))
 
-      (unquote-splicing (struct-accessor-definitions struct fields 0))))))
+        (unquote-splicing (struct-accessor-definitions struct fields 0)))))))
 
 ;;; hash tables
 
