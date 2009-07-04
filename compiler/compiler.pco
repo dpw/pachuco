@@ -1225,42 +1225,43 @@
         (rplacd pre (cons item (cdr pre)))
         l2)))
 
-(defmarco (define-operator template supplemental-regs . body)
-  ;; define how to generate code for an operator
-  (let* ((name (car template))
-         (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
-         (param-operand-constraints
-           (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
-         (body-ru (max (+ (length params) (length supplemental-regs))))
-         (out (last-elem body))
-         (outpos (and (symbol? out) (position out params)))
-         (operand-constraints-name
-                               (compound-symbol name "-operand-constraints")))
-    (quasiquote (definitions
-      (define (unquote operand-constraints-name)
-        (list (unquote-splicing
-          (mapfor (oc param-operand-constraints)
-            (list 'function (compound-symbol oc "-operand-constraint"))))))
+(defmarco (define-operator template options . body)
+  (options-bind ((temp-regs ())) options
+    ;; define how to generate code for an operator
+    (let* ((name (car template))
+           (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
+           (param-operand-constraints
+             (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
+           (body-ru (max (+ (length params) (length temp-regs))))
+           (out (last-elem body))
+           (outpos (and (symbol? out) (position out params)))
+           (operand-constraints-name
+                                 (compound-symbol name "-operand-constraints")))
+      (quasiquote (definitions
+        (define (unquote operand-constraints-name)
+          (list (unquote-splicing
+            (mapfor (oc param-operand-constraints)
+              (list 'function (compound-symbol oc "-operand-constraint"))))))
+  
+        (define-reg-use ((unquote name) attrs (unquote-splicing params))
+          (max (operator-args-reg-use form)
+               (unquote body-ru)))
+  
+        (define-codegen ((unquote name) attrs (unquote-splicing params))
+          ;; if necessary, shuffle regs so that the result reg
+          ;; corresponds to the output parameter
+          (unquote (if outpos
+                       (quasiquote
+                         (set! regs (move-to-position regs (unquote outpos) reg)))
+                       '(begin)))
+          (bind ((unquote-splicing params) (unquote-splicing temp-regs)
+                 . spare-regs)
+                (operator-args-codegen-new form cg regs
+                                           (unquote operand-constraints-name))
+            (let* ((result reg))
+              (unquote-splicing body)))))))))
 
-      (define-reg-use ((unquote name) attrs (unquote-splicing params))
-        (max (operator-args-reg-use form)
-             (unquote body-ru)))
-
-      (define-codegen ((unquote name) attrs (unquote-splicing params))
-        ;; if necessary, shuffle regs so that the result reg
-        ;; corresponds to the output parameter
-        (unquote (if outpos
-                     (quasiquote
-                       (set! regs (move-to-position regs (unquote outpos) reg)))
-                     '(begin)))
-        (bind ((unquote-splicing params)
-               (unquote-splicing supplemental-regs) . spare-regs)
-              (operator-args-codegen-new form cg regs
-                                         (unquote operand-constraints-name))
-          (let* ((result reg))
-            (unquote-splicing body))))))))
-
-(defmarco (define-cc-operator template supplemental-regs . body)
+(defmarco (define-cc-operator template options . body)
   ;; define how to generate code for an operator that is free of
   ;; side-effects and produces its result in a condition code
   (let* ((name (car template))
@@ -1268,7 +1269,6 @@
          (param-operand-constraints
            (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
          (params-count (length params))
-         (body-ru (+ params-count (length supplemental-regs)))
          (operand-constraints-name
            (compound-symbol name "-operand-constraints")))
     (quasiquote (definitions
@@ -1280,12 +1280,11 @@
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         ;; converting from a CC to a reg value needs an extra register
         ;; over the body
-        (max (unquote (1+ body-ru)) (operator-args-reg-use form)))
+        (max (unquote (1+ params-count)) (operator-args-reg-use form)))
 
       (define-codegen ((unquote name) attrs (unquote-splicing params))
         (set! regs (move-to-position regs (unquote params-count) reg))
-        (bind ((unquote-splicing params) result
-               (unquote-splicing supplemental-regs) . spare-regs)
+        (bind ((unquote-splicing params) result . spare-regs)
               (operator-args-codegen-new form cg regs
                                          (unquote operand-constraints-name))
           (emit-prepare-convert-cc-value cg reg)
@@ -1294,12 +1293,11 @@
 
       (define-reg-use-conditional ((unquote name) attrs
                                    (unquote-splicing params))
-        (max (unquote body-ru) (operator-args-reg-use form)))
+        (max (unquote params-count) (operator-args-reg-use form)))
 
       (define-codegen-conditional ((unquote name) attrs
                                    (unquote-splicing params))
-        (bind ((unquote-splicing params)
-               (unquote-splicing supplemental-regs) . spare-regs)
+        (bind ((unquote-splicing params) . spare-regs)
               (operator-args-codegen-new form cg regs
                                          (unquote operand-constraints-name))
           (let* ((cc (begin (unquote-splicing body))))

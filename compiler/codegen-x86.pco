@@ -488,7 +488,7 @@
 (define-simplify (raw-alloc tag-bits-ccsym size)
   (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
 
-(define-operator (raw-alloc (size reg-imm)) (alloc)
+(define-operator (raw-alloc (size reg-imm)) ((temp-regs alloc))
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
               (emit-scale-number cg value-scale size) alloc spare-regs)
   (emit-mov cg alloc result)
@@ -529,7 +529,7 @@
 
 ;;; Functions and closures
 
-(define-operator (alloc-closure) (alloc)
+(define-operator (alloc-closure) ((temp-regs alloc))
   (emit-alloc cg closure-tag-bits
               (* value-size (1+ (length (attr-ref attrs 'closure))))
               alloc spare-regs)
@@ -745,7 +745,7 @@
 
 (define-tag-check pair? pair-tag pair-tag-bits)
 
-(define-operator (cons (a reg-imm) (d reg-imm)) (alloc)
+(define-operator (cons (a reg-imm) (d reg-imm)) ((temp-regs alloc))
   (emit-alloc cg pair-tag-bits (* 2 value-size) alloc spare-regs)
   (emit-mov cg a (mem alloc))
   (emit-mov cg d (mem alloc 1))
@@ -765,7 +765,7 @@
 
 ;;; Boxes
 
-(define-operator (raw-make-box (val reg-imm)) (alloc)
+(define-operator (raw-make-box (val reg-imm)) ((temp-regs alloc))
   (emit-alloc cg box-tag-bits value-size alloc spare-regs)
   (emit-mov cg val (mem alloc))
   (emit-lea cg (mem1+ alloc box-tag) result)
@@ -784,7 +784,8 @@
 (define-operator (symbol-name sym) () (tagged-mem symbol-tag sym))
 (define-operator (symbol-id sym) () (tagged-mem symbol-tag sym 1))
 
-(define-operator (raw-make-symbol (str reg-imm) (id reg-imm)) (alloc)
+(define-operator (raw-make-symbol (str reg-imm) (id reg-imm))
+    ((temp-regs alloc))
   (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc spare-regs)
   (emit-mov cg str (mem alloc))
   (emit-mov cg id (mem alloc 1))
@@ -868,7 +869,7 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define-operator (make-vec len) (alloc saved-len)
+(define-operator (make-vec len) ((temp-regs alloc saved-len))
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
