@@ -131,9 +131,6 @@
 (define (value-sized operand)
   (insn-operand operand value-scale))
 
-(define (move-regs-to-front regs all-regs)
-  (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
-
 (define (operand-using-reg? o r)
   (cond ((register? o) (eq? o r))
         ((mem? o) (member? r (cdr o)))
@@ -835,29 +832,17 @@
   (emit-sub cg b a)
   a)
 
-(define-reg-use (truncate attrs a b)
-  (operator-args-reg-use form)
-  general-register-count)
-
-(define-codegen (truncate attrs a b)
-  (operator-args-codegen form cg
-                         (move-regs-to-front (list %a %c) general-registers))
-  (emit-mov cg %a %d)
+(define-operator (truncate (dividend fixed-reg %a) (divisor reg-mem)) ()
+  (emit-mov cg dividend %d)
   (emit-extend-sign-bit cg %d)
-  (emit-idiv cg %c)
-  (emit-shl cg number-tag-bits %a)
-  %a)
+  (emit-idiv cg divisor)
+  (emit-shl cg number-tag-bits dividend)
+  dividend)
 
-(define-reg-use (rem attrs a b)
-  (operator-args-reg-use form)
-  general-register-count)
-
-(define-codegen (rem attrs a b)
-  (operator-args-codegen form cg
-                         (move-regs-to-front (list %a %c) general-registers))
-  (emit-mov cg %a %d)
+(define-operator (rem (dividend fixed-reg %a) (divisor reg-mem)) ()
+  (emit-mov cg dividend %d)
   (emit-extend-sign-bit cg %d)
-  (emit-idiv cg %c)
+  (emit-idiv cg divisor)
   %d)
 
 (define-operator (logior a (b reg-mem-imm)) ()
@@ -930,27 +915,22 @@
             (quote unspecified)))))
     (simplify form)))
 
-(define-reg-use (copy-mem attrs src-addr dest-addr len)
-  (operator-args-reg-use form)
-  general-register-count)
-
-(define-codegen (copy-mem attrs src-addr dest-addr len)
+(define-operator (copy-mem (src-addr fixed-reg %si) (dest-addr fixed-reg %di)
+                           (len fixed-reg %c)) ()
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale)))
-    (operator-args-codegen form cg
-                    (move-regs-to-front (list %si %di %c) general-registers))
     (if (attr-ref attrs 'forward)
         (emit cg "cld")
         (begin
           ;; when coping backwards, we need to offset src-addr and dest-addr
           (emit cg "std")
-          (emit-mov cg %c %a)
+          (emit-mov cg len %a)
           (emit-scale-number cg scale %a)
-          (emit-lea cg (tagged-mem (ash 1 scale) %si %a) %si)
-          (emit-lea cg (tagged-mem (ash 1 scale) %di %a) %di)))
-    (emit-sar cg number-tag-bits %c)
-    (emit-rep-movs cg scale)
-    false))
+          (emit-lea cg (tagged-mem (ash 1 scale) src-addr %a) src-addr)
+          (emit-lea cg (tagged-mem (ash 1 scale) dest-addr %a) dest-addr)))
+    (emit-sar cg number-tag-bits len)
+    (emit-rep-movs cg scale))
+  false)
 
 ;;; Raw memory access
 

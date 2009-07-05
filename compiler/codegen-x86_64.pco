@@ -15,6 +15,9 @@
   (operator-args-reg-use form)
   general-register-count)
 
+(define (move-regs-to-front regs all-regs)
+  (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
+
 (define-codegen (c-call attrs . args)
   (when (> (length args) (length c-call-arg-regs))
     (error "too many arguments to c-call"))

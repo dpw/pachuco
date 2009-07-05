@@ -1202,6 +1202,14 @@
   (emit-mov-maybe cg operand reg)
   reg)
 
+(define (reg-mem-operand-constraint cg operand reg)
+  (if (or (immediate? operand)
+          (and (register? operand) (not (eq? operand reg))))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
 (define (reg-mem-imm-operand-constraint cg operand reg)
   (if (and (register? operand) (not (eq? operand reg)))
       (begin
@@ -1217,6 +1225,24 @@
         reg)
       operand))
 
+(define (fixed-reg-operand-constraint cg operand reg)
+  (emit-mov-maybe cg operand reg)
+  reg)
+
+(define (make-registers-from-template template regs)
+  (set! regs (copy-list regs))
+  (dolist (reg template) (when reg (set! regs (delete reg regs))))
+  (labels ((fill-template (template)
+             (cond ((null? template)
+                    regs)
+                   ((car template)
+                    (cons (car template) (fill-template (cdr template))))
+                   (true
+                    (let* ((r (car regs)))
+                      (set! regs (cdr regs))
+                      (cons r (fill-template (cdr template))))))))
+    (fill-template template)))
+
 (define (move-to-position l index item)
    (if (= 0 index)
       (cons item (remove item l))
@@ -1230,31 +1256,64 @@
     ;; define how to generate code for an operator
     (let* ((name (car template))
            (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
-           (param-operand-constraints
-             (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
-           (body-ru (max (+ (length params) (length temp-regs))))
+           (param-specs (mapfor (p (cdr template))
+                          (if (pair? p) p (list p 'reg))))
+           (param-names (mapfor (ps param-specs) (first ps)))
+           (have-fixed-regs (findfor (ps param-specs)
+                              (eq? 'fixed-reg (second ps))))
            (out (last-elem body))
            (outpos (and (symbol? out) (position out params)))
            (operand-constraints-name
-                                 (compound-symbol name "-operand-constraints")))
+                                 (compound-symbol name "-operand-constraints"))
+           (registers-name (compound-symbol name "-registers")))
       (quasiquote (definitions
+        ;; The operand-constraints for an operator is a list of
+        ;; functions, each of which converts a general machine operand
+        ;; (immediate, register or memory) into a form suitable for the
+        ;; corresponding operand of the operation.
         (define (unquote operand-constraints-name)
           (list (unquote-splicing
-            (mapfor (oc param-operand-constraints)
-              (list 'function (compound-symbol oc "-operand-constraint"))))))
-  
-        (define-reg-use ((unquote name) attrs (unquote-splicing params))
-          (max (operator-args-reg-use form)
-               (unquote body-ru)))
-  
+            (mapfor (ps param-specs)
+              (list 'function (compound-symbol (second ps)
+                                               "-operand-constraint"))))))
+
+        ;; For an operator with fixed-regs operands, we need a register
+        ;; list that makes sure the right operands end up in the right
+        ;; registers.
+        (unquote-splicing (if (not have-fixed-regs) () (quasiquote (
+          (define (unquote registers-name)
+            (make-registers-from-template
+              (list (unquote-splicing (mapfor (ps param-specs)
+                                        (if (eq? 'fixed-reg (second ps))
+                                            (third ps)
+                                            false))))
+              general-registers))))))
+
+        (define-reg-use ((unquote name) attrs (unquote-splicing param-names))
+          (unquote-splicing
+            (if have-fixed-regs
+                '((operator-args-reg-use form)
+                  general-register-count)
+                (quasiquote ((max (operator-args-reg-use form)
+                                  (unquote (+ (length param-specs)
+                                              (length temp-regs)))))))))
+
         (define-codegen ((unquote name) attrs (unquote-splicing params))
-          ;; if necessary, shuffle regs so that the result reg
-          ;; corresponds to the output parameter
-          (unquote (if outpos
-                       (quasiquote
-                         (set! regs (move-to-position regs (unquote outpos) reg)))
-                       '(begin)))
-          (bind ((unquote-splicing params) (unquote-splicing temp-regs)
+          ;; manipulate the register list as required
+          (unquote
+            (cond (have-fixed-regs
+                   ;; if we have fixed regs, we need to use the special
+                   ;; register list
+                   (quasiquote (set! regs (unquote registers-name))))
+                  (outpos
+                   ;; shuffle regs so that the result reg corresponds to
+                   ;; the output parameter
+                   (quasiquote
+                     (set! regs (move-to-position regs (unquote outpos) reg))))
+                  (true
+                   (begin))))
+
+          (bind ((unquote-splicing param-names) (unquote-splicing temp-regs)
                  . spare-regs)
                 (operator-args-codegen-new form cg regs
                                            (unquote operand-constraints-name))
@@ -1266,6 +1325,9 @@
   ;; side-effects and produces its result in a condition code
   (let* ((name (car template))
          (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
+         (param-specs (mapfor (p (cdr template))
+                        (if (pair? p) p (list p 'reg))))
+         (param-names (mapfor (ps param-specs) (first ps)))
          (param-operand-constraints
            (mapfor (p (cdr template)) (if (pair? p) (second p) 'reg)))
          (params-count (length params))
@@ -1274,17 +1336,18 @@
     (quasiquote (definitions
       (define (unquote operand-constraints-name)
         (list (unquote-splicing
-          (mapfor (oc param-operand-constraints)
-            (list 'function (compound-symbol oc "-operand-constraint"))))))
+          (mapfor (ps param-specs)
+            (list 'function (compound-symbol (second ps)
+                                             "-operand-constraint"))))))
 
       (define-reg-use ((unquote name) attrs (unquote-splicing params))
         ;; converting from a CC to a reg value needs an extra register
         ;; over the body
         (max (unquote (1+ params-count)) (operator-args-reg-use form)))
 
-      (define-codegen ((unquote name) attrs (unquote-splicing params))
+      (define-codegen ((unquote name) attrs (unquote-splicing param-names))
         (set! regs (move-to-position regs (unquote params-count) reg))
-        (bind ((unquote-splicing params) result . spare-regs)
+        (bind ((unquote-splicing param-names) result . spare-regs)
               (operator-args-codegen-new form cg regs
                                          (unquote operand-constraints-name))
           (emit-prepare-convert-cc-value cg reg)
@@ -1292,12 +1355,12 @@
           reg))
 
       (define-reg-use-conditional ((unquote name) attrs
-                                   (unquote-splicing params))
+                                   (unquote-splicing param-names))
         (max (unquote params-count) (operator-args-reg-use form)))
 
       (define-codegen-conditional ((unquote name) attrs
-                                   (unquote-splicing params))
-        (bind ((unquote-splicing params) . spare-regs)
+                                   (unquote-splicing param-names))
+        (bind ((unquote-splicing param-names) . spare-regs)
               (operator-args-codegen-new form cg regs
                                          (unquote operand-constraints-name))
           (let* ((cc (begin (unquote-splicing body))))
