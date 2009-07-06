@@ -4,7 +4,7 @@
 
 (define-reg-use (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
-  (operator-args-reg-use form)
+  (dolist (arg args) (reg-use arg))
   general-register-count)
 
 (define-codegen (c-call attrs . args)

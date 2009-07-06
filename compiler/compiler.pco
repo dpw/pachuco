@@ -1112,6 +1112,10 @@
     (rplaca (cdr form) (list* (cons 'trashy-args trashy-args)
                               (cons 'non-trashy-args non-trashy-args)
                               (cadr form)))
+
+    ;; This result doesn't include the point where all the operands
+    ;; are potentially reloaded into registers, ready for the operator
+    ;; body.  The caller should take care of that.
     (min max-ru general-register-count)))
 
 (define (operator-args-codegen form cg regs operand-constraints)
