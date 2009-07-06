@@ -15,14 +15,17 @@
   (operator-args-reg-use form)
   general-register-count)
 
-(define (move-regs-to-front regs all-regs)
-  (append regs (filterfor (reg all-regs) (not (member? reg regs)))))
+(define c-call-registers 
+        (make-registers-from-template c-call-arg-regs general-registers))
+
+(define c-call-operand-constraints
+        (list-repeating (function fixed-reg-operand-constraint)
+                        (length c-call-arg-regs)))
 
 (define-codegen (c-call attrs . args)
   (when (> (length args) (length c-call-arg-regs))
     (error "too many arguments to c-call"))
-  (operator-args-codegen form cg
-                         (move-regs-to-front c-call-arg-regs general-registers))
+  (operator-args-codegen form cg c-call-registers c-call-operand-constraints)
   (emit cg "cld")
   (emit-set-ac-flag cg false)
 

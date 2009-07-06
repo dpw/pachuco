@@ -1114,46 +1114,7 @@
                               (cadr form)))
     (min max-ru general-register-count)))
 
-(define (operator-args-codegen form cg regs)
-  ;; Generate the code to evaluate the arguments of an operator
-  (let* ((trashy-args (form-attr form 'trashy-args))
-         (non-trashy-args (form-attr form 'non-trashy-args))
-         (args (cddr form)))
-    (when (> (length args) (length regs))
-      (error "more operator arguments than available registers in ~S"
-             (comment-form form)))
-
-    ;; First, evaluate the trashy args, saving their results on the
-    ;; stack.
-    (dolist (arg trashy-args)
-      (codegen-into-reg (elt args arg) cg false regs (first regs))
-      (emit-frame-push cg (first regs)))
-
-    ;; Work out the register list for evaluating the non-trashy args,
-    ;; so that the result of each evaluation ends up in the correct
-    ;; register.  Note that operator-args-reg-use left the
-    ;; non-trashy-arg list in reverse order of evaluation,
-    (let* ((non-trashy-regs (copy-list regs))
-           (result-regs ()))
-      (dolist (arg non-trashy-args)
-        (let* ((c (nthcdr arg non-trashy-regs)))
-          (set! result-regs (cons (car c) result-regs))
-          (rplaca c false)))
-
-      (set! non-trashy-regs (nconc result-regs (delete false non-trashy-regs)))
-      
-      ;; Now generate code for non-trashy args, reducing the available
-      ;; registers after each one.
-      (dolist (arg (reverse non-trashy-args))
-        (codegen-into-reg (elt args arg) cg false non-trashy-regs
-                          (first non-trashy-regs))
-        (set! non-trashy-regs (cdr non-trashy-regs))))
-  
-    ;; reload trashy arg results from stack
-    (dolist (arg (reverse trashy-args))
-      (emit-frame-pop cg (elt regs arg)))))
-
-(define (operator-args-codegen-new form cg regs operand-constraints)
+(define (operator-args-codegen form cg regs operand-constraints)
   ;; Generate the code to evaluate the arguments of an operator
   (let* ((trashy-args (form-attr form 'trashy-args))
          (non-trashy-args (form-attr form 'non-trashy-args))
@@ -1326,8 +1287,8 @@
 
           (bind ((unquote-splicing param-names) (unquote-splicing temp-regs)
                  . spare-regs)
-                (operator-args-codegen-new form cg regs
-                                           (unquote operand-constraints-name))
+                (operator-args-codegen form cg regs
+                                       (unquote operand-constraints-name))
             (let* ((result reg))
               (unquote-splicing body)))))))))
 
@@ -1359,8 +1320,8 @@
       (define-codegen ((unquote name) attrs (unquote-splicing param-names))
         (set! regs (move-to-position regs (unquote params-count) reg))
         (bind ((unquote-splicing param-names) result . spare-regs)
-              (operator-args-codegen-new form cg regs
-                                         (unquote operand-constraints-name))
+              (operator-args-codegen form cg regs
+                                     (unquote operand-constraints-name))
           (emit-prepare-convert-cc-value cg reg)
           (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
           reg))
@@ -1372,8 +1333,8 @@
       (define-codegen-conditional ((unquote name) attrs
                                    (unquote-splicing param-names))
         (bind ((unquote-splicing param-names) . spare-regs)
-              (operator-args-codegen-new form cg regs
-                                         (unquote operand-constraints-name))
+              (operator-args-codegen form cg regs
+                                     (unquote operand-constraints-name))
           (let* ((cc (begin (unquote-splicing body))))
             (emit-reset-frame-base cg out-frame-base)
             (emit-smart-branch cg cc tlabel flabel))))))))

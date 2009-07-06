@@ -6,6 +6,10 @@
                                   ((symbol? p) (symbol-name p))
                                   (true (error "~S" p)))))))
 
+(define (list-repeating el len)
+  (if (= 0 len) ()
+      (cons el (list-repeating el (1- len)))))
+
 ;;; Simple option list support
 ;;;
 ;;; The options-bind macro takes an options specification
