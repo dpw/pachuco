@@ -554,14 +554,6 @@
   (emit-literal cg (fixnum-representation closure-size))
   (emit-smart-label cg label))
 
-(define-reg-use-discarding (return attrs body)
-  (reg-use body)
-  0)
-
-(define-reg-use-discarding (varargs-return attrs arg-count body)
-  (operator-args-reg-use form)
-  0)
-
 (define (emit-call-or-jump cg insn func)
   (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
          (label (and func-varrec
@@ -715,13 +707,6 @@
 ;; raw-jump-with-arg-space and raw-apply-jump should always appear in
 ;; tail positions
 (define-propogate ((raw-jump-with-arg-space raw-apply-jump) . rest))
-
-(define-reg-use-discarding (raw-jump-with-arg-space attrs before-arg-count
-                                                    after-arg-count bodyfunc)
-  (operator-args-reg-use form))
-
-(define-reg-use-discarding (raw-apply-jump attrs func arg-count)
-  (operator-args-reg-use form))
 
 ;;; Comparisons
 

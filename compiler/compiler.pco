@@ -1252,7 +1252,7 @@
         l2)))
 
 (defmarco (define-operator template options . body)
-  (options-bind ((temp-regs ())) options
+  (options-bind ((temp-regs ()) (tail-form false)) options
     ;; define how to generate code for an operator
     (let* ((name (car template))
            (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
@@ -1261,11 +1261,18 @@
            (param-names (mapfor (ps param-specs) (first ps)))
            (have-fixed-regs (findfor (ps param-specs)
                               (eq? 'fixed-reg (second ps))))
-           (out (last-elem body))
-           (outpos (and (symbol? out) (position out params)))
+           (outpos (and (not tail-form)
+                        (let* ((out (last-elem body)))
+                          (and (symbol? out) (position out params)))))
            (operand-constraints-name
                                  (compound-symbol name "-operand-constraints"))
-           (registers-name (compound-symbol name "-registers")))
+           (registers-name (compound-symbol name "-registers"))
+           (define-reg-use-name (if tail-form
+                                    'define-reg-use-discarding
+                                    'define-reg-use))
+           (define-codegen-name (if tail-form
+                                    'define-codegen-discarding
+                                    'define-codegen)))
       (quasiquote (definitions
         ;; The operand-constraints for an operator is a list of
         ;; functions, each of which converts a general machine operand
@@ -1289,14 +1296,18 @@
                                             false))))
               general-registers))))))
 
-        (define-reg-use ((unquote name) attrs (unquote-splicing param-names))
-          (unquote-splicing
-            (if have-fixed-regs
-                '((operator-args-reg-use form)
-                  general-register-count)
-                (quasiquote ((max (operator-args-reg-use form)
-                                  (unquote (+ (length param-specs)
-                                              (length temp-regs)))))))))
+        ((unquote define-reg-use-name) ((unquote name) attrs
+                                        (unquote-splicing params))
+          (unquote (cond (have-fixed-regs
+                          '(begin (operator-args-reg-use form)
+                                  general-register-count))
+                         (tail-form
+                          '(begin (operator-args-reg-use form)
+                                  0))
+                         (true
+                           (quasiquote (max (operator-args-reg-use form)
+                                            (unquote (+ (length param-specs)
+                                                      (length temp-regs)))))))))
 
         (define-codegen ((unquote name) attrs (unquote-splicing params))
           ;; manipulate the register list as required
