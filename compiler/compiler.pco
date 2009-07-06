@@ -1217,15 +1217,17 @@
         l2)))
 
 (defmarco (define-operator template options . body)
-  (options-bind ((temp-regs ()) (tail-form false)) options
+  (options-bind ((temp-regs ()) (tail-form false) (temp-fixed-regs ()))
+                options
     ;; define how to generate code for an operator
     (let* ((name (car template))
            (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
            (param-specs (mapfor (p (cdr template))
                           (if (pair? p) p (list p 'reg))))
            (param-names (mapfor (ps param-specs) (first ps)))
-           (have-fixed-regs (findfor (ps param-specs)
-                              (eq? 'fixed-reg (second ps))))
+           (have-fixed-regs (or (not (null? temp-fixed-regs))
+                                (findfor (ps param-specs)
+                                  (eq? 'fixed-reg (second ps)))))
            (outpos (and (not tail-form)
                         (let* ((out (last-elem body)))
                           (and (symbol? out) (position out params)))))
@@ -1258,7 +1260,8 @@
               (list (unquote-splicing (mapfor (ps param-specs)
                                         (if (eq? 'fixed-reg (second ps))
                                             (third ps)
-                                            false))))
+                                            false)))
+                    (unquote-splicing temp-fixed-regs))
               general-registers))))))
 
         ((unquote define-reg-use-name) ((unquote name) attrs
@@ -1289,7 +1292,9 @@
                   (true
                    (begin))))
 
-          (bind ((unquote-splicing param-names) (unquote-splicing temp-regs)
+          (bind ((unquote-splicing param-names)
+                 (unquote-splicing temp-fixed-regs)
+                 (unquote-splicing temp-regs)
                  . spare-regs)
                 (operator-args-codegen form cg regs
                                        (unquote operand-constraints-name))
