@@ -1414,7 +1414,7 @@
     (aux 0))
 
   (define command-line-args
-          (c-string-array-to-list (raw-c-global "lisp_argv"))))
+          (c-string-array-to-list (raw-ref (raw-label "lisp_argv")))))
 
 
 ;;; Entry point function

@@ -39,17 +39,17 @@
     (when gc-active (error "Recursive GC"))
     (set! gc-active true)
 
-    (set! gc-from-space (raw-c-global "heap_start"))
-    (set! gc-from-space-end (raw-c-global "heap_end"))
+    (set! gc-from-space (raw-ref (raw-label "heap_start")))
+    (set! gc-from-space-end (raw-ref (raw-label "heap_end")))
 
-    (set! gc-to-space (raw-c-global "heap2_start"))
-    (set! gc-to-space-end (raw-c-global "heap2_end"))
+    (set! gc-to-space (raw-ref (raw-label "heap2_start")))
+    (set! gc-to-space-end (raw-ref (raw-label "heap2_end")))
 
-    (define old-heap-alloc (raw-c-global "heap_alloc"))
+    (define old-heap-alloc (raw-ref (raw-label "heap_alloc")))
     (raw-set! (raw-label "heap_alloc") gc-to-space-end)
     (raw-set! (raw-label "heap_threshold") gc-to-space)
 
-    (when (/= 0 (raw->fixnum (raw-c-global "verbose_gc")))
+    (when (/= 0 (raw->fixnum (raw-ref (raw-label "verbose_gc"))))
       (formout stderr "GC... "))
 
     ;; it's critical that the GC type table is in to-space, so that it
@@ -60,13 +60,13 @@
     (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
     (gc-root-set (raw-args-base) runtime-main-args-base)
 
-    (define live-bytes
-            (raw->fixnum (raw-- gc-to-space-end (raw-c-global "heap_alloc"))))
+    (define live-bytes (raw->fixnum (raw-- gc-to-space-end
+                                           (raw-ref (raw-label "heap_alloc")))))
 
     (raw-set! (raw-label "heap_start") gc-to-space)
     (raw-set! (raw-label "heap_end") gc-to-space-end)
-    (raw-set! (raw-label "heap_threshold")
-              (raw-- gc-to-space-end (raw-c-global "heap_threshold_size")))
+    (raw-set! (raw-label "heap_threshold") (raw-- gc-to-space-end
+                                   (raw-ref (raw-label "heap_threshold_size"))))
     
     ;; zero from-space.  Do it here, while bits of it may still be in cache
     (c-call "memset" old-heap-alloc (fixnum->raw 0)
@@ -75,7 +75,7 @@
     (raw-set! (raw-label "heap2_start") gc-from-space)
     (raw-set! (raw-label "heap2_end") gc-from-space-end)
 
-    (when (/= 0 (raw->fixnum (raw-c-global "verbose_gc")))
+    (when (/= 0 (raw->fixnum (raw-ref (raw-label "verbose_gc"))))
       (formout stderr "done, ~D bytes live~%" live-bytes))
 
     (set! gc-active (set! gc-from-space (set! gc-from-space-end
@@ -88,9 +88,9 @@
 
     ;; heap_alloc moves downwards, so from-space is above it, and
     ;; to-space is below it
-    (set! gc-from-space (raw-c-global "heap_alloc"))
-    (set! gc-from-space-end (raw-c-global "heap_end"))
-    (set! gc-to-space (raw-c-global "heap_start"))
+    (set! gc-from-space (raw-ref (raw-label "heap_alloc")))
+    (set! gc-from-space-end (raw-ref (raw-label "heap_end")))
+    (set! gc-to-space (raw-ref (raw-label "heap_start")))
     (set! gc-to-space-end gc-from-space)
     (construct-gc-type-table)
     

@@ -966,9 +966,8 @@
         (emit-and cg reg (mem %sp) 2)))
   (emit-popf cg))
 
-(define-simplify ((raw-c-global raw-label) name)
+(define-simplify (raw-label name)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-reg-use ((raw-c-global raw-label) attrs) 0)
-(define-codegen (raw-c-global attrs) (mem (attr-ref attrs 'name)))
+(define-reg-use (raw-label attrs) 0)
 (define-codegen (raw-label attrs) (attr-ref attrs 'name))
