@@ -86,62 +86,6 @@
 (define (normalize-2 form)
   (list* (car form) (copy-tree (cadr form)) (normalize-forms (cddr form))))
 
-;;; A walker is a function which recurses over a program tree,
-;;; dispatching forms to handlers based on their keywords.
-;;; define-walker is a macro providing a convenient way to define
-;;; walkers.
-;;;
-;;; A define-walker needs to be paired with a recursion function,
-;;; which defines how to handle forms that don't match one of the
-;;; handlers
-
-(define (multi-acons keys val rest)
-  (if (pair? keys)
-      (append (mapfor (key keys) (cons key val)) rest)
-      (acons keys val rest)))
-
-(defmarco (define-walker name implicit-vars)
-  (let* ((form-name name)
-         (recurse-name (compound-symbol name "-recurse"))
-         (define-name (compound-symbol "define-" name))
-         (alist-name (compound-symbol name "-alist")))
-    (quasiquote (definitions
-      (define (unquote alist-name) ())
-
-      (define ((unquote form-name) form (unquote-splicing implicit-vars))
-        (let* ((kw (car form))
-               (a (assoc kw (unquote alist-name))))
-          (if a
-              (funcall (cdr a) form (unquote-splicing implicit-vars))
-              ((unquote recurse-name) form (unquote-splicing implicit-vars)))))
-
-      (defmarco ((unquote define-name) template . body)
-        (quasiquote
-          (set! (unquote (unquote alist-name))
-                (multi-acons '(unquote (car template))
-                       (lambda (form (unquote-splicing (unquote implicit-vars)))
-                         (bind (unquote (cdr template)) (cdr form)
-                               (unquote-splicing body)))
-                       (unquote (unquote alist-name))))))))))
-
-;;; define-trivial-walker is like define-walker, but it also provides
-;;; a recusrion function that does a straightforward recursion into
-;;; subforms
-
-(defmarco (define-trivial-walker name implicit-vars)
-  (let* ((form-name name)
-         (recurse-name (compound-symbol name "-recurse"))
-         (forms-name (compound-symbol name "-forms")))
-    (quasiquote (definitions
-      (define-walker (unquote name) (unquote implicit-vars))
-
-      (define ((unquote forms-name) forms (unquote-splicing implicit-vars))
-        (dolist (form forms)
-          ((unquote form-name) form (unquote-splicing implicit-vars))))
-
-      (define ((unquote recurse-name) form (unquote-splicing implicit-vars))
-        ((unquote forms-name) (cddr form) (unquote-splicing implicit-vars)))))))
-
 ;;; Utils
 
 (define (attr-ref attrs attr)
