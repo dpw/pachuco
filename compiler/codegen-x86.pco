@@ -382,29 +382,13 @@
 (define (emit-jmp cg label)
   (emit-without-flushing "jmp ~A" label))
 
-;;; codegen and reg-use fallbacks
-
 (define (emit-mov-maybe cg src dst)
   (unless (eq? src dst) (emit-mov cg src dst)))
 
-(define (codegen-into-reg form cg out-frame-base regs reg)
-  (emit-mov-maybe cg (codegen form cg out-frame-base regs reg) reg))
-
-(define (reg-use-discarding-recurse form)
-  (reg-use form))
-
-(define (codegen-discarding-recurse form cg out-frame-base regs)
-  (codegen form cg out-frame-base regs (if (null? regs) false (first regs))))
-
-(define (reg-use-conditional-recurse form)
-  (reg-use form))
-
-(define (codegen-conditional-recurse form cg out-frame-base regs tlabel flabel)
-  (let* ((res (codegen form cg out-frame-base regs
-                       (if (null? regs) false (first regs)))))
-    (emit-cmp cg false-representation res)
-    (emit-reset-frame-base cg out-frame-base)
-    (emit-smart-branch cg "ne" tlabel flabel)))
+(define (emit-branch-on-operand cg oper out-frame-base tlabel flabel)
+  (emit-cmp cg false-representation oper)
+  (emit-reset-frame-base cg out-frame-base)
+  (emit-smart-branch cg "ne" tlabel flabel))
 
 (define (emit-prepare-convert-cc-value cg reg)
   (emit-clear cg reg))
@@ -534,20 +518,6 @@
   (emit-lea cg (mem1+ alloc closure-tag) result)
   result)
 
-(define-reg-use (fill-closure attrs closure . refs)
-  (max (reg-use closure) (1+ (max$ 0 (mapfor (ref refs) (reg-use ref))))))
-
-(define-codegen (fill-closure attrs closure . refs)
-  (let* ((closure-reg (first regs))
-         (ref-reg (second regs))
-         (index 0))
-    (codegen-into-reg closure cg false regs closure-reg)
-    (dolist (ref refs)
-      (codegen-into-reg ref cg false (cdr regs) ref-reg)
-      (emit-mov cg ref-reg (closure-slot closure-reg index))
-      (set! index (1+ index)))
-    closure-reg))
-
 (define (codegen-function-intro label closure-size cg)
   (emit cg ".text")
   (emit cg ".align ~D" (ash 1 value-scale))
@@ -572,14 +542,6 @@
         (emit cg "~A ~A # ~S" insn label comment)
         (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
-
-(define-reg-use ((call c-call) attrs . args)
-  (dolist (arg args) (reg-use arg))
-  general-register-count)
-
-(define-reg-use-discarding ((tail-call varargs-tail-call) attrs . args)
-  (dolist (arg args) (reg-use arg))
-  general-register-count)
 
 (define (codegen-call-args cg func args)
   (dolist (arg (reverse args))
@@ -653,12 +615,6 @@
 ;;; Quote
 
 (define-operator (quote) () (attr-ref attrs 'value))
-
-(define-reg-use-conditional (quote attrs) 0)
-(define-codegen-conditional (quote attrs)
-  (emit-reset-frame-base cg out-frame-base)
-  (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
-                          flabel tlabel)))
 
 ;;; Variables
 
