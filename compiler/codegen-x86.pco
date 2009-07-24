@@ -564,7 +564,7 @@
         (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
 
-(define-reg-use (call attrs . args)
+(define-reg-use ((call c-call) attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)
 
@@ -593,6 +593,10 @@
 (define (emit-restore-%closure cg)
   (when (codegen-have-closure cg)
     (emit-mov cg (closure-address-slot cg) %closure)))
+
+(define-simplify (c-call c-function-name . args)
+  (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
+  (simplify-recurse form))
 
 ;;; Literals
 

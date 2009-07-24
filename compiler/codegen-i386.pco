@@ -2,11 +2,6 @@
 
 ;;; C calls
 
-(define-reg-use (c-call c-function-name . args)
-  (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
-  (dolist (arg args) (reg-use arg))
-  general-register-count)
-
 (define-codegen (c-call attrs . args)
   (dolist (arg (reverse args))
     (codegen-into-reg arg cg false general-registers (first general-registers))

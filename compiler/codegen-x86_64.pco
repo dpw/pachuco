@@ -10,22 +10,20 @@
 
 ;;; C calls
 
-(define-reg-use (c-call c-function-name . args)
-  (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
-  (operator-args-reg-use form)
-  general-register-count)
-
-(define c-call-registers 
-        (make-registers-from-template c-call-arg-regs general-registers))
-
-(define c-call-operand-constraints
-        (list-repeating (function fixed-reg-operand-constraint)
-                        (length c-call-arg-regs)))
-
 (define-codegen (c-call attrs . args)
-  (when (> (length args) (length c-call-arg-regs))
-    (error "too many arguments to c-call"))
-  (operator-args-codegen form cg c-call-registers c-call-operand-constraints)
+  (labels ((codegen-args (args regs)
+             (when (null? regs) (error "too many arguments for registers"))
+             (if (null? (cdr args))
+                 (codegen-into-reg (car args) cg false general-registers
+                                   (car regs))
+                 (begin
+                   (emit-frame-push cg (codegen (car args) cg false
+                                                general-registers
+                                                (first general-registers)))
+                   (codegen-args (cdr args) (cdr regs))
+                   (emit-frame-pop cg (car regs))))))
+    (unless (null? args) (codegen-args args c-call-arg-regs)))
+
   (emit cg "cld")
   (emit-set-ac-flag cg false)
 
