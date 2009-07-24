@@ -554,10 +554,19 @@
   (emit-literal cg (fixnum-representation closure-size))
   (emit-smart-label cg label))
 
+(define (func-lambda-label func)
+  (and (eq? 'ref (first func))
+       (let* ((varrec (attr-ref (second func) 'varrec)))
+         (varrec-origin-attr varrec 'lambda-label))))
+
+(define (func-no-closure func)
+  (and (eq? 'ref (first func))
+       (let* ((varrec (attr-ref (second func) 'varrec)))
+         (and (varrec-origin-attr varrec 'lambda-label)
+              (varrec-origin-attr varrec 'no-closure)))))
+
 (define (emit-call-or-jump cg insn func)
-  (let* ((func-varrec (and (eq? 'ref (first func)) (second func)))
-         (label (and func-varrec
-                     (varrec-origin-attr func-varrec 'lambda-label)))
+  (let* ((label (func-lambda-label func))
          (comment (comment-form func)))
     (if label
         (emit cg "~A ~A # ~S" insn label comment)
@@ -576,9 +585,7 @@
   (dolist (arg (reverse args))
     (emit-frame-push cg (codegen arg cg false general-registers
                                  (first general-registers))))
-  (unless (and (eq? 'ref (first func))
-               (varrec-origin-attr (second func) 'lambda-label)
-               (varrec-origin-attr (second func) 'no-closure))
+  (unless (func-no-closure func)
     (emit-mov-maybe cg (codegen func cg false general-registers 
                                 (first general-registers)) %closure)))
 
@@ -645,10 +652,9 @@
 
 ;;; Quote
 
-(define-reg-use (quote attrs) 0)
-(define-codegen (quote attrs) (attr-ref attrs 'value))
+(define-operator (quote) () (attr-ref attrs 'value))
 
-(define-codegen-conditional (quote attrs) 0)
+(define-reg-use-conditional (quote attrs) 0)
 (define-codegen-conditional (quote attrs)
   (emit-reset-frame-base cg out-frame-base)
   (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
@@ -669,18 +675,17 @@
   (emit-frame-push cg val)
   val)
 
-(define-codegen-sections (set! varrec val)
+(define-codegen-sections ((set! ref) varrec . rest)
   ;; make the varrec into a normal attribute, in order to use
   ;; define-operator
   (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-sections val cg))
+  (codegen-sections-forms rest cg))
 
 (define-operator (set! (val reg-imm)) ()
   (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg))
   val)
 
-(define-reg-use (ref varrec) 0)
-(define-codegen (ref varrec) (varrec-operand varrec cg))
+(define-operator (ref) () (varrec-operand (attr-ref attrs 'varrec) cg))
 
 ;;; Operator definitions
 
@@ -973,5 +978,4 @@
 (define-simplify (raw-label name)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-reg-use (raw-label attrs) 0)
-(define-codegen (raw-label attrs) (attr-ref attrs 'name))
+(define-operator (raw-label) () (attr-ref attrs 'name))
