@@ -14,12 +14,9 @@
   (labels ((codegen-args (args regs)
              (when (null? regs) (error "too many arguments for registers"))
              (if (null? (cdr args))
-                 (codegen-into-reg (car args) cg false general-registers
-                                   (car regs))
+                 (trashy-codegen-into-reg (car args) cg false (car regs))
                  (begin
-                   (emit-frame-push cg (codegen (car args) cg false
-                                                general-registers
-                                                (first general-registers)))
+                   (emit-frame-push cg (trashy-codegen (car args) cg false))
                    (codegen-args (cdr args) (cdr regs))
                    (emit-frame-pop cg (car regs))))))
     (unless (null? args) (codegen-args args c-call-arg-regs)))

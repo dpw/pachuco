@@ -4,9 +4,8 @@
 
 (define-codegen (c-call attrs . args)
   (dolist (arg (reverse args))
-    (codegen-into-reg arg cg false general-registers (first general-registers))
-    (emit-frame-push cg (first general-registers)))
-
+    (emit-frame-push cg (trashy-codegen arg cg false)))
+  
   (emit cg "cld")
   (emit-set-ac-flag cg false)
   (emit cg "call ~A" (attr-ref attrs 'c-function-name))

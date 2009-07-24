@@ -32,8 +32,7 @@
 (define (codegen-function label closure-size body cg) 
   (codegen-function-intro label closure-size cg)
   (when (codegen-have-closure cg) (emit-push cg %closure))
-  (codegen-discarding body cg (if (codegen-have-closure cg) -1 0)
-                      general-registers)
+  (trashy-codegen-discarding body cg (if (codegen-have-closure cg) -1 0))
   (codegen-do-out-of-line cg))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
@@ -94,7 +93,7 @@
          (retaddr (return-address-slot cg)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
-    (codegen-into-reg arg-count cg false general-registers in-arg-count-reg)
+    (trashy-codegen-into-reg arg-count cg false in-arg-count-reg)
     (emit-scale-number cg value-scale in-arg-count-reg)
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
@@ -126,7 +125,6 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
     (codegen-program-sections program cg)
-    (reg-use-discarding program)
     
     (emit cg ".text")
     (emit cg ".globl lisp")
@@ -136,7 +134,7 @@
 
     (codegen-set-frame-base! cg 0)
     (codegen-set-have-closure! cg false)
-    (codegen-discarding program cg false general-registers)
+    (trashy-codegen-discarding program cg false)
 
     (emit-set-ac-flag cg false)
     (emit cg "cld")

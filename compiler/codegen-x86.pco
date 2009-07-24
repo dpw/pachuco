@@ -328,7 +328,8 @@
           (unless (member? label (codegen-here-labels cg))
             (emit-jmp cg label))))))
 
-(define (emit-smart-branch cg cc tlabel flabel)
+(define (emit-smart-branch cg cc out-frame-base tlabel flabel)
+  (emit-reset-frame-base cg out-frame-base)
   (flush-labels-and-jumps cg)
   (codegen-set-deferred-jump! cg
     (lambda ()
@@ -387,8 +388,7 @@
 
 (define (emit-branch-on-operand cg oper out-frame-base tlabel flabel)
   (emit-cmp cg false-representation oper)
-  (emit-reset-frame-base cg out-frame-base)
-  (emit-smart-branch cg "ne" tlabel flabel))
+  (emit-smart-branch cg "ne" out-frame-base tlabel flabel))
 
 (define (emit-prepare-convert-cc-value cg reg)
   (emit-clear cg reg))
@@ -542,14 +542,6 @@
         (emit cg "~A ~A # ~S" insn label comment)
         (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
-
-(define (codegen-call-args cg func args)
-  (dolist (arg (reverse args))
-    (emit-frame-push cg (codegen arg cg false general-registers
-                                 (first general-registers))))
-  (unless (func-no-closure func)
-    (emit-mov-maybe cg (codegen func cg false general-registers 
-                                (first general-registers)) %closure)))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg

@@ -10,11 +10,19 @@ else
 $(error unknown stack regime $(STACK_REGIME))
 endif
 
+CODEGEN=old
+ifeq ($(CODEGEN),old)
+CODEGEN_SOURCES=compiler/codegen-old.pco
+else ifeq ($(CODEGEN),simple)
+CODEGEN_SOURCES=compiler/codegen-simple.pco
+endif
+
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
     compiler/mach.pco compiler/mach-$(TARGET).pco compiler/walker.pco \
-    compiler/compiler.pco compiler/codegen-old.pco compiler/codegen-x86.pco \
-    $(STACK_SOURCES) compiler/codegen-$(TARGET).pco compiler/driver.pco
+    compiler/compiler.pco compiler/codegen-generic.pco \
+    $(CODEGEN_SOURCES) $(STACK_SOURCES) compiler/codegen-x86.pco \
+    compiler/codegen-$(TARGET).pco compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
     bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)

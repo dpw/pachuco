@@ -1,0 +1,17 @@
+;;; Code generation bits that aren't dependent on the target, the
+;;; stack regime, the code generation strategy, or anything else
+
+(define (make-registers-from-template template regs)
+  (set! regs (copy-list regs))
+  (dolist (reg template) (when reg (set! regs (delete reg regs))))
+  (labels ((fill-template (template)
+             (cond ((null? template)
+                    regs)
+                   ((car template)
+                    (cons (car template) (fill-template (cdr template))))
+                   (true
+                    (let* ((r (car regs)))
+                      (set! regs (cdr regs))
+                      (cons r (fill-template (cdr template))))))))
+    (fill-template template)))
+

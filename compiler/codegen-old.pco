@@ -46,6 +46,21 @@
                                       (if (null? regs) false (first regs)))
                           out-frame-base tlabel flabel))
 
+;;; codegen functions called from outside this file
+
+(define (trashy-codegen form cg out-frame-base)
+  (reg-use form)
+  (codegen form cg out-frame-base general-registers (first general-registers)))
+
+(define (trashy-codegen-discarding form cg out-frame-base)
+  (reg-use-discarding form)
+  (codegen-discarding form cg out-frame-base general-registers))
+
+(define (trashy-codegen-into-reg form cg out-frame-base reg)
+  (reg-use form)
+  (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
+                  reg))
+
 ;;; Begin
 
 (define (reg-use-begin forms max-ru reg-use-last)
@@ -273,20 +288,6 @@
   (emit-mov-maybe cg operand reg)
   reg)
 
-(define (make-registers-from-template template regs)
-  (set! regs (copy-list regs))
-  (dolist (reg template) (when reg (set! regs (delete reg regs))))
-  (labels ((fill-template (template)
-             (cond ((null? template)
-                    regs)
-                   ((car template)
-                    (cons (car template) (fill-template (cdr template))))
-                   (true
-                    (let* ((r (car regs)))
-                      (set! regs (cdr regs))
-                      (cons r (fill-template (cdr template))))))))
-    (fill-template template)))
-
 (define (move-to-position l index item)
    (if (= 0 index)
       (cons item (remove item l))
@@ -424,8 +425,7 @@
               (operator-args-codegen form cg regs
                                      (unquote operand-constraints-name))
           (let* ((cc (begin (unquote-splicing body))))
-            (emit-reset-frame-base cg out-frame-base)
-            (emit-smart-branch cg cc tlabel flabel))))))))
+            (emit-smart-branch cg cc out-frame-base tlabel flabel))))))))
 
 
 (define-reg-use-conditional (quote attrs) 0)
@@ -455,3 +455,11 @@
 (define-reg-use-discarding ((tail-call varargs-tail-call) attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)
+
+(define (codegen-call-args cg func args)
+  (dolist (arg (reverse args))
+    (emit-frame-push cg (codegen arg cg false general-registers
+                                 (first general-registers))))
+  (unless (func-no-closure func)
+    (emit-mov-maybe cg (codegen func cg false general-registers 
+                                (first general-registers)) %closure)))
