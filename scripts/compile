@@ -1,7 +1,7 @@
 #!/bin/sh - 
 
 set -e
-basedir=$(dirname $0)/..
+basedir=$(dirname $(dirname $0))
 
 [ -z "$TMPDIR" ] && TMPDIR=/tmp
 

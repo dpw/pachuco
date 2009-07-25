@@ -1,0 +1,23 @@
+#!/bin/sh -
+#
+# Bootstrap by sending code to another machine for execution over ssh
+#
+# Set BOOTSTRAP_HOST to the host to use for the bootstrap, and
+# BOOTSTRAP_COMPILER_REMOTE to the name of the compiler to use on the
+# that host.
+
+func=$1
+shift
+
+tar czf - $* $CL_COMPILER_SOURCES | ssh $BOOTSTRAP_HOST "
+  CL_COMPILER_SOURCES=\"$CL_COMPILER_SOURCES\"
+  export CL_COMPILER_SOURCES
+  cd /tmp
+  rm -rf pachuco-bootstrap
+  mkdir pachuco-bootstrap
+  cd pachuco-bootstrap
+  tar xzf -
+  $BOOTSTRAP_COMPILER_REMOTE $func $*
+  cd /tmp
+  rm -rf pachuco-bootstrap
+"
