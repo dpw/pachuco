@@ -1,45 +1,5 @@
 ;;; x86-64 machine definition
 
-(defconstant value-scale 3)
-(defconstant value-size (ash 1 value-scale))
-
-;;; Value representation
-
-;;; number-tag must be all zeros
-(defconstant number-tag #b0000)
-(defconstant number-tag-bits 4)
-
-;;; specials are (), true, false, etc.
-(defconstant special-tag #b1000)
-(defconstant special-tag-bits 4)
-
-(defconstant closure-tag #b001)
-(defconstant closure-tag-bits 3)
-
-(defconstant box-tag #b010)
-(defconstant box-tag-bits 3)
-
-(defconstant pair-tag #b011)
-(defconstant pair-tag-bits 3)
-
-(defconstant vector-tag #b100)
-(defconstant vector-tag-bits 3)
-
-(defconstant string-tag #b101)
-(defconstant string-tag-bits 3)
-
-(defconstant symbol-tag #b111)
-(defconstant symbol-tag-bits 3)
-
-(defconstant false-representation #b1000)
-
-(defconstant simple-representations 
-  ;; The quotes here are significant for CL compatibility
-  (list (cons 'false false-representation)
-        (cons 'true #b11000)
-        (cons 'unspecified #b101000)
-        (cons () #b111000)))
-
 ;;; Registers
 
 (define-register %a "%al" "%ax" "%eax" "%rax")

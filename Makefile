@@ -2,27 +2,42 @@ ARCH=$(shell uname -m | sed -e s/i.86/i386/)
 TARGET=$(ARCH)
 
 STACK_REGIME=no-fp
+CODEGEN=old
+
+CODEGEN_SOURCES=compiler/codegen-generic.pco
+MACH_SOURCES=compiler/mach.pco
+STACK_SOURCES=compiler/stack-traditional.pco
+
+ifeq ($(CODEGEN),old)
+CODEGEN_SOURCES+=compiler/codegen-old.pco
+else ifeq ($(CODEGEN),simple)
+CODEGEN_SOURCES+=compiler/codegen-simple.pco
+else
+$(error unknown codegen strategy $(CODEGEN))
+endif
+
+ifeq ($(TARGET),i386)
+MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
+CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-i386.pco
+else ifeq ($(TARGET),x86_64)
+MACH_SOURCES+=compiler/mach-64bit.pco compiler/mach-x86_64.pco
+CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-x86_64.pco
+else
+$(error unknown target $(TARGET))
+endif
+
 ifeq ($(STACK_REGIME),no-fp)
-STACK_SOURCES=compiler/stack-traditional.pco compiler/stack-no-fp.pco
+STACK_SOURCES+=compiler/stack-no-fp.pco
 else ifeq ($(STACK_REGIME),fp)
-STACK_SOURCES=compiler/stack-traditional.pco compiler/stack-fp.pco
+STACK_SOURCES+=compiler/stack-fp.pco
 else
 $(error unknown stack regime $(STACK_REGIME))
 endif
 
-CODEGEN=old
-ifeq ($(CODEGEN),old)
-CODEGEN_SOURCES=compiler/codegen-old.pco
-else ifeq ($(CODEGEN),simple)
-CODEGEN_SOURCES=compiler/codegen-simple.pco
-endif
-
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
-    compiler/mach.pco compiler/mach-$(TARGET).pco compiler/walker.pco \
-    compiler/compiler.pco compiler/codegen-generic.pco \
-    $(CODEGEN_SOURCES) $(STACK_SOURCES) compiler/codegen-x86.pco \
-    compiler/codegen-$(TARGET).pco compiler/driver.pco
+    compiler/walker.pco $(MACH_SOURCES) compiler/compiler.pco \
+    $(CODEGEN_SOURCES) $(STACK_SOURCES) compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
     bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)

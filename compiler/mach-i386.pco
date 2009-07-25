@@ -1,52 +1,5 @@
 ;;; i386 machine definition
 
-;;; This is mildly broken: correct programs will work, but programs
-;;; with type errors may produce surprising behaviour.  The issue is
-;;; that we rely on alignment checks for type checks, so we don't
-;;; really support tag-bits > bytes-per-value.  The common codegen
-;;; code needs enhancing to emit type checks in the appropriate
-;;; places.
-
-(defconstant value-scale 2)
-(defconstant value-size (ash 1 value-scale))
-
-;;; Value representation
-
-;;; number-tag must be all zeros
-(defconstant number-tag #b000)
-(defconstant number-tag-bits 3)
-
-;;; specials are (), true, false, etc.
-(defconstant special-tag #b100)
-(defconstant special-tag-bits 3)
-
-(defconstant box-tag #b01)
-(defconstant box-tag-bits 2)
-
-(defconstant pair-tag #b10)
-(defconstant pair-tag-bits 2)
-
-(defconstant closure-tag #b0011)
-(defconstant closure-tag-bits 4)
-
-(defconstant vector-tag #b0111)
-(defconstant vector-tag-bits 4)
-
-(defconstant string-tag #b1011)
-(defconstant string-tag-bits 4)
-
-(defconstant symbol-tag #b1111)
-(defconstant symbol-tag-bits 4)
-
-(defconstant false-representation #b100)
-
-(defconstant simple-representations 
-  ;; The quotes here are significant for CL compatibility
-  (list (cons 'false false-representation)
-        (cons 'true #b1100)
-        (cons 'unspecified #b10100)
-        (cons () #b11100)))
-
 ;;; Registers
 
 (define-register %a "%al" "%ax" "%eax")
