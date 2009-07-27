@@ -28,6 +28,9 @@
   (quasiquote (codegen-into-reg (unquote form) (unquote cg)
                                 (unquote out-frame-base) (unquote reg))))
 
+(defmarco (define-trashy-codegen template . body)
+  (quasiquote (define-codegen (unquote template) (unquote-splicing body))))
+
 ;;; Begin
 
 (define (codegen-begin forms cg out-frame-base)
@@ -145,7 +148,7 @@
                    (emit-frame-push cg (codegen (car refs) cg false))
                    (fill-slots (cdr refs) (1+ index))
                    (emit-frame-pop cg (second general-registers))
-                   (emit-mov cg (second general-registers)
-                             (closure-slot main-reg index))))))
+                   (emit-store-into-closure cg main-reg index
+                                            (second general-registers))))))
     (fill-slots refs 0)
     main-reg))

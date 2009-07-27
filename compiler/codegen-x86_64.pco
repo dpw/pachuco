@@ -1,5 +1,21 @@
 ;;; x86_64-specific code generation
 
+;;; Bitness-dependent assembler bits
+
+(define (emit-literal cg lit)
+  (emit cg ".quad ~A" lit))
+
+(define (emit-movzx cg src dest src-scale . dest-scale)
+  (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
+  (if (= dest-scale 3)
+      (if (= src-scale 3)
+          (emit cg "movq ~A, ~A" (value-sized src) (value-sized dest))
+          (emit-movzx-32 cg src dest src-scale 2))
+      (emit-movzx-32 cg src dest src-scale dest-scale)))
+
+(define (emit-extend-sign-bit cg oper)
+  (emit-sar cg 63 oper))
+
 ;;; rip-relative addressing is shorter on x86-64, but is not the
 ;;; default in the assembly syntax:
 
@@ -10,17 +26,9 @@
 
 ;;; C calls
 
-(define-codegen (c-call attrs . args)
-  (labels ((codegen-args (args regs)
-             (when (null? regs) (error "too many arguments for registers"))
-             (if (null? (cdr args))
-                 (trashy-codegen-into-reg (car args) cg false (car regs))
-                 (begin
-                   (emit-frame-push cg (trashy-codegen (car args) cg false))
-                   (codegen-args (cdr args) (cdr regs))
-                   (emit-frame-pop cg (car regs))))))
-    (unless (null? args) (codegen-args args c-call-arg-regs)))
-
+(define-trashy-codegen (c-call attrs . args)
+  (trashy-codegen-into-regs cg args c-call-arg-regs)
+  
   (emit cg "cld")
   (emit-set-ac-flag cg false)
 

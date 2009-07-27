@@ -10,16 +10,7 @@
 (define-register %di "%dil" "%di" "%edi" "%rdi")
 (define-register %sp "%spl" "%sp" "%esp" "%rsp")
 (define-register %bp "%bpl" "%bp" "%ebp" "%rbp")
-
-(defmarco (define-extended-registers)
-  (cons 'definitions
-        (mapfor (n '(8 9 10 11 12 13 14 15))
-          (list* 'define-register
-                 (subject-language-intern (format~ false "%r~D" n))
-                 (mapfor (tmpl '("%r~Dl" "%r~Dw" "%r~Dd" "%r~D"))
-                   (format~ false tmpl n))))))
-
-(define-extended-registers)
+(define-numbered-registers "%r~D" 8 16 "%r~Dl" "%r~Dw" "%r~Dd" "%r~D")
 
 (add-general-registers (list %a %b %c %d %si %di))
 (define %closure %r15)
@@ -28,21 +19,5 @@
 (define c-callee-saved-regs (list %b %bp %r12 %r13 %r14 %r15))
 (define c-call-arg-regs (list %di %si %d %c %r8 %r9))
 
-;;; Bitness-dependent assembler bits
-
-(define (emit-literal cg lit)
-  (emit cg ".quad ~A" lit))
-
 (define (insn-size-suffix scale)
   (elt '("b" "w" "l" "q") scale))
-
-(define (emit-movzx cg src dest src-scale . dest-scale)
-  (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
-  (if (= dest-scale 3)
-      (if (= src-scale 3)
-          (emit cg "movq ~A, ~A" (value-sized src) (value-sized dest))
-          (emit-movzx-32 cg src dest src-scale 2))
-      (emit-movzx-32 cg src dest src-scale dest-scale)))
-
-(define (emit-extend-sign-bit cg oper)
-  (emit-sar cg 63 oper))

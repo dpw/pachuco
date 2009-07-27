@@ -802,11 +802,6 @@
     (list 'quote (if (string? val) (escape-string-literal val) val))))
 
 
-(define (emit-comment-form cg form)
-  (unless (eq? 'begin (car form))
-    (emit-comment cg "~S" (comment-form form))))
-
-
 ;;; Arch-independent code generation
 
 ;;; Top-level sections:  Lambdas and quoted forms

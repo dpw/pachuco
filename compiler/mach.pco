@@ -4,14 +4,29 @@
 
 ;;; Registers
 
-(defmarco (define-register name . variants)
+(define (register-definition name variants)
   (quasiquote 
     (define (unquote name)
       (make-vector-from-list
         (quote ((unquote name) (unquote false) (unquote-splicing variants)))))))
 
-(define (register-operand reg scale)
-  (vector-ref reg (+ 2 scale)))
+(defmarco (define-register name . variants)
+  (register-definition name variants))
+
+(defmarco (define-numbered-registers template start stop . variant-templates)
+  (labels ((make-defs (n)
+             (if (< n stop)
+                 (let* ((name
+                          (subject-language-intern (format~ false template n)))
+                        (variants
+                          (mapfor (vt variant-templates) (format~ false vt n))))
+                   (cons (register-definition name variants)
+                         (make-defs (1+ n))))
+                 ())))
+    (cons 'definitions (make-defs start))))
+
+(define (register-variant reg variant)
+  (vector-ref reg (+ 2 variant)))
 
 (define (register-name reg)
   (vector-ref reg 0))
@@ -39,10 +54,15 @@
 ;;; Assembler bits
 
 (defmarco (emit-without-flushing template . args)
-  (quasiquote
-    (let* ((*print-pretty* false))
-      (format~ true (unquote (string-concat template "~%"))
-               (unquote-splicing args)))))
+  (if (string? template)
+      (quasiquote
+        (let* ((*print-pretty* false))
+          (format~ true (unquote (string-concat template "~%"))
+                   (unquote-splicing args))))
+      (quasiquote
+        (let* ((*print-pretty* false))
+          (format~ true (unquote template) (unquote-splicing args))
+          (format~ true "~%")))))
 
 (defmarco (emit cg template . args)
   (quasiquote (begin
@@ -54,14 +74,6 @@
     (let* ((*print-pretty* false))
       (format~ true (unquote (string-concat "# " template "~%"))
                (unquote-splicing args)))))
-
-(define (emit-movzx-32 cg src dest src-scale dest-scale)
-  (emit cg "mov~A ~A,~A"
-        (elt (elt '(("b")
-                    ("zbw" "w")
-                    ("zbl" "zwl" "l")) dest-scale) src-scale)
-        (insn-operand src src-scale)
-        (insn-operand dest dest-scale)))
 
 (defmarco (with-saved-frame-base cg . body)
   (let* ((orig-frame-base (gensym)))

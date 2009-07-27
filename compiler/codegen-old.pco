@@ -61,6 +61,15 @@
   (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
                   reg))
 
+(defmarco (define-trashy-codegen template . body)
+  (quasiquote (definitions 
+    (define-reg-use (unquote template)
+      (dolist (arg (cddr form)) (reg-use arg))
+      general-register-count)
+
+    (define-codegen (unquote template)
+      (unquote-splicing body)))))
+
 ;;; Begin
 
 (define (reg-use-begin forms max-ru reg-use-last)
@@ -261,29 +270,6 @@
   (emit-mov-maybe cg operand reg)
   reg)
 
-(define (reg-mem-operand-constraint cg operand reg)
-  (if (or (immediate? operand)
-          (and (register? operand) (not (eq? operand reg))))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
-
-(define (reg-mem-imm-operand-constraint cg operand reg)
-  (if (and (register? operand) (not (eq? operand reg)))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
-
-(define (reg-imm-operand-constraint cg operand reg)
-  (if (or (mem? operand)
-          (and (register? operand) (not (eq? operand reg))))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
-
 (define (fixed-reg-operand-constraint cg operand reg)
   (emit-mov-maybe cg operand reg)
   reg)
@@ -444,11 +430,11 @@
     (codegen-into-reg closure cg false regs closure-reg)
     (dolist (ref refs)
       (codegen-into-reg ref cg false (cdr regs) ref-reg)
-      (emit-mov cg ref-reg (closure-slot closure-reg index))
+      (emit-store-into-closure cg closure-reg index ref-reg)
       (set! index (1+ index)))
     closure-reg))
 
-(define-reg-use ((call c-call) attrs . args)
+(define-reg-use (call attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)
 

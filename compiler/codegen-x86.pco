@@ -1,62 +1,11 @@
-;;; Code generation
+;;; x86 bitness-independent code generation
 
-(define-struct codegen ()
-  (frame-base false)
-  (have-closure true)
-  (deferred-jump false)
-  (here-labels ())
-  (redirect-labels ())
-  (out-of-line ()))
+;;; Assembly bits
 
-(define (codegen-push-out-of-line cg f)
-  ;; When we push an out-of-line function, we need to save the
-  ;; relevant coedegen state.  Currently this amounts to the
-  ;; frame-base
-  (codegen-set-out-of-line! cg (cons (cons f (codegen-frame-base cg))
-                                     (codegen-out-of-line cg))))
+(defconstant value-insn-size-suffix (insn-size-suffix value-scale))
 
-(define (codegen-do-out-of-line cg)
-  (let* ((ool (codegen-out-of-line cg)))
-    (unless (null? ool)
-      (codegen-set-frame-base! cg (cdar ool))
-      (funcall (caar ool))
-      (codegen-set-out-of-line! cg (cdr ool))
-      (codegen-do-out-of-line cg))))
-
-
-(define label-counter 0)
-
-(define (gen-label)
-  (format~ false ".L~D" (set! label-counter (1+ label-counter))))
-
-(define (label-name-ok? name i)
-  (or (= i (string-length name))
-      (let* ((ch (string-ref name i)))
-        (and (or (character-alphanumeric? ch) (eq? ch #\-))
-             (label-name-ok? name (1+ i))))))
-
-(define (make-label-for sym prefix)
-  ;; map a lisp symbol to an assembly label, returning a gen-labelled
-  ;; label if necessary
-  (let* ((name (subject-language-symbol-name sym)))
-    (if (label-name-ok? name 0)
-        (string-concat prefix (string-replace name "-" "_"))
-        (gen-label))))
-
-(define (emit-data cg label scale)
-  (emit cg ".section .rodata")
-  (emit cg ".align ~D" (ash 1 scale))
-  (emit-smart-label cg label))
-
-(define (escape-string-literal str)
-  (string-replace (string-replace (string-replace str "\\" "\\\\")
-                                  "\"" "\\\"") "
-" "\\n"))
-
-;;; Generic representation bits
-
-(define (fixnum-representation n) (ash n number-tag-bits))
-(define (low-bits-mask bits) (1- (ash 1 bits)))
+(define (emit-align cg scale)
+  (emit cg ".align ~D" (ash 1 scale)))
 
 ;;; Registers and address modes
 ;;;
@@ -71,6 +20,9 @@
 (define (immediate? x) (or (number? x) (string? x)))
 (define (register? x) (vector? x))
 (define (mem? x) (pair? x))
+
+(defmarco (register-operand reg scale)
+  (list 'register-variant reg scale))
 
 (define (mem1 x)
   (cond ((register? x) (list 0 x))
@@ -136,6 +88,31 @@
         ((mem? o) (member? r (cdr o)))
         (true false)))
 
+;;; Operator argument constraints
+
+(define (reg-mem-operand-constraint cg operand reg)
+  (if (or (immediate? operand)
+          (and (register? operand) (not (eq? operand reg))))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
+(define (reg-mem-imm-operand-constraint cg operand reg)
+  (if (and (register? operand) (not (eq? operand reg)))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
+(define (reg-imm-operand-constraint cg operand reg)
+  (if (or (mem? operand)
+          (and (register? operand) (not (eq? operand reg))))
+      (begin
+        (emit-mov cg operand reg)
+        reg)
+      operand))
+
 ;;; Condition codes
 
 (define (negate-cc cc)
@@ -144,8 +121,6 @@
       (string-concat "n" cc)))
 
 ;;; Instructions
-
-(defconstant value-insn-size-suffix (insn-size-suffix value-scale))
 
 (defmarco (define-insn-2 name insn)
   (quasiquote
@@ -181,6 +156,14 @@
                      (min 2 (if (null? scale) value-scale (car scale)))))
         (true
          (emit-insn-2 cg "mov" src dest scale))))
+
+(define (emit-movzx-32 cg src dest src-scale dest-scale)
+  (emit cg "mov~A ~A,~A"
+        (elt (elt '(("b")
+                    ("zbw" "w")
+                    ("zbl" "zwl" "l")) dest-scale) src-scale)
+        (insn-operand src src-scale)
+        (insn-operand dest dest-scale)))
 
 (define (emit-push cg reg)
   (emit cg "push~A ~A" value-insn-size-suffix (value-sized reg)))
@@ -235,152 +218,10 @@
                (begin (emit-shl cg shift oper) oper)
                (format~ true "~A<<~A" oper shift))))))
 
-;;; "Smart" branching, jumping, and labels.
-;;;
-;;; These do some simple flow control optimizations.  For example,
-;;;
-;;;     (if (and A B) C D)
-;;;
-;;; which after macro-expansion is
-;;;
-;;;     (if (if A B false) C D)
-;;;
-;;; might naively yield
-;;;
-;;;     <code to yield A as boolean in CC1>
-;;;     jnCC1 L1b ; branch to code for A false
-;;;     jmp L1a   ; jump to code for A true
-;;;
-;;;     L1a:      ; A true
-;;;     <code to yield B as boolean in CC2>
-;;;     jnCC2 L2b ; branch to code for D
-;;;     jmp L2a   ; branch to code for C
-;;;     jmp L1c   ; unreachable branch to code after (if A B false)
-;;;
-;;;     L1b:      ; A false
-;;;     jmp L2b   ; branch to code for D
-;;;
-;;;     L1c:      ; code following (if A B false) would go here... 
-;;;     
-;;;     L2a:
-;;;     <code for C>
-;;;     jmp L2c
-;;;
-;;;     L2b:
-;;;     <code for D>
-;;;
-;;;     L2c:
-;;;
-;;; instead yields
-;;;
-;;;     <code to yield A as boolean in CC1>
-;;;     jnCC1 L1b ; branch to code for A false
-;;;
-;;;     L1a:      ; A true
-;;;     <code to yield B as boolean in CC2>
-;;;     jnCC2 L2b ; branch to code for D
-;;;     
-;;;     L2a:
-;;;     <code for C>
-;;;     jmp L2c
-;;;
-;;;     L1b:      ; A false
-;;;     L2b:
-;;;     <code for D>
-;;;
-;;;     L2c:
-;;;
-;;; The basic order of code is unchanged, but redundant jumps have
-;;; been eliminated, and labels have been moved accordingly.  The key
-;;; thing to notice here is that labels have all been moved later in
-;;; the instruction stream.  This works because the compiler always
-;;; generates jumps/branches forwards, never backwards.
-;;;
-;;; Thus we simply have to maintain a small amonut of state as we
-;;; output instructions to tell us what special treatment is required
-;;; for jumps, branches and labels.  This consists of three slots in
-;;; the codegen object:
-;;;
-;;; - deferred-jump: A function representing the pending jump or
-;;; branch, if any.  This function is called to emit the jump in
-;;; flush-labels-and-jumps.  It's false when not optimising flow.
-;;;
-;;; - here-labels: The list of labels attached to the current point in
-;;; the instruction stream.
-;;;
-;;; - redirect-labels: an alist from labels to the labels they
-;;; redirect to.  We never change the label of a jump/branch; instead,
-;;; when we emit a label, we also emit all the labels that redirect to
-;;; it.
-
-(define (emit-smart-jump cg label)
-  (if (codegen-deferred-jump cg)
-      (begin
-        ;; there is no direct way to reach this jump, so all the here
-        ;; labels now redirect to the jumped-to label
-        (codegen-set-redirect-labels! cg
-          (nconc (nmapfor (l (codegen-here-labels cg)) (cons l label))
-                 (codegen-redirect-labels cg)))
-        (codegen-set-here-labels! cg ()))
-      (codegen-set-deferred-jump! cg
-        (lambda ()
-          ;; emit a jump, unless we are jumping to a here label
-          (unless (member? label (codegen-here-labels cg))
-            (emit-jmp cg label))))))
-
-(define (emit-smart-branch cg cc out-frame-base tlabel flabel)
-  (emit-reset-frame-base cg out-frame-base)
-  (flush-labels-and-jumps cg)
-  (codegen-set-deferred-jump! cg
-    (lambda ()
-      (let* ((here-labels (codegen-here-labels cg)))
-        (if (member? tlabel here-labels)
-            (unless (member? flabel here-labels)
-              (emit-jcc cg (negate-cc cc) flabel))
-            (begin
-             (emit-jcc cg cc tlabel)
-             (unless (member? flabel here-labels)
-               (emit-jmp cg flabel))))))))
- 
-(define (emit-raw-label cg label)
-  (emit-without-flushing "~A:" label))
-
-(define (emit-smart-label cg label)
-  (let* ((here-labels (cons label (nconc (codegen-here-labels cg)
-                                         (take-merged-labels cg label)))))
-    (if (codegen-deferred-jump cg)
-        (codegen-set-here-labels! cg here-labels)
-        (dolist (ml here-labels) (emit-raw-label cg ml)))))
-
-(define (take-merged-labels cg label)
-  ;; extract the labels which lead to label
-  (let* ((res ()))
-    (codegen-set-redirect-labels! cg
-      (nfilterfor (redirect (codegen-redirect-labels cg))
-        (if (eq? label (cdr redirect))
-            (begin
-              (push (car redirect) res)
-              false)
-            true)))
-    res))
-
-(define (flush-labels-and-jumps cg)
-  (let* ((jump-func (codegen-deferred-jump cg)))
-    (when jump-func
-      (funcall jump-func)
-      (let* ((here-labels (codegen-here-labels cg)))
-        (if (null? here-labels)
-            (emit-comment cg "unreachable")
-            (dolist (l here-labels)
-              (emit-without-flushing "~A:" l))))
-
-      (codegen-set-deferred-jump! cg false)
-      (codegen-set-here-labels! cg ()))))
-
-(define (emit-jcc cg cc label)
+(define (emit-branch cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
 
-(define (emit-jmp cg label)
+(define (emit-jump cg label)
   (emit-without-flushing "jmp ~A" label))
 
 (define (emit-mov-maybe cg src dst)
@@ -399,6 +240,14 @@
   (emit-shl cg special-tag-bits reg 0)
   (emit-or cg special-tag reg 0))
 
+(defmarco (define-tag-check name tag tag-bits)
+  (quasiquote
+    (define-cc-operator ((unquote name) val) ()
+      ;; just check the low-order byte
+      (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
+      (emit-cmp cg (unquote tag) val 0)
+      "e")))
+
 ;;; Heap allocation
 
 (define (register-bitset regs)
@@ -415,7 +264,7 @@
     (set! scale (if (null? scale) value-scale (car scale)))
     (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
     (emit-cmp cg (mem "heap_threshold") allocreg)
-    (emit-jcc cg "be" exhausted-label)
+    (emit-branch cg "be" exhausted-label)
     (emit-mov cg allocreg (mem "heap_alloc"))
 
     (codegen-push-out-of-line cg
@@ -424,7 +273,7 @@
         (emit-mov cg (register-bitset (cons allocreg spare-regs)) %closure)
         (emit cg "call heap_exhausted")
         (emit-restore-%closure cg)
-        (emit-jmp cg again-label)))))
+        (emit-jump cg again-label)))))
 
 (define gc-label (make-label-for 'gc function-label-prefix))
 
@@ -433,7 +282,7 @@
              (dolist (reg regs)
                (let* ((l (gen-label)))
                  (emit-test cg (register-bit reg) %closure)
-                 (emit-jcc cg "nz" l)
+                 (emit-branch cg "nz" l)
                  (funcall op cg reg)
                  (emit-raw-label cg l)))))
     (emit cg ".text")
@@ -466,47 +315,11 @@
 
 ;; the gc uses the raw-alloc operation
 
-(define-simplify (raw-alloc tag-bits-ccsym size)
-  (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
-
 (define-operator (raw-alloc (size reg-imm)) ((temp-regs alloc))
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
               (emit-scale-number cg value-scale size) alloc spare-regs)
   (emit-mov cg alloc result)
   result)
-
-;;; Variable access
-
-(define (closure-slot closure index)
-  (tagged-mem closure-tag closure (1+ index)))
-
-(define (varrec-operand varrec cg)
-  (let* ((mode (varrec-attr varrec 'mode)))
-    (cond ((eq? mode 'self) %closure)
-          ((eq? mode 'top-level) (mem (varrec-attr varrec 'label)))
-          (true
-           (let* ((index (varrec-attr varrec 'index)))
-             (cond ((eq? mode 'closure) (closure-slot %closure index))
-                   ((eq? mode 'param) (param-slot cg index))
-                   ((eq? mode 'local) (local-slot cg index))
-                   (true (error "strange variable mode ~S" mode))))))))
-
-(define (codegen-top-level-variable cg name label)
-  (emit-comment cg "top-level ~S" name)
-  (emit cg ".section .bss")
-  (emit cg "~A:" label)
-  (emit-literal cg 0))
-
-(define (codegen-program-sections program cg)
-  (define (emit-bss-label l)
-    (emit cg ".section .bss")
-    (emit cg ".align ~D" value-size)
-    (emit cg ".globl ~A" l)
-    (emit cg "~A:" l))
-
-  (emit-bss-label "top_level_start")
-  (codegen-sections program cg)
-  (emit-bss-label "top_level_end"))
 
 ;;; Functions and closures
 
@@ -518,22 +331,17 @@
   (emit-lea cg (mem1+ alloc closure-tag) result)
   result)
 
+(define (closure-slot closure index)
+  (tagged-mem closure-tag closure (1+ index)))
+
+(define (emit-store-into-closure cg closure index val)
+  (emit-mov cg val (closure-slot closure index)))
+
 (define (codegen-function-intro label closure-size cg)
   (emit cg ".text")
-  (emit cg ".align ~D" (ash 1 value-scale))
+  (emit-align  cg value-scale)
   (emit-literal cg (fixnum-representation closure-size))
   (emit-smart-label cg label))
-
-(define (func-lambda-label func)
-  (and (eq? 'ref (first func))
-       (let* ((varrec (attr-ref (second func) 'varrec)))
-         (varrec-origin-attr varrec 'lambda-label))))
-
-(define (func-no-closure func)
-  (and (eq? 'ref (first func))
-       (let* ((varrec (attr-ref (second func) 'varrec)))
-         (and (varrec-origin-attr varrec 'lambda-label)
-              (varrec-origin-attr varrec 'no-closure)))))
 
 (define (emit-call-or-jump cg insn func)
   (let* ((label (func-lambda-label func))
@@ -555,79 +363,27 @@
   (when (codegen-have-closure cg)
     (emit-mov cg (closure-address-slot cg) %closure)))
 
-(define-simplify (c-call c-function-name . args)
-  (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
-  (simplify-recurse form))
-
-;;; Literals
-
-(define (codegen-quoted quoted cg)
-  (cond ((pair? quoted) (codegen-quoted-pair quoted cg))
-        ((number? quoted) (fixnum-representation quoted))
-        ((character? quoted) (fixnum-representation (character-code quoted)))
-        ((string? quoted) (codegen-quoted-string quoted cg))
-        (true (let* ((c (assoc quoted simple-representations)))
-             (cond (c (cdr c))
-                   ((symbol? quoted) (codegen-quoted-symbol quoted cg))
-                   (true (error "unrecognised quoted form ~S" quoted)))))))
-
-(define (codegen-quoted-pair quoted cg)
-  (let* ((label (gen-label))
-         (a (codegen-quoted (car quoted) cg))
-         (d (codegen-quoted (cdr quoted) cg)))
-    (emit-data cg label pair-tag-bits)
-    (emit-literal cg a)
-    (emit-literal cg d)
-    (format~ false "~A+~D" label pair-tag)))
-
-(define (codegen-quoted-string str cg)
-  (let* ((label (gen-label)))
-    (emit-data cg label string-tag-bits)
-    (emit-literal cg (fixnum-representation (string-length str)))
-    (emit cg ".ascii \"~A\"" (escape-string-literal str))
-    (format~ false "~A+~D" label string-tag)))
-
-(define emitted-symbols ())
-(define emitted-symbol-counter 0)
-
-(define (codegen-quoted-symbol sym cg)
-  (let* ((emitted (assoc sym emitted-symbols)))
-    (if emitted (cdr emitted)
-        (let* ((label (gen-label))
-               (name (codegen-quoted-string (subject-language-symbol-name sym)
-                                            cg)))
-          (emit-data cg label symbol-tag-bits)
-          (emit-literal cg name)
-          (emit-literal cg (fixnum-representation
-                    (set! emitted-symbol-counter (1+ emitted-symbol-counter))))
-          (let* ((lit (format~ false "~A+~D" label symbol-tag)))
-            (set! emitted-symbols (acons sym lit emitted-symbols))
-            lit)))))
-
 ;;; Quote
 
 (define-operator (quote) () (attr-ref attrs 'value))
 
 ;;; Variables
 
-(define-codegen-sections (define varrec val)
-  ;; convert define for top-level variables to set!
-  (when (varrec-top-level? varrec) (rplaca form 'set!))
-  ;; make the varrec into a normal attribute, in order to use
-  ;; define-operator
-  (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-sections val cg))
+(define (varrec-operand varrec cg)
+  (let* ((mode (varrec-attr varrec 'mode)))
+    (cond ((eq? mode 'self) %closure)
+          ((eq? mode 'top-level) (mem (varrec-attr varrec 'label)))
+          (true
+           (let* ((index (varrec-attr varrec 'index)))
+             (cond ((eq? mode 'closure) (closure-slot %closure index))
+                   ((eq? mode 'param) (param-slot cg index))
+                   ((eq? mode 'local) (local-slot cg index))
+                   (true (error "strange variable mode ~S" mode))))))))
 
 (define-operator (define (val reg-mem-imm)) ()
   (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
   (emit-frame-push cg val)
   val)
-
-(define-codegen-sections ((set! ref) varrec . rest)
-  ;; make the varrec into a normal attribute, in order to use
-  ;; define-operator
-  (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-sections-forms rest cg))
 
 (define-operator (set! (val reg-imm)) ()
   (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg))
@@ -635,19 +391,9 @@
 
 (define-operator (ref) () (varrec-operand (attr-ref attrs 'varrec) cg))
 
-;;; Operator definitions
-
-(defmarco (define-tag-check name tag tag-bits)
-  (quasiquote
-    (define-cc-operator ((unquote name) val) ()
-      ;; just check the low-order byte
-      (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
-      (emit-cmp cg (unquote tag) val 0)
-      "e")))
+;;; Function call-related internals
 
 (define-tag-check function? closure-tag closure-tag-bits)
-
-;;; Function call-related internals
 
 (define-cc-operator (check-arg-count) ()
   (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs)
@@ -658,12 +404,6 @@
 (define-operator (raw-args-base) ()
   (emit-lea cg (param-slot cg 0) result)
   result)
-
-;;; Apply support
-
-;; raw-jump-with-arg-space and raw-apply-jump should always appear in
-;; tail positions
-(define-propogate ((raw-jump-with-arg-space raw-apply-jump) . rest))
 
 ;;; Comparisons
 
@@ -735,36 +475,14 @@
 
 (define-tag-check number? number-tag number-tag-bits)
 
-(defmarco (define-simplify-binary-op op identity unary-op)
-  (quasiquote
-    (define-simplify ((unquote op) attrs . args)
-      (simplify-recurse form)
-      (cond ((null? args)
-             (overwrite-form form (list 'quote (unquote identity))))
-            ((null? (cdr args))
-             (overwrite-form form (list* '(unquote unary-op) () args)))
-            (true
-             (overwrite-form form 
-                             (reduce~ (car args) (cdr args)
-                                      (lambda (a b)
-                                        (list '(unquote op) () a b)))))))))
-
-(define-simplify-binary-op + 0 begin) 
 (define-operator (+ a (b reg-mem-imm)) ()
   (emit-add cg b a)
   a)
 
-(define-simplify-binary-op * 1 begin) 
 (define-operator (* a (b reg-mem-imm)) ()
   (emit-sar cg number-tag-bits a)
   (emit-imul cg b a)
   a)
-
-(define-simplify (- attrs a . args)
-  (simplify-recurse form)
-  (if (null? args) (rplaca form 'negate)
-      (overwrite-form form
-                      (reduce~ a args (lambda (a b) (list '- () a b))))))
 
 (define-operator (negate a) ()
   (emit-neg cg a)
@@ -902,7 +620,7 @@
   (emit-add cg b a)
   a)
 
-;;; Misc. runtime
+;;; Misc runtime support
 
 (define-operator (fixnum->raw val) ()
   (emit-sar cg number-tag-bits val)
@@ -911,6 +629,8 @@
 (define-operator (raw->fixnum val) ()
   (emit-shl cg number-tag-bits val)
   val)
+
+(define-operator (raw-label) () (attr-ref attrs 'name))
 
 (define (emit-set-ac-flag cg enable)
   (emit-pushf cg)
@@ -923,7 +643,3 @@
         (emit-and cg reg (mem %sp) 2)))
   (emit-popf cg))
 
-(define-simplify (raw-label name)
-  (rplaca (cdr form) (list (cons 'name name))))
-
-(define-operator (raw-label) () (attr-ref attrs 'name))
