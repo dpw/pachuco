@@ -1,21 +1,22 @@
-ARCH=$(shell uname -m | sed -e s/i.86/i386/)
+ARCH=$(shell uname -m | sed -e 's/i.86/i386/;s/armv5.*/armv5/')
 TARGET=$(ARCH)
 
-STACK_REGIME=no-fp
 CODEGEN=old
 
-CODEGEN_SOURCES=compiler/codegen-generic.pco
 MACH_SOURCES=compiler/mach.pco
-STACK_SOURCES=compiler/stack-traditional.pco
 
 ifeq ($(CODEGEN),old)
-CODEGEN_SOURCES+=compiler/codegen-old.pco
+CODEGEN_SOURCES+=compiler/codegen-old.pco compiler/codegen-generic.pco
 else ifeq ($(CODEGEN),simple)
-CODEGEN_SOURCES+=compiler/codegen-simple.pco
+CODEGEN_SOURCES+=compiler/codegen-simple.pco compiler/codegen-generic.pco
 else
 $(error unknown codegen strategy $(CODEGEN))
 endif
 
+ifeq ($(TARGET),armv5)
+MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
+CODEGEN_SOURCES+=compiler/codegen-arm.pco
+else
 ifeq ($(TARGET),i386)
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
 CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-i386.pco
@@ -26,18 +27,22 @@ else
 $(error unknown target $(TARGET))
 endif
 
+STACK_REGIME=no-fp
+
 ifeq ($(STACK_REGIME),no-fp)
-STACK_SOURCES+=compiler/stack-no-fp.pco
+CODEGEN_SOURCES+=compiler/stack-traditional.pco compiler/stack-no-fp.pco
 else ifeq ($(STACK_REGIME),fp)
-STACK_SOURCES+=compiler/stack-fp.pco
+CODEGEN_SOURCES+=compiler/stack-traditional.pco compiler/stack-fp.pco
 else
 $(error unknown stack regime $(STACK_REGIME))
+endif
+
 endif
 
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
     compiler/walker.pco $(MACH_SOURCES) compiler/compiler.pco \
-    $(CODEGEN_SOURCES) $(STACK_SOURCES) compiler/driver.pco
+    $(CODEGEN_SOURCES) compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
     bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)

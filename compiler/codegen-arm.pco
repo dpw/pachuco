@@ -1,0 +1,709 @@
+;;; ARMv5 code generation
+
+;; Condition codes
+
+(defconstant cc-eq 0)
+(defconstant cc-ne 1)
+(defconstant cc-gt 2)
+(defconstant cc-le 3)
+(defconstant cc-ge 4)
+(defconstant cc-lt 5)
+
+(define cc-insn-suffixes 
+  (make-vector-from-list '("eq" "ne" "gt" "le" "ge" "lt")))
+
+(define (cc-insn-suffix cc)
+  (vector-ref cc-insn-suffixes cc))
+
+(define (negate-cc cc)
+  (logxor cc 1))
+
+;;; Assembly bits
+
+(define (register? x) (vector? x))
+
+(defmarco (register-operand reg)
+  (list 'register-variant reg 0))
+
+(define (insn-operand x)
+  (cond ((number? x) (format~ false "#~D" x))
+        ((string? x) x)
+        ((vector? x) (register-operand x))
+        (true (error "strange operand ~S" x))))
+
+(define (operand-using-reg? o r)
+  (eq? o r))
+
+(define (multi-operand regs)
+  (if (null? regs) "{}"
+      (labels ((pieces (regs)
+                 (if (null? (cdr regs))
+                     (list (register-operand (car regs)) "}")
+                     (list* (register-operand (car regs)) ", " 
+                            (pieces (cdr regs))))))
+        (string-flatten (cons "{" (pieces regs))))))
+
+(define (emit-literal cg lit)
+  (emit cg ".word ~A" lit))
+
+(define (emit-align cg scale)
+  (emit cg ".align ~D" scale))
+
+;; Ok, ARM requires us to do a .ltorg every so often to tell the
+;; assembler to flush the literal pool.  So we handle that here.
+
+(define instructions-since-pool 0)
+
+(defmarco (emit-ltorg cg)
+  (quote
+    (begin
+      (emit-without-flushing ".ltorg")
+      (set! instructions-since-pool 0))))
+
+(define (check-instructions-since-pool cg)
+  (when (> (set! instructions-since-pool (1+ instructions-since-pool)) 1000)
+    (let* ((label (gen-label)))
+      (emit-smart-jump cg label)
+      (emit-ltorg cg)
+      (emit-smart-label cg label))))
+
+(defmarco (emiti cg template . args)
+  (quasiquote
+    (begin
+      (check-instructions-since-pool (unquote cg))
+      (emit (unquote cg) (unquote template) (unquote-splicing args)))))
+
+(define (emit-push cg reg)
+  (emiti cg "str ~A, [sp, #-4]!" (register-operand reg)))
+
+(define (emit-pop cg reg)
+  (emiti cg "ldr ~A, [sp], #4" (register-operand reg)))
+
+(define (emit-mov-maybe cg src dst)
+  (unless (eq? src dst)
+    (emiti cg "mov ~A, ~A" (register-operand dst) (insn-operand src))))
+
+(define (emit-branch cg cc label)
+  (emit-without-flushing "b~A ~A" (cc-insn-suffix cc) label))
+
+(define (emit-jump cg label)
+  (emit-without-flushing "b ~A" label)
+  (emit-ltorg cg))
+
+(define (emit-prepare-convert-cc-value cg reg)
+  (emiti cg "mov ~A, #~A" (register-operand reg) false-representation))
+
+(define (emit-convert-cc-value cg cc reg)
+  (emiti cg "mov~A ~A, #~A" (cc-insn-suffix cc) (register-operand reg)
+         true-representation))
+
+(define (emit-branch-on-operand cg reg out-frame-base tlabel flabel)
+  (emiti cg "cmp ~A, #~A" (register-operand reg) false-representation)
+  (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
+
+(define (emit-function-call cg func)
+  (let* ((label (func-lambda-label func))
+         (comment (comment-form func)))
+    (if label
+        (emiti cg "bl ~A @ ~S" label comment)
+        (begin
+          (emiti cg "ldr r0, [~A, #-~D]" (register-operand %closure)
+                 closure-tag)
+          (emiti cg "mov lr, pc")
+          (emiti cg "mov pc, r0")))))
+
+(define (emit-function-jump cg func)
+  (let* ((label (func-lambda-label func))
+         (comment (comment-form func)))
+    (if label
+        (emiti cg "b ~A @ ~S" label comment)
+        (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure)
+               closure-tag))))
+
+(defmarco (define-tag-check name tag tag-bits)
+  (quasiquote
+    (define-cc-operator ((unquote name) val) ()
+      (let* ((valreg (register-operand val)))
+        (emiti cg "and ~A, ~A, #~D" valreg valreg
+               (low-bits-mask (unquote tag-bits)))
+        (emiti cg "cmp ~A, #~D" valreg (unquote tag)))
+      cc-eq)))
+
+;;; C-callable program wrapper
+
+(define (codegen-program program)
+  (let* ((cg (make-codegen))
+         (saved-regs (multi-operand (append c-callee-saved-regs (list %lr)))))
+    (codegen-program-sections program cg)
+    
+    (set! instructions-since-pool 0)
+    (emit cg ".text")
+    (emit cg ".globl lisp")
+    (emit cg "lisp:")
+    (emiti cg "stmfd sp!, ~A" saved-regs)
+
+    (codegen-set-frame-base! cg 0)
+    (codegen-set-have-closure! cg false)
+    (trashy-codegen-discarding program cg false)
+
+    (emiti cg "ldmfd sp!, ~A" saved-regs)
+    (emiti cg "mov pc, lr")
+    
+    (codegen-do-out-of-line cg)
+    (codegen-heap-exhausted cg)))
+
+(define (codegen-function label closure-size body cg) 
+  (set! instructions-since-pool 0)
+  (emit cg ".text")
+  (emit-align cg value-scale)
+  (emit-literal cg (fixnum-representation closure-size))
+  (emit-smart-label cg label)
+  (emit-push cg %lr)
+  (when (codegen-have-closure cg) (emit-push cg %closure))
+  (trashy-codegen-discarding body cg (if (codegen-have-closure cg) -1 0))
+  (codegen-do-out-of-line cg))
+
+;;; Stack layout:
+;;;
+;;; param N
+;;; ...
+;;; param 1
+;;; param 0
+;;; Return address
+;;; %closure  <--- %sp + frame-base
+;;; Local var 0
+;;; ...
+;;; Local var N
+;;; in-progress param N
+;;; in-progress param N-1
+;;; ...
+;;;
+;;; Functions are called with the closure in %closure, arg-count in
+;;; %nargs.  They return with the result in %funcres.
+
+(define (stack-param-offset cg index)
+  (* value-size
+     (+ index (codegen-frame-base cg) (if (codegen-have-closure cg) 2 1))))
+
+(define (stack-return-offset cg)
+  (stack-param-offset cg -1))
+
+(define (stack-closure-offset cg)
+  (stack-param-offset cg -2))
+
+(define (stack-local-offset cg index)
+  (* value-size (- (codegen-frame-base cg) 1 index)))
+
+(define (closure-slot-offset index)
+  (- (* value-size (1+ index)) closure-tag))
+
+(define (emit-reset-frame-base cg out-frame-base)
+  (when out-frame-base
+    (let* ((in-frame-base (codegen-frame-base cg)))
+      (unless (= in-frame-base out-frame-base)
+        (emiti cg "add sp, sp, #~D"
+              (* value-size (- in-frame-base out-frame-base)))
+        (codegen-set-frame-base! cg out-frame-base)))))
+
+(define (emit-frame-push cg reg)
+  (emit-push cg reg)
+  (codegen-set-frame-base! cg (1+ (codegen-frame-base cg))))
+
+(define (emit-frame-pop cg reg)
+  (emit-pop cg reg)
+  (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
+
+;;; Function and closure bits
+
+(define-tag-check function? closure-tag closure-tag-bits)
+
+(define-operator (alloc-closure) ((temp-regs alloc temp))
+  (emit-alloc cg closure-tag-bits
+              (* value-size (1+ (length (attr-ref attrs 'closure))))
+              alloc temp spare-regs)
+  (emiti cg "ldr ~A, =~A" (register-operand temp) (attr-ref attrs 'label))
+  (emiti cg "str ~A, [~A]" (register-operand temp) (register-operand alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
+        closure-tag)
+  result)
+
+(define (emit-store-into-closure cg closure index val)
+  (emiti cg "str ~A, [~A, #~D]" (register-operand val) 
+        (register-operand closure) (closure-slot-offset index)))
+
+(define-cc-operator (check-arg-count) ()
+  (emiti cg "cmp ~A, #~A" (register-operand %nargs)
+        (fixnum-representation (attr-ref attrs 'nparams)))
+  cc-eq)
+
+(define-operator (arg-count) () %nargs)
+
+(define-operator (raw-args-base) ()
+  (emiti cg "add ~A, sp, #~D" (register-operand result)
+        (stack-param-offset cg 0))
+  result)
+
+(define-codegen (call attrs func . args)
+  (with-saved-frame-base cg
+    (codegen-call-args cg func args)
+    (emiti cg "mov ~A, #~A" (register-operand %nargs) 
+          (fixnum-representation (length args)))
+    (emit-function-call cg func))
+  (emit-restore-%closure cg)
+  %funcres)
+
+(define-operator (return (retval fixed-reg %funcres)) (tail-form)
+  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+  (emiti cg "add sp, sp, #~D" (stack-param-offset cg (attr-ref attrs 'nparams)))
+  (emiti cg "mov pc, lr"))
+
+(define-operator (varargs-return arg-count (retval fixed-reg %funcres))
+                 (tail-form)
+  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+  (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
+  (emiti cg "add sp, sp, ~A~A" (register-operand arg-count)
+        (scale-number-expr value-scale))
+  (emiti cg "mov pc, lr"))
+
+(define (codegen-copy-stack cg dest-offset count regs)
+  (cond ((= count 0)
+         (emiti cg "add sp, sp, ~A" dest-offset))
+        ((< count (length regs))
+         (let* ((regs-operand (multi-operand (sublist regs 0 count))))
+           (emiti cg "ldmia sp, ~A" regs-operand)
+           (emiti cg "add sp, sp, ~A" dest-offset)
+           (emiti cg "stmia sp, ~A" regs-operand)))
+        (true
+         (error "cowardly refusing big emit-copy-stack"))))
+
+(define (codegen-tail-call cg func args out-arg-count out-param-offset regs)
+  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+  (codegen-copy-stack cg out-param-offset out-arg-count regs)
+  (emiti cg "mov ~A, #~A" (register-operand %nargs) 
+        (fixnum-representation out-arg-count))
+  (emit-function-jump cg func))
+
+(define-codegen-discarding (tail-call attrs func . args)
+  (codegen-call-args cg func args)
+  (let* ((in-arg-count (attr-ref attrs 'nparams))
+         (out-arg-count (length args)))
+    (codegen-tail-call cg func args out-arg-count
+                       (insn-operand (stack-param-offset cg (- in-arg-count
+                                                               out-arg-count)))
+                       general-registers)))
+
+(define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
+  (codegen-call-args cg func args)
+  (let* ((out-arg-count (length args))
+         (out-param-offset-reg (first general-registers))
+         (out-param-offset (register-operand out-param-offset-reg)))
+    (trashy-codegen-into-reg arg-count cg false out-param-offset-reg)
+    (emiti cg "mov ~A, ~A~A" out-param-offset out-param-offset 
+          (scale-number-expr value-scale))
+    (emiti cg "add ~A, ~A, #~D" out-param-offset out-param-offset 
+          (stack-param-offset cg (- out-arg-count)))
+    (codegen-tail-call cg func args out-arg-count out-param-offset 
+                       (cdr general-registers))))
+
+(define (emit-restore-%closure cg)
+  (when (codegen-have-closure cg)
+    (emiti cg "ldr ~A, [sp, #~D]" (register-operand %closure)
+          (stack-closure-offset cg))))
+
+(define-operator (quote) ()
+  (let* ((val (attr-ref attrs 'value)))
+    (if (and (number? val) (= 0 (logand val -128)))
+        (emiti cg "mov ~A, #~D" (register-operand result) val)
+        (emiti cg "ldr ~A, =~A" (register-operand result) val)))
+  result)
+
+;;; Apply support
+
+(define-operator (raw-jump-with-arg-space before-arg-count after-arg-count
+                                          bodyfunc)
+                 (tail-form (temp-regs retaddr))
+  (emit-mov-maybe cg bodyfunc %closure)
+  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+  (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
+  (emiti cg "add sp, sp, ~A~A" (register-operand before-arg-count)
+        (scale-number-expr value-scale))
+  (emiti cg "sub sp, sp, ~A~A" (register-operand after-arg-count)
+        (scale-number-expr value-scale))
+  (emiti cg "mov ~A, #0" (register-operand %nargs))
+  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag))
+
+(define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
+  (emit-mov-maybe cg func %closure)
+  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+  (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
+  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag))
+
+;;; Variables
+
+(define (access-varrec cg varrec insn addr reg)
+  (set! reg (register-operand reg))
+  (let* ((mode (varrec-attr varrec 'mode)))
+    (cond ((eq? mode 'self)
+           ;; we only need to read such variables
+           (emiti cg "mov ~A, ~A" reg (register-operand %closure)))
+          ((eq? mode 'top-level)
+           (set! addr (register-operand addr))
+           (emiti cg "ldr ~A, =~A" addr (varrec-attr varrec 'label))
+           (emiti cg "~A ~A, [~A]" insn reg addr))
+          (true
+           (let* ((index (varrec-attr varrec 'index))
+                  (base-reg %sp)
+                  (offset
+                   (cond ((eq? mode 'closure)
+                          (set! base-reg %closure)
+                          (closure-slot-offset index))
+                         ((eq? mode 'param)
+                          (stack-param-offset cg index))
+                         ((eq? mode 'local)
+                          (stack-local-offset cg index))
+                         (true (error "strange variable mode ~S" mode)))))
+             (emiti cg "~A ~A, [~A, #~D]" insn reg
+                   (register-operand base-reg) offset))))))
+
+(define-operator (define val) ()
+  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
+  (emit-frame-push cg val)
+  val)
+
+(define-operator (set! val) ((temp-regs temp))
+  (access-varrec cg (attr-ref attrs 'varrec) "str" temp val)
+  val)
+
+(define-operator (ref) ()
+  (access-varrec cg (attr-ref attrs 'varrec) "ldr" result result)
+  result)
+
+;;; Comparisons
+
+(defmarco (define-cmp-operator name cc)
+  (quasiquote (define-cc-operator ((unquote name) a b) () 
+                (emiti cg "cmp ~A, ~A" (register-operand a) (register-operand b))
+                (unquote cc))))
+ 
+(define-cmp-operator eq? cc-eq)
+(define-cmp-operator = cc-eq)
+(define-cmp-operator /= cc-ne)
+(define-cmp-operator > cc-gt)
+(define-cmp-operator >= cc-ge)
+(define-cmp-operator < cc-lt)
+(define-cmp-operator <= cc-le)
+
+;;; Numbers
+
+(define-tag-check number? number-tag number-tag-bits)
+
+(defmarco (define-simple-number-operator name insn)
+  (quasiquote
+    (define-operator ((unquote name) a b) ()
+      (emiti cg (unquote (string-concat insn " ~A, ~A, ~A"))
+            (register-operand result) (register-operand a) (register-operand b))
+      result)))
+
+(define-simple-number-operator + "add")
+(define-simple-number-operator - "sub")
+(define-simple-number-operator logand "and")
+(define-simple-number-operator logior "orr")
+(define-simple-number-operator logxor "eor")
+
+(define-operator (negate a) ()
+  (emiti cg "rsb ~A, ~A, #0" (register-operand result) (register-operand a))
+  result)
+
+(define-operator (* a b) ((temp-regs temp))
+  ;; early versions of the ARM architecture (pre-v6) suggest that the
+  ;; operands of mul shouldn't be the same as the destination
+  (emiti cg "mov ~A, ~A, asr #~D" (register-operand temp) (register-operand a)
+        number-tag-bits)
+  (emiti cg "mul ~A, ~A, ~A" (register-operand result) (register-operand temp)
+        (register-operand b))
+  result)
+
+(define-trashy-codegen (truncate attrs a b)
+  (trashy-codegen-into-regs cg (list a b) c-call-arg-regs)
+  (emit-c-call cg "__aeabi_idiv")
+  (emiti cg "mov r0, r0, asl #~D" number-tag-bits)
+  %r0)
+
+(define-trashy-codegen (rem attrs a b)
+  (trashy-codegen-into-regs cg (list a b) c-call-arg-regs)
+  (emit-c-call cg "__aeabi_idivmod")
+  %r1)
+
+;;; Conses
+
+(define-tag-check pair? pair-tag pair-tag-bits)
+
+(define-operator (cons a d) ((temp-regs alloc temp))
+  (emit-alloc cg pair-tag-bits (* 2 value-size) alloc temp spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand a) (register-operand alloc))
+  (emiti cg "str ~A, [~A, #4]" (register-operand d) (register-operand alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
+        pair-tag)
+  result)
+
+(define-operator (car a) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand a)
+        (- pair-tag))
+  result)
+
+(define-operator (cdr a) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand a)
+        (- value-size pair-tag))
+  result)
+
+(define-operator (rplaca c a) ()
+  (emiti cg "str ~A, [~A, #~D]" (register-operand a) (register-operand c)
+        (- pair-tag))
+  c)
+
+(define-operator (rplacd c d) ()
+  (emiti cg "str ~A, [~A, #~D]" (register-operand d) (register-operand c)
+        (- value-size pair-tag))
+  c)
+
+;;; Symbols
+
+(define-tag-check symbol? symbol-tag symbol-tag-bits)
+
+(define-operator (raw-make-symbol str id) ((temp-regs alloc temp))
+  (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc temp spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand str) (register-operand alloc))
+  (emiti cg "str ~A, [~A, #4]" (register-operand id) (register-operand alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
+        symbol-tag)
+  result)
+
+(define-operator (symbol-name sym) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand sym)
+        (- symbol-tag))
+  result)
+
+(define-operator (symbol-id sym) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand sym)
+        (- value-size symbol-tag))
+  result)
+
+;;; Boxes
+
+(define-operator (raw-make-box val) ((temp-regs alloc temp))
+  (emit-alloc cg symbol-tag-bits value-size alloc temp spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand val) (register-operand alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
+        box-tag)
+  result)
+
+(define-operator (raw-box-set! box val) ()
+  (emiti cg "str ~A, [~A, #~D]" (register-operand val) (register-operand box)
+        (- box-tag))
+  val)
+
+(define-operator (raw-box-ref box) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand box)
+        (- box-tag))
+  result)
+
+;;; Strings and vectors
+
+;;; We only support word and unsigned byte loads currently
+
+(define-tag-check string? string-tag string-tag-bits)
+(define-tag-check vector? vector-tag vector-tag-bits)
+
+(define (scale-load-store-suffix scale)
+  (cond ((= scale 0) "b")
+        ((= scale 2) "")
+        (true (error "unexpected vec scale ~D" scale))))
+
+(define (scale-number-expr scale)
+  (let* ((shift (- number-tag-bits scale)))
+    (cond ((= shift 0) "")
+          ((> shift 0) (format~ false ", asr #~D" shift))
+          (true (error "unexpected vec scale ~D" scale)))))
+
+(define-operator (make-vec len) ((temp-regs alloc temp size))
+  (let* ((tag (attr-ref attrs 'tag))
+         (tag-bits (attr-ref attrs 'tag-bits))
+         (scale (attr-ref attrs 'scale)))
+    (emiti cg "mov ~A, #~D" (register-operand size) value-size)
+    (emiti cg "add ~A, ~A, ~A~A" (register-operand size) (register-operand size)
+          (register-operand len) (scale-number-expr scale))
+    (emit-alloc cg tag-bits size alloc temp spare-regs scale)
+    (emiti cg "str ~A, [~A]" (register-operand len) (register-operand alloc))
+    (emiti cg "add ~A, ~A, #~D" (register-operand result)
+          (register-operand alloc) tag))
+  result)
+
+(define (emit-vec-op cg attrs scale template suffix valreg vecreg index)
+  (let* ((offset (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag)))
+         (vec (register-operand vecreg)))
+    (unless (= offset 0)
+      (emiti cg "add ~A, ~A, #~D" vec vec offset))
+    (emiti cg template suffix (register-operand valreg) vec
+          (register-operand index) (scale-number-expr scale))))
+
+(define-operator (raw-vec-set! vec index val) ()
+  (let* ((scale (attr-ref attrs 'scale)))
+    (emit-vec-op cg attrs scale "str~A ~A, [~A, ~A~A]"
+                 (scale-load-store-suffix scale) val vec index))
+  val)
+
+(define-operator (raw-vec-ref vec index) ()
+  (let* ((scale (attr-ref attrs 'scale)))
+    (emit-vec-op cg attrs scale "ldr~A ~A, [~A, ~A~A]"
+                 (scale-load-store-suffix scale) result vec index))
+  result)
+
+(define-operator (vec-address vec index) ()
+  (emit-vec-op cg attrs (attr-ref attrs 'scale)
+               "add~A ~A, ~A, ~A~A" "" result vec index)
+  result)
+
+(define-operator (vec-length vec) ()
+  (emiti cg "ldr ~A, [~A, #~D]" (register-operand result) (register-operand vec)
+        (- (attr-ref attrs 'tag)))
+  result)
+
+(define-trashy-codegen (copy-mem attrs src-addr dest-addr len)
+  (trashy-codegen-into-regs cg (list dest-addr src-addr len) c-call-arg-regs)
+  (let* ((len (register-operand (third c-call-arg-regs))))
+    (emiti cg "mov ~A, ~A~A" len len
+           (scale-number-expr (attr-ref attrs 'scale))))
+  (emit-c-call cg "memmove")
+  unspecified-representation)
+
+;;; Misc runtime support
+
+(define-operator (fixnum->raw val) ()
+  (emiti cg "mov ~A, ~A, asr #~D" (register-operand result)
+        (register-operand val) number-tag-bits)
+  result)
+
+(define-operator (raw->fixnum val) ()
+  (emiti cg "mov ~A, ~A, asl #~D" (register-operand result)
+        (register-operand val) number-tag-bits)
+  result)
+
+(define-operator (raw-label) ()
+  (emiti cg "ldr ~A, =~A" (register-operand result) (attr-ref attrs 'name))
+  result)
+
+(define-operator (raw-ref addr) ()
+  (emiti cg "ldr~A ~A, [~A]" (scale-load-store-suffix (attr-ref attrs 'scale))
+        (register-operand result) (register-operand addr))
+  result)
+
+(define-operator (raw-set! addr val) ()
+  (emiti cg "str~A ~A, [~A]" (scale-load-store-suffix (attr-ref attrs 'scale))
+        (register-operand val) (register-operand addr))
+  val)
+
+(define (emit-c-call cg label)
+  ;; EABI says that the stack should be aligned to 8 bytes when
+  ;; calling a public interface
+  (let* ((saved-sp (register-operand (first c-callee-saved-regs))))
+    (emiti cg "mov ~A, sp" saved-sp)
+    (emiti cg "and sp, sp, #-8")
+    (emiti cg "bl ~A" label)
+    (emiti cg "mov sp, ~A" saved-sp)))
+
+(define-trashy-codegen (c-call attrs . args)
+  (trashy-codegen-into-regs cg args c-call-arg-regs)
+  (emit-c-call cg (attr-ref attrs 'c-function-name))
+  %r0)
+
+;; the gc uses the raw-alloc operation
+
+(define-operator (raw-alloc size) ((temp-regs alloc temp))
+  (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
+              (string-concat (register-operand size)
+                             (scale-number-expr value-scale))
+              alloc temp spare-regs)
+  alloc)
+
+;;; Heap allocation
+
+(define (register-bitset regs)
+  (reduce~ (register-bit (car regs)) (cdr regs)
+           (lambda (bits reg) (logior bits (register-bit reg)))))
+
+(define (emit-alloc cg tag-bits size allocreg tempreg spare-regs . scale)
+  (let* ((again-label (gen-label))
+         (exhausted-label (gen-label))
+         (alloc (register-operand allocreg))
+         (temp (register-operand tempreg)))
+    (flush-labels-and-jumps cg)
+    (emit-raw-label cg again-label)
+    (emiti cg "ldr ~A, =heap_alloc" alloc)
+    (emiti cg "ldr ~A, [~A]" alloc alloc)
+    (emiti cg "sub ~A, ~A, ~A" alloc alloc (insn-operand size))
+    (emiti cg "ldr ~A, =heap_threshold" temp)
+    (set! scale (if (null? scale) value-scale (car scale)))
+    (unless (= tag-bits scale)
+      (emiti cg "and ~A, ~A, #~D" alloc alloc (- (ash 1 tag-bits))))
+    (emiti cg "ldr ~A, [~A]" temp temp)
+    (emiti cg "cmp ~A, ~A" alloc temp)
+    (emiti cg "blo ~A" exhausted-label)
+    (emiti cg "ldr ~A, =heap_alloc" temp)
+    (emiti cg "str ~A, [~A]" alloc temp)
+    
+    (codegen-push-out-of-line cg
+      (lambda ()
+        (emit-raw-label cg exhausted-label)
+        (emiti cg "ldr ~A,=~D" (register-operand %closure)
+              (register-bitset (list* allocreg tempreg spare-regs)))
+        (emiti cg "bl heap_exhausted")
+        (emit-restore-%closure cg)
+        (emiti cg "b ~A" again-label)
+        (emit-ltorg cg)))))
+
+(define gc-label (make-label-for 'gc function-label-prefix))
+
+(define (codegen-heap-exhausted cg)
+  (labels ((for-live-registers (regs insn-template)
+             (dolist (reg regs)
+               (emiti cg "tst ~A, #~D" (register-operand %closure)
+                     (register-bit reg))
+               (emiti cg insn-template "eq" (register-operand reg)))))
+    (emit cg ".text")
+    (emit cg ".globl heap_exhausted")
+    (emit cg "heap_exhausted:")
+    
+    (emiti cg "str lr, [sp, #-4]!")
+
+    ;; Push live registers onto the stack, guided by the bitset in
+    ;; %closure.  This preserves their values, and also means that
+    ;; they get treated as part of the root set by the GC.
+    (for-live-registers general-registers "str~A ~A, [sp, #-4]!")
+    
+    (let* ((reg (register-operand %closure)))
+      ;; We need to save the live reg bitset from %closure, in order to
+      ;; restore the live registers after the GC.  But if we put it on
+      ;; the stack it it's original form, the GC will see it and try to
+      ;; interpret it as an object reference.  So we disguise it as a
+      ;; fixnum first.
+      (emiti cg "mov ~A, ~A, asl #~D" reg reg number-tag-bits)
+      (emiti cg "str ~A, [sp, #-4]!" reg)
+    
+      (emiti cg "mov ~A, #~D" (register-operand %nargs)
+            (fixnum-representation 0))
+      (emiti cg "bl ~A" gc-label)
+    
+      (emiti cg "ldr ~A, [sp], #4" reg)
+      (emiti cg "mov ~A, ~A, asr #~D" reg reg number-tag-bits))
+  
+    ;; Restore live registers
+    (for-live-registers (reverse general-registers) "ldr~A ~A, [sp], #4")
+
+    (emiti cg "ldr lr, [sp], #4")
+    (emiti cg "mov pc, lr")))
+
+;;; Raw ops for the GC
+
+(define-simple-number-operator raw-+ "add")
+(define-simple-number-operator raw-- "sub")
+(define-simple-number-operator raw-logand "and")
