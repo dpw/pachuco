@@ -884,7 +884,7 @@
   (rplaca (cdr form) attrs)
   (simplify-recurse form))
 
-(define (make-vec-copy-form src src-index dest dest-index len attrs)
+(define (make-copy-mem-form src src-index dest dest-index len attrs)
   (quasiquote
     (copy-mem (unquote attrs)
               (vec-address (unquote attrs) (unquote src) (unquote src-index))
@@ -922,7 +922,7 @@
 
       (define-simplify ((unquote (compound-symbol "raw-" name "-copy"))
                         attrs src src-index dest dest-index len)
-        (overwrite-form form (make-vec-copy-form src src-index dest dest-index
+        (overwrite-form form (make-copy-mem-form src src-index dest dest-index
                                                  len (unquote type-attrs)))
         (simplify form))))))
 
@@ -947,27 +947,19 @@
 
       (define-simplify ((unquote (compound-symbol name "-vec-ref"))
                         attrs addr index)
-        (rplaca form 'raw-vec-ref)
-        (rplaca (cdr form) (unquote type-attrs))
-        (simplify-recurse form))
+        (genericize-vec-op form 'raw-vec-ref (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol name "-vec-set!"))
                         attrs addr index val)
-        (rplaca form 'raw-vec-set!)
-        (rplaca (cdr form) (unquote type-attrs))
-        (simplify-recurse form))
+        (genericize-vec-op form 'raw-vec-set! (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol name "-ref"))
                         attrs addr)
-        (rplaca form 'raw-ref)
-        (rplaca (cdr form) (unquote type-attrs))
-        (simplify-recurse form))
+        (genericize-vec-op form 'raw-ref (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol name "-set!"))
                         attrs addr val)
-        (rplaca form 'raw-set!)
-        (rplaca (cdr form) (unquote type-attrs))
-        (simplify-recurse form))
+        (genericize-vec-op form 'raw-set! (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol name "-copy"))
                         attrs src-addr dest-addr len)

@@ -39,10 +39,11 @@
 (defconstant symbol-tag-bits 4)
 
 (defconstant false-representation #b100)
+(defconstant unspecified-representation #b10100)
 
 (defconstant simple-representations 
   ;; The quotes here are significant for CL compatibility
   (list (cons 'false false-representation)
         (cons 'true #b1100)
-        (cons 'unspecified #b10100)
+        (cons 'unspecified unspecified-representation)
         (cons () #b11100)))
