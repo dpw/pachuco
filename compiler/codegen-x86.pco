@@ -507,8 +507,16 @@
   (emit-idiv cg divisor)
   %d)
 
+(define-operator (logand a (b reg-mem-imm)) ()
+  (emit-and cg b a)
+  a)
+
 (define-operator (logior a (b reg-mem-imm)) ()
   (emit-or cg b a)
+  a)
+
+(define-operator (logxor a (b reg-mem-imm)) ()
+  (emit-xor cg b a)
   a)
 
 ;;; Strings and vectors

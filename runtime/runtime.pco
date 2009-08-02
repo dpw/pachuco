@@ -141,7 +141,9 @@
 
 (reify (rem a b))
 (reify (truncate a b))
+(reify (logand a b))
 (reify (logior a b))
+(reify (logxor a b))
 
 (reify (character? a))
 (reify (character-code a))
