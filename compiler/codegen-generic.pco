@@ -327,7 +327,7 @@
 
 ;; raw-jump-with-arg-space and raw-apply-jump should always appear in
 ;; tail positions
-(define-propogate ((raw-jump-with-arg-space raw-apply-jump) . rest))
+(define-propagate ((raw-jump-with-arg-space raw-apply-jump) . rest))
 
 ;;; Misc utility functions
 
