@@ -56,11 +56,10 @@
 (defmarco (emit-without-flushing template . args)
   (if (string? template)
       (quasiquote
-        (let* ((*print-pretty* false))
-          (format~ true (unquote (string-concat template "~%"))
-                   (unquote-splicing args))))
+        (format~ true (unquote (string-concat template "~%"))
+                 (unquote-splicing args)))
       (quasiquote
-        (let* ((*print-pretty* false))
+        (begin
           (format~ true (unquote template) (unquote-splicing args))
           (format~ true "~%")))))
 
@@ -71,9 +70,8 @@
 
 (defmarco (emit-comment cg template . args)
   (quasiquote
-    (let* ((*print-pretty* false))
-      (format~ true (unquote (string-concat "# " template "~%"))
-               (unquote-splicing args)))))
+    (format~ true (unquote (string-concat "# " template "~%"))
+             (unquote-splicing args))))
 
 (defmarco (with-saved-frame-base cg . body)
   (let* ((orig-frame-base (gensym)))

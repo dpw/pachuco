@@ -208,7 +208,8 @@
     (string-replace-from str 0)))
 
 (defmacro format~ (&rest args)
-  `(format ,@args))
+  `(let* ((*print-pretty* false))
+     (format ,@args)))
 
 (defun read~ (in &rest eos)
   (if eos
