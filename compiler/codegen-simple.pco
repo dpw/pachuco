@@ -97,9 +97,12 @@
       (codegen-next-arg args regs))))
 
 (defmarco (define-operator template options . body)
+  ;; define how to generate code for an operator
   (options-bind ((temp-regs ()) (tail-form false) (temp-fixed-regs ()))
                 options
-    ;; define how to generate code for an operator
+    (when tail-form
+      (set! body (nconc body (list false))))
+
     (let* ((name (car template))
            (registers-name (compound-symbol name "-registers"))
            (param-specs (mapfor (p (cdr template))
