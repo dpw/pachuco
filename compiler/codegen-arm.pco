@@ -64,6 +64,7 @@
   (when (> (set! instructions-since-pool (1+ instructions-since-pool)) 1000)
     (let* ((label (gen-label)))
       (emit-smart-jump cg label)
+      (flush-labels-and-jumps cg)
       (emit-ltorg cg)
       (emit-smart-label cg label))))
 
