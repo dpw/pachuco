@@ -80,9 +80,11 @@
 (define (emit-pop cg reg)
   (emiti cg "ldr ~A, [sp], #4" (register-operand reg)))
 
-(define (emit-mov-maybe cg src dst)
-  (unless (eq? src dst)
-    (emiti cg "mov ~A, ~A" (register-operand dst) (insn-operand src))))
+(define (emit-mov cg src dest)
+  (emiti cg "mov ~A, ~A" (register-operand dest) (insn-operand src)))
+
+(define (emit-mov-maybe cg src dest)
+  (unless (eq? src dest) (emit-mov cg src dest)))
 
 (define (emit-branch cg cc label)
   (emit-without-flushing "b~A ~A" (cc-insn-suffix cc) label))
@@ -158,6 +160,7 @@
   (emit cg ".text")
   (emit-align cg value-scale)
   (emit-literal cg (fixnum-representation closure-size))
+  (emit cg ".globl ~A" label)
   (emit-smart-label cg label)
   (emit-push cg %lr)
   (when (codegen-have-closure cg) (emit-push cg %closure))
@@ -312,7 +315,10 @@
           (stack-closure-offset cg))))
 
 (define-operator (quote) ()
-  (let* ((val (attr-ref attrs 'value)))
+  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
+    ;;; If the quoted form resulted in a label, that means it emitted
+    ;;; code, and we need to switch back to the code section
+    (unless (number? val) (emit cg ".text"))
     (if (and (number? val) (= 0 (logand val -128)))
         (emiti cg "mov ~A, #~D" (register-operand result) val)
         (emiti cg "ldr ~A, =~A" (register-operand result) val)))

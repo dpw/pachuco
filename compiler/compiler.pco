@@ -680,14 +680,11 @@
 (define-decompose-lambdas (lambda attrs body)
   (decompose-lambda form (gen-label) begin-form))
 
-(define (make-varrec-label varrec prefix)
-  (if (varrec-top-level? varrec)
-      (make-label-for (car varrec) prefix)
-      (gen-label)))
-
 (define-decompose-lambdas (define varrec val)
   (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-      (let* ((label (make-varrec-label varrec function-label-prefix)))
+      (let* ((label (if (varrec-top-level? varrec)
+                        (make-label-for (car varrec) function-label-prefix)
+                        (gen-label))))
         (varrec-attr-set! varrec 'lambda-label label)
         (varrec-attr-set! varrec 'no-closure (null? (form-attr val 'closure)))
         (if (varrec-early-function? varrec)
@@ -808,18 +805,6 @@
 
 (define-trivial-walker codegen-sections (cg))
 
-(define-codegen-sections (quote quoted)
-  (rplaca (cdr form) (list (cons 'value (codegen-quoted quoted cg))
-                           (cons 'quoted quoted))))
-
-(define-codegen-sections (begin varrecs . body)
-  (dolist (varrec varrecs)
-    (when (varrec-top-level? varrec)
-      (let* ((label (make-varrec-label varrec variable-label-prefix)))
-        (varrec-attr-set! varrec 'label label)
-        (codegen-top-level-variable cg (car varrec) label))))
-  (codegen-sections-forms body cg))
-
 (define (assign-varrec-indices varrecs)
   ;; assign slot indices to varrecs
   (let* ((index 0))
@@ -831,7 +816,7 @@
   (let* ((self-varrec (attr-ref attrs 'self))
          (closure (attr-ref attrs 'closure))
          (body (attr-ref attrs 'body)))
-    ;; generate code for nested lambdas and data for quoted forms
+    ;; generate code for nested lambdas
     (codegen-sections body cg)
 
     (assign-varrec-indices closure)

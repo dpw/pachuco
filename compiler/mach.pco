@@ -82,5 +82,6 @@
         (unquote-splicing body)
         (codegen-set-frame-base! (unquote cg) (unquote orig-frame-base))))))
 
-(define function-label-prefix "lf_")
-(define variable-label-prefix "lv_")
+(define function-label-prefix "lf")
+(define variable-label-prefix "lv")
+(define symbol-label-prefix "ls")

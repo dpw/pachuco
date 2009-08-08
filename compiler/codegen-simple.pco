@@ -63,9 +63,7 @@
          (l2 (gen-label))
          (l3 (gen-label)))
     (if (eq? (car test) 'quote)
-        (emit-smart-jump cg
-                         (if (/= false-representation (form-attr test 'value))
-                             l1 l2))
+        (emit-smart-jump cg (if (quote-false? test) l2 l1))
         (emit-branch-on-operand cg (codegen test cg false) false
                                 l1 l2))
     (emit-smart-label cg l1)

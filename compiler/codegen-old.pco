@@ -417,8 +417,7 @@
 (define-reg-use-conditional (quote attrs) 0)
 (define-codegen-conditional (quote attrs)
   (emit-reset-frame-base cg out-frame-base)
-  (emit-smart-jump cg (if (= false-representation (attr-ref attrs 'value))
-                          flabel tlabel)))
+  (emit-smart-jump cg (if (quote-false? form) flabel tlabel)))
 
 (define-reg-use (fill-closure attrs closure . refs)
   (max (reg-use closure) (1+ (max$ 0 (mapfor (ref refs) (reg-use ref))))))
