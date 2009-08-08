@@ -9,6 +9,7 @@ files=
 dest=
 time=
 leaveasm=
+splitasm=
 compiler=$basedir/build/stage2
 runtimedir=$basedir/runtime
 
@@ -41,6 +42,11 @@ while [ $# -gt 0 ] ; do
         shift 1
         ;;
 
+    -S)
+        splitasm=1
+        shift 1
+        ;;
+
     -*)
         echo "Unknown option $1" 1>&2
         exit 1
@@ -63,21 +69,32 @@ else
         exit 1
     fi
 
+    asmclean=''
     if [ -z "$leaveasm" ] ; then
-        asmout=$TMPDIR/$$.s
-        trap 'rm -f $asmout' EXIT
+        asmdest=$TMPDIR/$$
+        trap 'rm -rf $asmclean' EXIT
     else
-        asmout=${dest}.s
+        asmdest=${dest}
     fi
 
-    eval $cmd >$asmout
-        
+    asmout="${asmdest}.s"
+    asmclean="$asmout"
+    asmfiles="$asmout"
+    eval $cmd >"$asmout"
+
+    if [ -n "$splitasm" ] ; then
+        asmdir="${asmdest}-asm"
+        mkdir $asmdir
+        asmclean="$asmout $asmdir"
+        asmfiles=`awk -v dir=$asmdir 'BEGIN { l = 0; fnum = 0; fn=dir "/0.s"; print fn; } /^# BREAK$/ { if (l > 10000) { l = 0; fnum++; fn=dir "/" fnum ".s"; print fn; next; } } { l++; print $0 >fn; }' $asmout`
+    fi
+    
     target=''
     # bit of a hack: if we are on x86-86, but it looks like the compiler
     # didn't produce x86-64 asm, assume a i386 target
     if [ "$(uname -m)" = x86_64 ] && ! grep -m1 '^movq' $asmout >/dev/null ; then
         target='-m32'
     fi
-        
-    gcc -Wall -g $target $asmout $runtimedir/main.c -o $dest
+    
+    gcc -Wall -g $target $asmfiles $runtimedir/main.c -o $dest
 fi

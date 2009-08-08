@@ -341,6 +341,7 @@
   (emit cg ".text")
   (emit-align  cg value-scale)
   (emit-literal cg (fixnum-representation closure-size))
+  (emit cg ".globl ~A" label)
   (emit-smart-label cg label))
 
 (define (emit-call-or-jump cg insn func)
@@ -365,7 +366,12 @@
 
 ;;; Quote
 
-(define-operator (quote) () (attr-ref attrs 'value))
+(define-operator (quote) ()
+  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
+    ;;; If the quoted form resulted in a label, that means it emitted
+    ;;; code, and we need to switch back to the code section
+    (unless (number? val) (emit cg ".text"))
+    val))
 
 ;;; Variables
 

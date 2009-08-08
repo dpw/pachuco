@@ -41,8 +41,8 @@
   ;; label if necessary
   (let* ((name (subject-language-symbol-name sym)))
     (if (label-name-ok? name 0)
-        (string-concat prefix (string-replace name "-" "_"))
-        (gen-label))))
+        (format~ false "~A_~A" prefix (string-replace name "-" "_"))
+        (format~ false "~A~D" prefix (set! label-counter (1+ label-counter))))))
 
 (define (emit-data cg label scale)
   (emit cg ".section .rodata")
@@ -52,6 +52,7 @@
 (define (codegen-top-level-variable cg name label)
   (emit-comment cg "top-level ~S" name)
   (emit cg ".section .bss")
+  (emit cg ".globl ~A" label)
   (emit cg "~A:" label)
   (emit-literal cg 0))
 
@@ -63,13 +64,17 @@
     (emit cg "~A:" l))
 
   (emit-bss-label "top_level_start")
-  (codegen-sections program cg)
-  (emit-bss-label "top_level_end"))
 
-(define (escape-string-literal str)
-  (string-replace (string-replace (string-replace str "\\" "\\\\")
-                                  "\"" "\\\"") "
-" "\\n"))
+  (dolist (varrec (second program))
+    (let* ((label (make-label-for (car varrec) variable-label-prefix)))
+      (varrec-attr-set! varrec 'label label)
+      (codegen-top-level-variable cg (car varrec) label)))
+
+  (dolist (form (cddr program))
+    (codegen-sections form cg)
+    (emit-comment cg "BREAK"))
+
+  (emit-bss-label "top_level_end"))
 
 ;;; "Smart" branching, jumping, and labels.
 ;;;
@@ -215,6 +220,12 @@
 
 ;;; Literals
 
+(define-codegen-sections (quote quoted)
+  (rplaca (cdr form) (list (cons 'quoted quoted))))
+
+(define (quote-false? form)
+  (and (eq? 'quote (car form)) (eq? (form-attr form 'quoted) 'false)))
+
 (define (codegen-quoted quoted cg)
   (cond ((pair? quoted) (codegen-quoted-pair quoted cg))
         ((number? quoted) (fixnum-representation quoted))
@@ -241,16 +252,22 @@
     (emit cg ".ascii \"~A\"" (escape-string-literal str))
     (format~ false "~A+~D" label string-tag)))
 
+(define (escape-string-literal str)
+  (string-replace (string-replace (string-replace str "\\" "\\\\")
+                                  "\"" "\\\"") "
+" "\\n"))
+
 (define emitted-symbols ())
 (define emitted-symbol-counter 0)
 
 (define (codegen-quoted-symbol sym cg)
   (let* ((emitted (assoc sym emitted-symbols)))
     (if emitted (cdr emitted)
-        (let* ((label (gen-label))
+        (let* ((label (make-label-for sym symbol-label-prefix))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
                                             cg)))
           (emit-data cg label symbol-tag-bits)
+          (emit cg ".globl ~A" label)
           (emit-literal cg name)
           (emit-literal cg (fixnum-representation
                     (set! emitted-symbol-counter (1+ emitted-symbol-counter))))

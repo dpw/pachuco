@@ -1,7 +1,8 @@
-ARCH=$(shell uname -m | sed -e s/i.86/i386/)
+ARCH=$(shell uname -m | sed -e 's/i.86/i386/;s/armv5.*/armv5/')
 TARGET=$(ARCH)
 
 CODEGEN=old
+COMPILEOPTS=-s
 
 MACH_SOURCES=compiler/mach.pco
 
@@ -14,6 +15,11 @@ $(error unknown codegen strategy $(CODEGEN))
 endif
 
 CODEGEN_SOURCES+=compiler/codegen-generic.pco
+
+ifeq ($(TARGET),armv5)
+MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
+CODEGEN_SOURCES+=compiler/codegen-arm.pco
+else
 
 ifeq ($(TARGET),i386)
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
@@ -33,6 +39,8 @@ else ifeq ($(STACK_REGIME),fp)
 CODEGEN_SOURCES+=compiler/stack-traditional.pco compiler/stack-fp.pco
 else
 $(error unknown stack regime $(STACK_REGIME))
+endif
+
 endif
 
 COMPILER_SOURCES= \
@@ -72,7 +80,7 @@ $(2)-compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 
 build/$(2)-test build/$(2)-test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	mkdir -p build
-	scripts/compile -C $(1) -s -o $$@ $(TEST_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -o $$@ $(TEST_SOURCES)
 
 $(2)-test-run: build/$(2)-test
 	$$<
@@ -80,7 +88,7 @@ $(2)-test-run: build/$(2)-test
 
 build/$(2)-gc-test build/$(2)-gc-test.s: $(1) $(RUNTIME_SOURCES) $(GC_TEST_SOURCES)
 	mkdir -p build
-	scripts/compile -C $(1) -s -o $$@ $(GC_TEST_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -o $$@ $(GC_TEST_SOURCES)
 
 $(2)-gc-test-run: build/$(2)-gc-test
 	$$<
@@ -91,7 +99,7 @@ $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 
 build/$(3) build/$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	mkdir -p build
-	scripts/compile -C $(1) -s -o build/$(3) $(SL_COMPILER_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -o build/$(3) $(SL_COMPILER_SOURCES)
 endef
 
 clean:
@@ -108,7 +116,7 @@ compare-stage3: build/stage2.s build/stage3.s
 	cmp -s build/stage2.s build/stage3.s
 
 build/repl build/repl.s: language/repl.pco language/util.pco language/interpreter.pco language/expander.pco | build/stage2
-	scripts/compile $^ -s -o $@
+	scripts/compile $^ $(COMPILEOPTS) -o $@
 
 .PHONY: repl
 repl: build/repl

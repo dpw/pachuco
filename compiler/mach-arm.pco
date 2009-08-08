@@ -1,0 +1,17 @@
+;;; ARMv5 machine definition
+
+;;; Registers
+
+(define-numbered-registers "%r~D" 0 13 "r~D")
+(define-register %sp "sp")
+(define-register %lr "lr")
+
+(add-general-registers (list %r0 %r1 %r2 %r3 %r4 %r5 %r6 %r7 %r8))
+
+;; By using a c-callee-saves reg for closure, we avoid having to
+;; restore it after calling C funcs.
+(define %closure %r11)
+(define %funcres (first general-registers))
+
+(define c-callee-saved-regs (list %r4 %r5 %r6 %r7 %r8 %r9 %r10 %r11))
+(define c-call-arg-regs (list %r0 %r1 %r2 %r3))
