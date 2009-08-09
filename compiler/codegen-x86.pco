@@ -645,6 +645,13 @@
 
 (define-operator (raw-label) () (attr-ref attrs 'name))
 
+(define-operator (raw-global-set! (val reg-imm)) ()
+  (emit-mov cg val (mem (subject-language-symbol-name (attr-ref attrs 'name))))
+  val)
+
+(define-operator (raw-global-ref) ()
+  (mem (subject-language-symbol-name (attr-ref attrs 'name))))
+
 (define (emit-set-ac-flag cg enable)
   (emit-pushf cg)
   (if enable

@@ -339,6 +339,12 @@
 (define-simplify (raw-label name)
   (rplaca (cdr form) (list (cons 'name name))))
 
+(define-simplify (raw-global-ref name)
+  (rplaca (cdr form) (list (cons 'name name))))
+
+(define-simplify (raw-global-set! name val)
+  (rplaca (cdr form) (list (cons 'name name))))
+
 (define-simplify (raw-alloc tag-bits-ccsym size)
   (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
 

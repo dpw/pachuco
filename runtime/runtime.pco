@@ -1147,18 +1147,17 @@
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace))
 
-  (dolist (ch-ct (list (cons #\( rt-lparen)
-                       (cons #\) rt-rparen)
-                       (cons #\; rt-line-comment)
-                       (cons #\" rt-double-quote)
-                       (cons #\' rt-single-quote)
-                       (cons #\# rt-sharp-sign)))
-    (vector-set! readtable (character-code (car ch-ct)) (cdr ch-ct)))
-
+  (vector-set! readtable (character-code #\() rt-lparen)
+  (vector-set! readtable (character-code #\)) rt-rparen)
+  (vector-set! readtable (character-code #\;) rt-line-comment)
+  (vector-set! readtable (character-code #\") rt-double-quote)
+  (vector-set! readtable (character-code #\') rt-single-quote)
+  (vector-set! readtable (character-code #\#) rt-sharp-sign)
+  
   (vector-set-range! readtable (character-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (character-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (character-code #\0) 10 rt-digit)
-  (dolist (ch '(#\. #\* #\+ #\- #\? #\< #\> #\= #\/ #\! #\~ #\% #\$))
+  (dolist (ch '(#\. #\* #\+ #\- #\_ #\? #\< #\> #\= #\/ #\! #\~ #\% #\$))
     (vector-set! readtable (character-code ch) rt-constituent-misc))
 
   (vector-set-range! digit-bases 0 rt-max false)

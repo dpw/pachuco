@@ -599,6 +599,21 @@
   (emiti cg "ldr ~A, =~A" (register-operand result) (attr-ref attrs 'name))
   result)
 
+(define (access-global cg attrs insn reg temp)
+  (set! reg (register-operand reg))
+  (set! temp (register-operand temp))
+  (emiti cg "ldr ~A, =~A" temp
+         (subject-language-symbol-name (attr-ref attrs 'name)))
+  (emiti cg "~A ~A, [~A]" insn reg temp))
+
+(define-operator (raw-global-set! val) ((temp-regs temp))
+  (access-global cg attrs "str" val temp)
+  val)
+
+(define-operator (raw-global-ref) ((temp-regs temp))
+  (access-global cg attrs "ldr" result temp)
+  result)
+
 (define-operator (raw-ref addr) ()
   (emiti cg "ldr~A ~A, [~A]" (scale-load-store-suffix (attr-ref attrs 'scale))
         (register-operand result) (register-operand addr))

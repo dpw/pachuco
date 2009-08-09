@@ -52,7 +52,8 @@
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
-                     c-call raw-c-global raw-label compiler-constant raw-alloc))
+                     c-call raw-label raw-global-ref raw-global-set!
+                     compiler-constant raw-alloc))
 
 ;;; Transform a program so that every form begins with a
 ;;; distinguishing keyword:
