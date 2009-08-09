@@ -39,16 +39,18 @@
     (when gc-active (error "Recursive GC"))
     (set! gc-active true)
 
+    ;; Record the extent of the old heap
     (set! gc-from-space (raw-ref (raw-label "heap_start")))
     (set! gc-from-space-end (raw-ref (raw-label "heap_end")))
 
-    (set! gc-to-space (raw-ref (raw-label "heap2_start")))
-    (set! gc-to-space-end (raw-ref (raw-label "heap2_end")))
+    ;; Allocate the new heap
+    (set! gc-to-space (c-call "alloc_heap"))
+    (set! gc-to-space-end (raw-+ gc-to-space (raw-ref (raw-label "heap_size"))))
 
-    (define old-heap-alloc (raw-ref (raw-label "heap_alloc")))
     (raw-set! (raw-label "heap_alloc") gc-to-space-end)
     (raw-set! (raw-label "heap_threshold") gc-to-space)
 
+    ;; We should be ok to do new allocations now
     (when (/= 0 (raw->fixnum (raw-ref (raw-label "verbose_gc"))))
       (formout stderr "GC... "))
 
@@ -57,31 +59,26 @@
     ;; the start of each GC.
     (construct-gc-type-table)
     
+    ;; copy all live data
     (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
     (gc-root-set (raw-args-base) runtime-main-args-base)
 
     (define live-bytes (raw->fixnum (raw-- gc-to-space-end
                                            (raw-ref (raw-label "heap_alloc")))))
 
+    ;; dispose of the old heap
+    (c-call "free_heap" gc-from-space)
     (raw-set! (raw-label "heap_start") gc-to-space)
     (raw-set! (raw-label "heap_end") gc-to-space-end)
-    (raw-set! (raw-label "heap_threshold") (raw-- gc-to-space-end
-                                   (raw-ref (raw-label "heap_threshold_size"))))
     
-    ;; zero from-space.  Do it here, while bits of it may still be in cache
-    (c-call "memset" old-heap-alloc (fixnum->raw 0)
-            (raw-- gc-from-space-end old-heap-alloc))
-    
-    (raw-set! (raw-label "heap2_start") gc-from-space)
-    (raw-set! (raw-label "heap2_end") gc-from-space-end)
-
-    (when (/= 0 (raw->fixnum (raw-ref (raw-label "verbose_gc"))))
-      (formout stderr "done, ~D bytes live~%" live-bytes))
-
+    ;; all done
     (set! gc-active (set! gc-from-space (set! gc-from-space-end
       (set! gc-to-space (set! gc-to-space-end
-        (set! gc-type-table (set! gc-raw-tag-mask false))))))))
+        (set! gc-type-table (set! gc-raw-tag-mask false)))))))
 
+    (when (/= 0 (raw->fixnum (raw-ref (raw-label "verbose_gc"))))
+      (formout stderr "done, ~D bytes live~%" live-bytes)))
+  
   (define (gc-test-copy val)
     ;; a test function that uses the GC machinery to destructively
     ;; copy objects
