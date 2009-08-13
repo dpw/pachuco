@@ -145,6 +145,14 @@
     (emit cg "lisp:")
     (emiti cg "stmfd sp!, ~A" saved-regs)
 
+    ;; load register globals from the variables assigned by the C setup
+    ;; code
+    (bind (reg temp . rest) general-registers
+      (dolist (rglob register-globals)
+        (access-global cg "ldr" reg (car rglob) temp)
+        (emiti cg "mov ~A, ~A" (register-operand (cdr rglob))
+               (register-operand reg))))
+
     (codegen-set-frame-base! cg 0)
     (codegen-set-have-closure! cg false)
     (trashy-codegen-discarding program cg false)
@@ -221,14 +229,14 @@
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
-(define-operator (alloc-closure) ((temp-regs alloc temp))
+(define-operator (alloc-closure) ((temp-regs label))
+  (emiti cg "ldr ~A, =~A" (register-operand label) (attr-ref attrs 'label))
   (emit-alloc cg closure-tag-bits
               (* value-size (1+ (length (attr-ref attrs 'closure))))
-              alloc temp spare-regs)
-  (emiti cg "ldr ~A, =~A" (register-operand temp) (attr-ref attrs 'label))
-  (emiti cg "str ~A, [~A]" (register-operand temp) (register-operand alloc))
-  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
-        closure-tag)
+              value-scale spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand label) (register-operand %alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result)
+         (register-operand %alloc) closure-tag)
   result)
 
 (define (emit-store-into-closure cg closure index val)
@@ -445,12 +453,12 @@
 
 (define-tag-check pair? pair-tag pair-tag-bits)
 
-(define-operator (cons a d) ((temp-regs alloc temp))
-  (emit-alloc cg pair-tag-bits (* 2 value-size) alloc temp spare-regs)
-  (emiti cg "str ~A, [~A]" (register-operand a) (register-operand alloc))
-  (emiti cg "str ~A, [~A, #4]" (register-operand d) (register-operand alloc))
-  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
-        pair-tag)
+(define-operator (cons a d) ()
+  (emit-alloc cg pair-tag-bits (* 2 value-size) value-scale spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand a) (register-operand %alloc))
+  (emiti cg "str ~A, [~A, #4]" (register-operand d) (register-operand %alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result)
+         (register-operand %alloc) pair-tag)
   result)
 
 (define-operator (car a) ()
@@ -477,12 +485,12 @@
 
 (define-tag-check symbol? symbol-tag symbol-tag-bits)
 
-(define-operator (raw-make-symbol str id) ((temp-regs alloc temp))
-  (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc temp spare-regs)
-  (emiti cg "str ~A, [~A]" (register-operand str) (register-operand alloc))
-  (emiti cg "str ~A, [~A, #4]" (register-operand id) (register-operand alloc))
-  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
-        symbol-tag)
+(define-operator (raw-make-symbol str id) ()
+  (emit-alloc cg symbol-tag-bits (* 2 value-size) value-scale spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand str) (register-operand %alloc))
+  (emiti cg "str ~A, [~A, #4]" (register-operand id) (register-operand %alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result)
+         (register-operand %alloc) symbol-tag)
   result)
 
 (define-operator (symbol-name sym) ()
@@ -497,11 +505,11 @@
 
 ;;; Boxes
 
-(define-operator (raw-make-box val) ((temp-regs alloc temp))
-  (emit-alloc cg symbol-tag-bits value-size alloc temp spare-regs)
-  (emiti cg "str ~A, [~A]" (register-operand val) (register-operand alloc))
-  (emiti cg "add ~A, ~A, #~D" (register-operand result) (register-operand alloc)
-        box-tag)
+(define-operator (raw-make-box val) ()
+  (emit-alloc cg symbol-tag-bits value-size value-scale spare-regs)
+  (emiti cg "str ~A, [~A]" (register-operand val) (register-operand %alloc))
+  (emiti cg "add ~A, ~A, #~D" (register-operand result)
+         (register-operand %alloc) box-tag)
   result)
 
 (define-operator (raw-box-set! box val) ()
@@ -532,17 +540,17 @@
           ((> shift 0) (format~ false ", asr #~D" shift))
           (true (error "unexpected vec scale ~D" scale)))))
 
-(define-operator (make-vec len) ((temp-regs alloc temp size))
+(define-operator (make-vec len) ((temp-regs size))
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
     (emiti cg "mov ~A, #~D" (register-operand size) value-size)
     (emiti cg "add ~A, ~A, ~A~A" (register-operand size) (register-operand size)
           (register-operand len) (scale-number-expr scale))
-    (emit-alloc cg tag-bits size alloc temp spare-regs scale)
-    (emiti cg "str ~A, [~A]" (register-operand len) (register-operand alloc))
+    (emit-alloc cg tag-bits size scale spare-regs)
+    (emiti cg "str ~A, [~A]" (register-operand len) (register-operand %alloc))
     (emiti cg "add ~A, ~A, #~D" (register-operand result)
-          (register-operand alloc) tag))
+          (register-operand %alloc) tag))
   result)
 
 (define (emit-vec-op cg attrs scale template suffix valreg vecreg index)
@@ -599,19 +607,28 @@
   (emiti cg "ldr ~A, =~A" (register-operand result) (attr-ref attrs 'name))
   result)
 
-(define (access-global cg attrs insn reg temp)
+(define (access-global cg insn reg name temp)
   (set! reg (register-operand reg))
   (set! temp (register-operand temp))
-  (emiti cg "ldr ~A, =~A" temp
-         (subject-language-symbol-name (attr-ref attrs 'name)))
+  (emiti cg "ldr ~A, =~A" temp (subject-language-symbol-name name))
   (emiti cg "~A ~A, [~A]" insn reg temp))
 
 (define-operator (raw-global-set! val) ((temp-regs temp))
-  (access-global cg attrs "str" val temp)
+  (let* ((name (attr-ref attrs 'name))
+         (rglob (assoc name register-globals)))
+    (if rglob
+        (emiti cg "mov ~A, ~A"
+               (register-operand (cdr rglob)) (register-operand val))
+        (access-global cg "str" val name temp)))
   val)
 
 (define-operator (raw-global-ref) ((temp-regs temp))
-  (access-global cg attrs "ldr" result temp)
+  (let* ((name (attr-ref attrs 'name))
+         (rglob (assoc name register-globals)))
+    (if rglob
+        (emiti cg "mov ~A, ~A"
+                (register-operand result) (register-operand (cdr rglob)))
+        (access-global cg "ldr" result name temp)))
   result)
 
 (define-operator (raw-ref addr) ()
@@ -640,12 +657,12 @@
 
 ;; the gc uses the raw-alloc operation
 
-(define-operator (raw-alloc size) ((temp-regs alloc temp))
+(define-operator (raw-alloc size) ()
   (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
               (string-concat (register-operand size)
                              (scale-number-expr value-scale))
-              alloc temp spare-regs)
-  alloc)
+              value-scale spare-regs)
+  %alloc)
 
 ;;; Heap allocation
 
@@ -653,31 +670,24 @@
   (reduce~ (register-bit (car regs)) (cdr regs)
            (lambda (bits reg) (logior bits (register-bit reg)))))
 
-(define (emit-alloc cg tag-bits size allocreg tempreg spare-regs . scale)
+(define (emit-alloc cg tag-bits size scale spare-regs)
   (let* ((again-label (gen-label))
          (exhausted-label (gen-label))
-         (alloc (register-operand allocreg))
-         (temp (register-operand tempreg)))
+         (alloc (register-operand %alloc))
+         (threshold (register-operand %threshold)))
     (flush-labels-and-jumps cg)
     (emit-raw-label cg again-label)
-    (emiti cg "ldr ~A, =heap_alloc" alloc)
-    (emiti cg "ldr ~A, [~A]" alloc alloc)
     (emiti cg "sub ~A, ~A, ~A" alloc alloc (insn-operand size))
-    (emiti cg "ldr ~A, =heap_threshold" temp)
-    (set! scale (if (null? scale) value-scale (car scale)))
     (unless (= tag-bits scale)
       (emiti cg "and ~A, ~A, #~D" alloc alloc (- (ash 1 tag-bits))))
-    (emiti cg "ldr ~A, [~A]" temp temp)
-    (emiti cg "cmp ~A, ~A" alloc temp)
+    (emiti cg "cmp ~A, ~A" alloc threshold)
     (emiti cg "blo ~A" exhausted-label)
-    (emiti cg "ldr ~A, =heap_alloc" temp)
-    (emiti cg "str ~A, [~A]" alloc temp)
     
     (codegen-push-out-of-line cg
       (lambda ()
         (emit-raw-label cg exhausted-label)
         (emiti cg "ldr ~A,=~D" (register-operand %closure)
-              (register-bitset (list* allocreg tempreg spare-regs)))
+               (register-bitset spare-regs))
         (emiti cg "bl heap_exhausted")
         (emit-restore-%closure cg)
         (emiti cg "b ~A" again-label)
