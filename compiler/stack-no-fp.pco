@@ -37,7 +37,8 @@
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emit-reset-frame-base cg out-frame-base)
-  (emit-ret cg (* value-size (attr-ref attrs 'nparams))))
+  (emit-ret cg (* value-size (attr-ref attrs 'nparams)))
+  (codegen-unreachable cg))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
                  (tail-form (temp-regs retaddr))
@@ -50,7 +51,8 @@
   (emit-mov cg (return-address-slot cg) retaddr)
   (emit-lea cg (mem (return-address-slot cg) arg-count) %sp)
   (emit-mov cg retaddr (mem %sp))
-  (emit cg "ret"))
+  (emit cg "ret")
+  (codegen-unreachable cg))
 
 (define (codegen-tail-call func retaddr out-arg-count out-retaddr
                            out-frame-base regs cg)
@@ -65,6 +67,7 @@
     ;; regs
     (emit-mov cg (fixnum-representation out-arg-count) %nargs)
     (emit-call-or-jump cg "jmp" func)
+    (codegen-unreachable cg)
     (codegen-set-frame-base! cg out-frame-base)))
 
 (define-codegen-discarding (tail-call attrs func . args)
@@ -113,12 +116,14 @@
   (emit-lea cg (mem (return-address-slot cg) before-arg-count) %sp)
   (emit-mov cg retaddr (mem %sp))
   (emit-clear cg %nargs)
-  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc))))
+  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc)))
+  (codegen-unreachable cg))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-reset-frame-base cg out-frame-base)
   (emit-mov cg func %closure)
-  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure))))
+  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure)))
+  (codegen-unreachable cg))
 
 ;;; C-callable program wrapper
 

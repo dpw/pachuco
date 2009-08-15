@@ -267,7 +267,8 @@
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg (attr-ref attrs 'nparams)))
-  (emiti cg "mov pc, lr"))
+  (emiti cg "mov pc, lr")
+  (codegen-unreachable cg))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
                  (tail-form)
@@ -275,7 +276,8 @@
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "add sp, sp, ~A~A" (register-operand arg-count)
         (scale-number-expr value-scale))
-  (emiti cg "mov pc, lr"))
+  (emiti cg "mov pc, lr")
+  (codegen-unreachable cg))
 
 (define (codegen-copy-stack cg dest-offset count regs)
   (cond ((= count 0)
@@ -293,7 +295,8 @@
   (codegen-copy-stack cg out-param-offset out-arg-count regs)
   (emiti cg "mov ~A, #~A" (register-operand %nargs) 
         (fixnum-representation out-arg-count))
-  (emit-function-jump cg func))
+  (emit-function-jump cg func)
+  (codegen-unreachable cg))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -345,13 +348,15 @@
   (emiti cg "sub sp, sp, ~A~A" (register-operand after-arg-count)
         (scale-number-expr value-scale))
   (emiti cg "mov ~A, #0" (register-operand %nargs))
-  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag))
+  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
+  (codegen-unreachable cg))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov-maybe cg func %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
-  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag))
+  (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
+  (codegen-unreachable cg))
 
 ;;; Variables
 
