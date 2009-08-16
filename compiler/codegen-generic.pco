@@ -218,9 +218,10 @@
       (codegen-set-deferred-jump! cg false)
       (codegen-set-here-labels! cg ()))))
 
-(define (codegen-unreachable cg)
-  ;; signals that the code is unreachable, e.g. after a return
-  ;; instruction, tail call, etc.
+(define (codegen-function-tail cg out-frame-base)
+  ;; signals unreachable code after the tail form of a function,
+  ;; e.g. after a return instruction, tail call, etc.
+  (codegen-set-frame-base! cg out-frame-base)
   (unless (codegen-deferred-jump cg)
     (codegen-set-deferred-jump! cg (lambda ()))))
 

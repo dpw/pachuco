@@ -8,9 +8,9 @@
 ;;; param N
 ;;; ...
 ;;; param 1
-;;; param 0
+;;; param 0  <--- (mem %sp frame-base)
 ;;; Return address
-;;; %closure  <--- (mem %sp frame-base)
+;;; %closure
 ;;; Local var 0
 ;;; ...
 ;;; Local var N
@@ -21,24 +21,31 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
+(define (param-slot cg index)
+  (mem %sp (+ index (codegen-frame-base cg))))
+
 (define (return-address-slot cg)
-  (mem %sp (+ (codegen-frame-base cg) (if (codegen-have-closure cg) 1 0))))
+  (param-slot cg -1))
 
 (define (closure-address-slot cg)
-  (mem %sp (codegen-frame-base cg)))
+  (param-slot cg -2))
+
+(define (local-slot cg index)
+  (mem %sp (- (codegen-frame-base cg) index)))
 
 ;;; Functions, calls, returns, etc.
 
 (define (codegen-function label closure-size body cg) 
   (codegen-function-intro label closure-size cg)
-  (when (codegen-have-closure cg) (emit-push cg %closure))
-  (trashy-codegen-discarding body cg (if (codegen-have-closure cg) -1 0))
+  (codegen-set-frame-base! cg 1)
+  (when (codegen-have-closure cg) (emit-frame-push cg %closure))
+  (trashy-codegen-discarding body cg 1)
   (codegen-do-out-of-line cg))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emit-reset-frame-base cg out-frame-base)
   (emit-ret cg (* value-size (attr-ref attrs 'nparams)))
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
                  (tail-form (temp-regs retaddr))
@@ -52,10 +59,10 @@
   (emit-lea cg (mem (return-address-slot cg) arg-count) %sp)
   (emit-mov cg retaddr (mem %sp))
   (emit cg "ret")
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define (codegen-tail-call func retaddr out-arg-count out-retaddr
-                           out-frame-base regs cg)
+                           regs cg)
   (let* ((tmpreg (first regs))
          (retaddr-reg (second regs)))
     (emit-mov cg retaddr retaddr-reg)
@@ -66,9 +73,7 @@
     ;; in general-regs and so might be the same as one of our temp
     ;; regs
     (emit-mov cg (fixnum-representation out-arg-count) %nargs)
-    (emit-call-or-jump cg "jmp" func)
-    (codegen-unreachable cg)
-    (codegen-set-frame-base! cg out-frame-base)))
+    (emit-call-or-jump cg "jmp" func)))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -87,7 +92,8 @@
           (emit-mov cg (fixnum-representation out-arg-count) %nargs)
           (emit-call-or-jump cg "jmp" func))
         (codegen-tail-call func retaddr out-arg-count out-retaddr
-                           out-frame-base general-registers cg))))
+                           general-registers cg))
+    (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
   (codegen-call-args cg func args)
@@ -101,7 +107,8 @@
     (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
               in-arg-count-reg)
     (codegen-tail-call func retaddr out-arg-count in-arg-count-reg 
-                       out-frame-base (cdr general-registers) cg)))
+                       (cdr general-registers) cg)
+    (codegen-function-tail cg out-frame-base)))
 
 ;;; Apply support
 
@@ -117,13 +124,13 @@
   (emit-mov cg retaddr (mem %sp))
   (emit-clear cg %nargs)
   (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc)))
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-reset-frame-base cg out-frame-base)
   (emit-mov cg func %closure)
   (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure)))
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 ;;; C-callable program wrapper
 

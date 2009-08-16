@@ -387,8 +387,8 @@
                    (true (error "strange variable mode ~S" mode))))))))
 
 (define-operator (define (val reg-mem-imm)) ()
-  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
   (emit-frame-push cg val)
+  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
   val)
 
 (define-operator (set! (val reg-imm)) ()

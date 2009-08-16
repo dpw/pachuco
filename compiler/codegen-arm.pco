@@ -139,7 +139,6 @@
          (saved-regs (multi-operand (append c-callee-saved-regs (list %lr)))))
     (codegen-program-sections program cg)
     
-    (set! instructions-since-pool 0)
     (emit cg ".text")
     (emit cg ".globl lisp")
     (emit cg "lisp:")
@@ -163,26 +162,14 @@
     (codegen-do-out-of-line cg)
     (codegen-heap-exhausted cg)))
 
-(define (codegen-function label closure-size body cg) 
-  (set! instructions-since-pool 0)
-  (emit cg ".text")
-  (emit-align cg value-scale)
-  (emit-literal cg (fixnum-representation closure-size))
-  (emit cg ".globl ~A" label)
-  (emit-smart-label cg label)
-  (emit-push cg %lr)
-  (when (codegen-have-closure cg) (emit-push cg %closure))
-  (trashy-codegen-discarding body cg (if (codegen-have-closure cg) -1 0))
-  (codegen-do-out-of-line cg))
-
 ;;; Stack layout:
 ;;;
 ;;; param N
 ;;; ...
 ;;; param 1
-;;; param 0
+;;; param 0  <--- %sp + frame-base
 ;;; Return address
-;;; %closure  <--- %sp + frame-base
+;;; %closure (if present)
 ;;; Local var 0
 ;;; ...
 ;;; Local var N
@@ -193,9 +180,21 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
+(define (codegen-function label closure-size body cg) 
+  (emit cg ".text")
+  (emit-align cg value-scale)
+  (emit-literal cg (fixnum-representation closure-size))
+  (emit cg ".globl ~A" label)
+  (emit-smart-label cg label)
+  (codegen-set-frame-base! cg 0)
+  (emit-frame-push cg %lr)
+  (when (codegen-have-closure cg) (emit-frame-push cg %closure))
+  (trashy-codegen-discarding body cg 0)
+  (codegen-do-out-of-line cg)
+  (emit-ltorg cg))
+
 (define (stack-param-offset cg index)
-  (* value-size
-     (+ index (codegen-frame-base cg) (if (codegen-have-closure cg) 2 1))))
+  (* value-size (+ index (codegen-frame-base cg))))
 
 (define (stack-return-offset cg)
   (stack-param-offset cg -1))
@@ -204,7 +203,7 @@
   (stack-param-offset cg -2))
 
 (define (stack-local-offset cg index)
-  (* value-size (- (codegen-frame-base cg) 1 index)))
+  (* value-size (- (codegen-frame-base cg) index)))
 
 (define (closure-slot-offset index)
   (- (* value-size (1+ index)) closure-tag))
@@ -268,7 +267,7 @@
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg (attr-ref attrs 'nparams)))
   (emiti cg "mov pc, lr")
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
                  (tail-form)
@@ -277,7 +276,7 @@
   (emiti cg "add sp, sp, ~A~A" (register-operand arg-count)
         (scale-number-expr value-scale))
   (emiti cg "mov pc, lr")
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define (codegen-copy-stack cg dest-offset count regs)
   (cond ((= count 0)
@@ -295,8 +294,7 @@
   (codegen-copy-stack cg out-param-offset out-arg-count regs)
   (emiti cg "mov ~A, #~A" (register-operand %nargs) 
         (fixnum-representation out-arg-count))
-  (emit-function-jump cg func)
-  (codegen-unreachable cg))
+  (emit-function-jump cg func))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -305,7 +303,8 @@
     (codegen-tail-call cg func args out-arg-count
                        (insn-operand (stack-param-offset cg (- in-arg-count
                                                                out-arg-count)))
-                       general-registers)))
+                       general-registers)
+    (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
   (codegen-call-args cg func args)
@@ -318,7 +317,8 @@
     (emiti cg "add ~A, ~A, #~D" out-param-offset out-param-offset 
           (stack-param-offset cg (- out-arg-count)))
     (codegen-tail-call cg func args out-arg-count out-param-offset 
-                       (cdr general-registers))))
+                       (cdr general-registers))
+    (codegen-function-tail cg out-frame-base)))
 
 (define (emit-restore-%closure cg)
   (when (codegen-have-closure cg)
@@ -349,14 +349,14 @@
         (scale-number-expr value-scale))
   (emiti cg "mov ~A, #0" (register-operand %nargs))
   (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov-maybe cg func %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
-  (codegen-unreachable cg))
+  (codegen-function-tail cg out-frame-base))
 
 ;;; Variables
 
@@ -386,8 +386,8 @@
                    (register-operand base-reg) offset))))))
 
 (define-operator (define val) ()
-  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
   (emit-frame-push cg val)
+  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
   val)
 
 (define-operator (set! val) ((temp-regs temp))

@@ -828,7 +828,6 @@
     
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
-    (codegen-set-frame-base! cg 0)
     (emit-comment-form cg body)
     (codegen-set-have-closure! cg (not (null? closure)))
     (codegen-function (attr-ref attrs 'label) (1+ (length closure)) body cg)))
