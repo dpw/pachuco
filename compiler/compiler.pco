@@ -3,9 +3,7 @@
 (define (compile-program program)
   ;; Compile the program, printing the resulting assembly on standard
   ;; output
-  (set! program (normalize-forms program))
-  (set! program (eliminate-definitions-forms program))
-  (set! program (list* 'begin () program))
+  (set! program (list* 'begin () (normalize-forms program)))
   (replace-empty-bodies program)
   (normalize-lambdas program)
   (simplify program)
@@ -21,7 +19,7 @@
   )
 
 (define keywords-1
-  '(begin definitions if
+  '(begin if
 
     eq? function?
     
@@ -55,36 +53,29 @@
                      compiler-constant raw-alloc))
 
 ;;; Transform a program so that every form begins with a
-;;; distinguishing keyword:
-;;;
-;;; if, definitions, define, lambda, set!: as in source
-;;; language
-;;;
-;;; quote: All quoted and literal forms
-;;;
-;;; call: a function call
-;;;
-;;; ref: a variable reference
-;;;
-;;; And the builtin operators
+;;; distinguishing keyword (e.g. resolve calls and self-quoting
+;;; forms).  "definitions" forms are also spliced into their
+;;; containing bodies at this point.
 
 (define (normalize form)
   (cond ((pair? form)
            (let* ((keyword (car form)))
              (cond ((member? keyword keywords-2) (normalize-2 form))
                    ((member? keyword keywords-1) (normalize-1 form))
-                   (true (list* 'call () (normalize-forms form))))))
-        ((symbol? form) (list 'ref form))
-        (true (list 'quote form))))
+                   ((eq? keyword 'definitions) (normalize-forms (cdr form)))
+                   (true (list (list* 'call () (normalize-forms form)))))))
+        ((symbol? form) (list (list 'ref form)))
+        (true (list (list 'quote form)))))
 
 (define (normalize-forms forms)
-  (mapfor (form forms) (normalize form)))
+  (flatten*-mapfor (form forms) (normalize form)))
 
 (define (normalize-1 form)
-  (list* (car form) () (normalize-forms (cdr form))))
+  (list (list* (car form) () (normalize-forms (cdr form)))))
 
 (define (normalize-2 form)
-  (list* (car form) (copy-tree (cadr form)) (normalize-forms (cddr form))))
+  (list (list* (car form) (copy-tree (cadr form))
+               (normalize-forms (cddr form)))))
 
 ;;; Utils
 
@@ -136,21 +127,6 @@
 
 (define (quoted-unspecified)
   (list 'quote unspecified))
-
-;;; Remove the definitions forms, splicing them into the surrounding
-;;; begin/lambda
-
-(define-walker eliminate-definitions ())
-
-(define (eliminate-definitions-forms forms)
-  (flatten*-mapfor (form forms) (eliminate-definitions form)))
-
-(define (eliminate-definitions-recurse form)
-  (list (list* (first form) (second form)
-               (eliminate-definitions-forms (cddr form)))))
-
-(define-eliminate-definitions (definitions attrs . body)
-  (eliminate-definitions-forms body))
 
 ;;; Replace empty bodies with unspecified
 
