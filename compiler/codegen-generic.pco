@@ -269,12 +269,12 @@
                                   "\"" "\\\"") "
 " "\\n"))
 
-(define emitted-symbols ())
+(define emitted-symbols (make-symboltable))
 (define emitted-symbol-counter 0)
 
 (define (codegen-quoted-symbol sym cg)
-  (let* ((emitted (assoc sym emitted-symbols)))
-    (if emitted (cdr emitted)
+  (let* ((lit (symboltable-ref emitted-symbols sym)))
+    (or lit
         (let* ((label (make-label-for sym symbol-label-prefix))
                (name (codegen-quoted-string (subject-language-symbol-name sym)
                                             cg)))
@@ -283,15 +283,15 @@
           (emit-literal cg name)
           (emit-literal cg (fixnum-representation
                     (set! emitted-symbol-counter (1+ emitted-symbol-counter))))
-          (let* ((lit (format~ false "~A+~D" label symbol-tag)))
-            (set! emitted-symbols (acons sym lit emitted-symbols))
-            lit)))))
+          (set! lit (format~ false "~A+~D" label symbol-tag))
+          (symboltable-set! emitted-symbols sym lit)
+          lit))))
 
 (define (codegen-symbols cg)
   (emit-data cg "symbols_start" value-scale)
   (emit cg ".globl symbols_start")
-  (dolist (s emitted-symbols)
-    (emit-literal cg (cdr s)))
+  (for-hashtable (sym lit emitted-symbols)
+    (emit-literal cg lit))
   (emit cg "symbols_end:")
   (emit cg ".global symbols_end"))
 

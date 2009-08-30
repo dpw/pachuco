@@ -181,6 +181,23 @@
       (rehash-bucket 0))
     (hashtable-set-buckets! ht new-buckets)))
 
+(define (for-hashtable-call ht f)
+  (labels ((for-entries (entry)
+             (when entry
+               (funcall f (ht-entry-key entry) (ht-entry-value entry))
+               (for-entries (ht-entry-next entry))))
+           (for-buckets (buckets n)
+             (when (< n (vector-length buckets))
+               (for-entries (vector-ref buckets n))
+               (for-buckets buckets (1+ n)))))
+    (for-buckets (hashtable-buckets ht) 0)))
+
+(defmarco (for-hashtable k-v-ht . body)
+  (quasiquote
+    (for-hashtable-call (unquote (third k-v-ht))
+      (lambda ((unquote (first k-v-ht)) (unquote (second k-v-ht)))
+        (unquote-splicing body)))))
+
 (define (string-hash str)
   (string-range-hash str 0 (string-length str)))
 

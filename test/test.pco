@@ -61,7 +61,12 @@
     (hashtable-set! ht "foo" "bar")
     (assert-result (hashtable-ref ht "foo") "bar")
     (hashtable-set! ht "foo" "baz")
-    (assert-result (hashtable-ref ht "foo") "baz"))
+    (assert-result (hashtable-ref ht "foo") "baz")
+    
+    (define l ())
+    (for-hashtable (k v ht)
+      (set! l (acons k v l)))
+    (assert-result l '(("foo" . "baz"))))
 
   (assert-result (string-equal? (symbol-name 'foo) "foo") true)
   (assert-result (eq? (intern "foo") 'foo) true)
