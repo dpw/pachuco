@@ -152,6 +152,5 @@
     (emit cg "cld")
     (dolist (reg (reverse c-callee-saved-regs)) (emit-pop cg reg))
     (emit cg "ret")
-    
-    (codegen-do-out-of-line cg)
-    (codegen-heap-exhausted cg)))
+
+    (codegen-program-end cg)))

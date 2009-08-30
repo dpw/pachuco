@@ -161,5 +161,4 @@
     (emit cg "cld ; leave")
     (emit cg "ret")
     
-    (codegen-do-out-of-line cg)    
-    (codegen-heap-exhausted cg)))
+    (codegen-program-end cg)))

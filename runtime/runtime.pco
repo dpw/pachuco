@@ -541,11 +541,22 @@
   (define symbol-id-counter 0)
 
   (define (intern str)
+    ;; have we constructed the symbol table from the symbol list dumped
+    ;; by the compiler yet?
     (unless symbol-table
       (set! symbol-table (make-hashtable string-hash string-equal?))
-      (dolist (sym initial-symbols)
-        (hashtable-set! symbol-table (symbol-name sym) sym)))
 
+      (define (add-symbols offset end-offset)
+        (when (< offset end-offset)
+          (define sym (raw-ref (raw-+ (raw-label "symbols_start")
+                                      (fixnum->raw offset))))
+          (hashtable-set! symbol-table (symbol-name sym) sym)
+          (add-symbols (+ offset (compiler-constant value-size))
+                       end-offset)))
+
+      (add-symbols 0 (raw->fixnum (raw-- (raw-label "symbols_end")
+                                         (raw-label "symbols_start")))))
+    
     (define res (hashtable-ref symbol-table str))
     (if res res
         (begin

@@ -159,8 +159,7 @@
     (emiti cg "ldmfd sp!, ~A" saved-regs)
     (emiti cg "mov pc, lr")
     
-    (codegen-do-out-of-line cg)
-    (codegen-heap-exhausted cg)))
+    (codegen-program-end cg)))
 
 ;;; Stack layout:
 ;;;

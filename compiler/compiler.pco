@@ -4,7 +4,6 @@
   ;; Compile the program, printing the resulting assembly on standard
   ;; output
   (set! program (normalize-forms program))
-  (set! program (gather-symbols-forms program))
   (set! program (eliminate-definitions-forms program))
   (set! program (list* 'begin () program))
   (replace-empty-bodies program)
@@ -137,27 +136,6 @@
 
 (define (quoted-unspecified)
   (list 'quote unspecified))
-
-;;; Gather all symbols used into the program into the initial-symbols
-;;; definition
-
-(define (gather-symbols-from-quoted-form quoted cell)
-  (cond ((pair? quoted)
-         (gather-symbols-from-quoted-form (car quoted) cell)
-         (gather-symbols-from-quoted-form (cdr quoted) cell))
-        ((symbol? quoted)
-         (rplaca cell (adjoin quoted (car cell))))))
-         
-(define-trivial-walker gather-symbols-aux (cell))
-
-(define-gather-symbols-aux (quote quoted)
-  (gather-symbols-from-quoted-form quoted cell))
-
-(define (gather-symbols-forms forms)
-  (let* ((cell (cons () ())))
-    (gather-symbols-aux-forms forms cell)
-    (cons (quasiquote (define initial-symbols (quote (unquote (car cell)))))
-          forms)))
 
 ;;; Remove the definitions forms, splicing them into the surrounding
 ;;; begin/lambda
