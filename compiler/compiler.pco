@@ -180,34 +180,6 @@
   (rplaca (cdr form) (normalize-lambda-params params))
   (normalize-lambdas-recurse form))
 
-;;; Collect definitions in begins.  The second element of a begin form
-;;; holds a list of varrecs.  For a lambda enclosing defines, we wrap
-;;; the lambda body in a begin, e.g:
-;;;
-;;; (lambda (...) ... (define x ...) ...)
-;;; => (lambda (...) (begin ((x)) ... (define x ...) ...))
-
-(define-trivial-walker collect-defines-aux (cell))
-
-(define-collect-defines-aux (define var . val)
-  (rplaca cell (cons (list var) (car cell)))
-  (collect-defines-aux-recurse form cell))
-
-(define-collect-defines-aux (begin attrs . body)
-  (collect-defines-aux-forms body (cdr form)))
-
-(define-collect-defines-aux (lambda attrs . body)
-  (let* ((cell (cons () body)))
-    (collect-defines-aux-recurse form cell)
-    (unless (null? (car cell))
-      (rplacd (cdr form) (list (cons 'begin cell))))))
-
-(define (collect-defines form)
-  (let* ((cell (cons () ())))
-    (collect-defines-aux form cell)
-    (unless (null? (car cell))
-      (error "what do you expect me to do with ~S?" (car cell)))))
-
 ;;; This phase is for miscellaneous simplifications and source
 ;;; rearrangements
 
@@ -282,6 +254,34 @@
 (define-simplify (character? attrs ch)
   (rplaca form 'number?)
   (simplify-recurse form))
+
+;;; Collect definitions in begins.  The second element of a begin form
+;;; holds a list of varrecs.  For a lambda enclosing defines, we wrap
+;;; the lambda body in a begin, e.g:
+;;;
+;;; (lambda (...) ... (define x ...) ...)
+;;; => (lambda (...) (begin ((x)) ... (define x ...) ...))
+
+(define-trivial-walker collect-defines-aux (cell))
+
+(define-collect-defines-aux (define var . val)
+  (rplaca cell (cons (list var) (car cell)))
+  (collect-defines-aux-recurse form cell))
+
+(define-collect-defines-aux (begin attrs . body)
+  (collect-defines-aux-forms body (cdr form)))
+
+(define-collect-defines-aux (lambda attrs . body)
+  (let* ((cell (cons () body)))
+    (collect-defines-aux-recurse form cell)
+    (unless (null? (car cell))
+      (rplacd (cdr form) (list (cons 'begin cell))))))
+
+(define (collect-defines form)
+  (let* ((cell (cons () ())))
+    (collect-defines-aux form cell)
+    (unless (null? (car cell))
+      (error "what do you expect me to do with ~S?" (car cell)))))
 
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to the relevant varrec
