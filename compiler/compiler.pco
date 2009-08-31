@@ -6,8 +6,7 @@
   (set! program (list* 'begin () (normalize-forms program)))
   (normalize-lambdas program)
   (simplify program)
-  (collect-defines program)
-  (resolve-variables program)
+  (resolve-variables program ())
   (classify-variables program)
   (mark-top-level-definitions program)
   (collect-closures program)
@@ -211,13 +210,21 @@
   (overwrite-form form body)
   (propagate body (list 'varargs-return attrs arg-count)))
 
-(define (propagate-recurse-last form rest operator)
-  (if (null? rest)
-      (propagate form operator)
-      (propagate-recurse-last (car rest) (cdr rest) operator)))
+(define (propagate-last forms operator)
+  (if (null? (cdr forms))
+      (let* ((form (car forms)))
+        ;; if the final form is a define, we need to take special
+        ;; action to make sure it remains a subform of the enclosing
+        ;; begin: we append a reference to the variable to the end of
+        ;; the body, and propagate into that.
+        (when (eq? 'define (first form))
+          (set! form (list 'ref (second form)))
+          (rplacd forms (list form)))
+        (propagate form operator))
+      (propagate-last (cdr forms) operator)))
 
 (define-propagate (begin attrs . body)
-  (propagate-recurse-last (car body) (cdr body) operator))
+  (propagate-last body operator))
 
 (define-propagate (if attrs test then else)
   ;; we need to avoid aliasing operator, so one of these needs to copy
@@ -246,70 +253,44 @@
   (rplaca form 'number?)
   (simplify-recurse form))
 
-;;; Collect definitions in begins.  The second element of a begin form
-;;; holds a list of varrecs.  For a lambda enclosing defines, we wrap
-;;; the lambda body in a begin, e.g:
-;;;
-;;; (lambda (...) ... (define x ...) ...)
-;;; => (lambda (...) (begin ((x)) ... (define x ...) ...))
-
-(define-trivial-walker collect-defines-aux (cell))
-
-(define-collect-defines-aux (define var . val)
-  (rplaca cell (cons (list var) (car cell)))
-  (collect-defines-aux-recurse form cell))
-
-(define-collect-defines-aux (begin attrs . body)
-  (collect-defines-aux-forms body (cdr form)))
-
-(define-collect-defines-aux (lambda attrs . body)
-  (let* ((cell (cons () body)))
-    (collect-defines-aux-recurse form cell)
-    (unless (null? (car cell))
-      (rplacd (cdr form) (list (cons 'begin cell))))))
-
-(define (collect-defines form)
-  (let* ((cell (cons () ())))
-    (collect-defines-aux form cell)
-    (unless (null? (car cell))
-      (error "what do you expect me to do with ~S?" (car cell)))))
-
 ;;; Convert all variable names (in defines, refs, set!s) to references
-;;; to the relevant varrec
+;;; to varrecs.  Also, collect definitions in begins.  The second
+;;; element of a begin form holds a list of varrecs.
 
-(define-trivial-walker resolve-variables-aux (frames))
+(define-trivial-walker resolve-variables (frames))
+
+(define-resolve-variables (begin attrs . body)
+  (let* ((frame (make-symboltable))
+         (varrecs ()))
+    (dolist (subform body)
+      (when (eq? 'define (car subform))
+        (let* ((var (second subform))
+               (varrec (list var)))
+          (when (symboltable-ref frame var)
+            (error "multiple definitions for ~S" var))
+          (symboltable-set! frame var varrec)
+          (rplaca (cdr subform) varrec)
+          (push varrec varrecs))))
+    (rplaca (cdr form) varrecs)
+    (resolve-variables-forms body (cons frame frames))))
+
+(define-resolve-variables (lambda attrs body)
+  (let* ((frame (make-symboltable)))
+    (dolist (varrec (attr-ref attrs 'params))
+      (symboltable-set! frame (car varrec) varrec))
+    (resolve-variables body (cons frame frames))))
 
 (define (resolve-variable var frames)
   (let* ((varrec (symboltable-list-ref frames var)))
     (unless varrec (error "unbound variable ~S" var))
     varrec))
 
-(define-resolve-variables-aux (ref var)
+(define-resolve-variables (ref var)
   (rplaca (cdr form) (resolve-variable var frames)))
 
-(define-resolve-variables-aux (set! var val)
+(define-resolve-variables (set! var val)
   (rplaca (cdr form) (resolve-variable var frames))
-  (resolve-variables-aux val frames))
-
-(define-resolve-variables-aux (define var val)
-  (rplaca (cdr form) (resolve-variable var frames))
-  (resolve-variables-aux val frames))
-
-(define (make-frame varrecs)
-  (let* ((frame (make-symboltable)))
-    (dolist (varrec varrecs)
-      (symboltable-set! frame (car varrec) varrec))
-    frame))
-
-(define-resolve-variables-aux (begin varrecs . body)
-  (resolve-variables-aux-recurse form (cons (make-frame varrecs) frames)))
-
-(define-resolve-variables-aux (lambda attrs body)
-  (resolve-variables-aux body (cons (make-frame (attr-ref attrs 'params))
-                                    frames)))
-
-(define (resolve-variables form)
-  (resolve-variables-aux form ()))
+  (resolve-variables val frames))
 
 ;;; Classify all variables into read-only and (potentially)
 ;;; read-write, or early function (a read-only variable with a
