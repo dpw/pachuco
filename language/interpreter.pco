@@ -17,7 +17,8 @@
     (symboltable-set! interpreter-builtin-vars
                       '(unquote name) (cons (unquote val) ()))))
 
-(define (make-initial-interpreter-env) (list interpreter-builtin-vars))
+(define (make-initial-interpreter-env)
+  (list (make-symboltable) interpreter-builtin-vars))
 
 (define (eval-form-aux form env in-body)
   (cond ((pair? form)

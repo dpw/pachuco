@@ -6,7 +6,7 @@
 ;; normal macro expanders, the second for symbol macro expansions.
 
 (define (make-initial-macro-env)
-  (list (cons builtin-expanders false)))
+  (list (cons false false) (cons builtin-expanders false)))
 
 (defmarco (define-form-expander keyword . body)
   (quasiquote
