@@ -347,9 +347,10 @@
     (when (= state 2) (rplaca form 'set!))
     (when lambda? (form-attr-set! val 'self varrec))))
 
-(define (classify-block-variables varrecs init form)
+(define (classify-block-variables varrecs init mode form)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'state init))
+    (varrec-attr-set! varrec 'state init)
+    (varrec-attr-set! varrec 'mode mode))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
     (let* ((state (varrec-attr-remove varrec 'state)))
@@ -361,11 +362,11 @@
                         (vector-ref varrec-access-table state)))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs 4 form))
+  (classify-block-variables varrecs 4 'local form))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) 0 form))
+  (classify-block-variables (attr-ref attrs 'params) 0 'param form))
 
 (define (varrec-written? varrec)
   (eq? 'written (varrec-attr varrec 'access)))
@@ -376,22 +377,9 @@
 ;;;
 ;;; The program should always consist of a begin form at this point
 
-(define-trivial-walker mark-non-top-level-definitions ())
-
 (define (mark-top-level-definitions program)
   (dolist (varrec (second program))
-    (varrec-attr-set! varrec 'mode 'top-level))
-  (mark-non-top-level-definitions-recurse program))
-
-(define-mark-non-top-level-definitions (begin varrecs . body)
-  (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'mode 'local))
-  (mark-non-top-level-definitions-forms body))
-
-(define-mark-non-top-level-definitions (lambda attrs body)
-  (dolist (varrec (form-attr form 'params))
-    (varrec-attr-set! varrec 'mode 'param))
-  (mark-non-top-level-definitions body))
+    (varrec-attr-set! varrec 'mode 'top-level)))
 
 (define (varrec-top-level? varrec)
   (eq? 'top-level (varrec-attr varrec 'mode)))
