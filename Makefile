@@ -10,6 +10,8 @@ ifeq ($(CODEGEN),old)
 CODEGEN_SOURCES+=compiler/codegen-old.pco
 else ifeq ($(CODEGEN),simple)
 CODEGEN_SOURCES+=compiler/codegen-simple.pco
+else ifeq ($(CODEGEN),context)
+CODEGEN_SOURCES+=compiler/codegen-context.pco
 else
 $(error unknown codegen strategy $(CODEGEN))
 endif

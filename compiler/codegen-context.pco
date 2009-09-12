@@ -1,9 +1,24 @@
 ;;; More-or-less the simplest code generation strategy that could
 ;;; possibly work
 
+;; codegen emits the code to evaluate the form, with the result going into 
+;; %funcres
 (define-walker codegen (cg out-frame-base))
 (define (codegen-recurse form cg out-frame-base)
   (error "codegen on unknown form ~S" (car form)))
+
+;; codegen-discarding emits code to evaluate the form, in a context
+;; where the resulting value is not used.
+(define-walker codegen-discarding (cg out-frame-base))
+(define (codegen-discarding-recurse form cg out-frame-base)
+  (codegen form cg out-frame-base))
+
+;; codegen-discarding emits code to evaluate the form, in a
+;; conditional context.
+(define-walker codegen-conditional (cg out-frame-base tlabel flabel))
+(define (codegen-conditional-recurse form cg out-frame-base tlabel flabel)
+  (emit-branch-on-operand cg (codegen form cg out-frame-base)
+                          out-frame-base tlabel flabel))
 
 
 (define main-reg (first general-registers))
@@ -11,18 +26,14 @@
 (define (codegen-into-reg form cg out-frame-base reg)
   (emit-mov-maybe cg (codegen form cg out-frame-base) reg))
 
-(defmarco (define-codegen-discarding template . body)
-  (quasiquote (define-codegen (unquote template)
-                (unquote-splicing body)
-                false)))
-
 ;;; codegen functions called from outside this file
 
 (defmarco (trashy-codegen form cg out-frame-base)
   (quasiquote (codegen (unquote form) (unquote cg) (unquote out-frame-base))))
 
 (defmarco (trashy-codegen-discarding form cg out-frame-base)
-  (quasiquote (codegen (unquote form) (unquote cg) (unquote out-frame-base))))
+  (quasiquote (codegen-discarding (unquote form) (unquote cg)
+                                  (unquote out-frame-base))))
 
 (defmarco (trashy-codegen-into-reg form cg out-frame-base reg)
   (quasiquote (codegen-into-reg (unquote form) (unquote cg)
@@ -33,53 +44,78 @@
 
 ;;; Begin
 
-(define (codegen-begin forms cg out-frame-base)
-  (emit-comment-form cg (car forms))
+(define (codegen-begin-non-final cg forms)
   (if (null? (cdr forms))
-      (codegen (car forms) cg out-frame-base)
       (begin
-        (codegen (car forms) cg false)
-        (codegen-begin (cdr forms) cg out-frame-base))))
- 
+        (emit-comment-form cg (car forms))
+        (car forms))
+      (begin
+        (emit-comment-form cg (car forms))
+        (codegen-discarding (car forms) cg false)
+        (codegen-begin-non-final cg (cdr forms)))))
+
+;; We always attempt to reset the frame-base at the end of a begin.
+;; Sometimes this won't do anything, because the last form in the
+;; begin will have taken care of it (e.g. a nested begin).  But
+;; checking there means that most forms can ignore out-frame-base
+
 (define-codegen (begin varrecs . body)
   (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
-  (let* ((res (codegen-begin body cg out-frame-base)))
-    ;; we make sure that the result goes into a register, because any
-    ;; operand that depends on the frame-base might no longer be valid
-    ;; if we alter the frame-base
-    (unless (or (not res) (register? res))
-      (emit-mov cg res main-reg)
-      (set! res main-reg))
-    (emit-reset-frame-base cg out-frame-base)
-    res))
+  ;; we make sure that the result goes into a register, because any
+  ;; operand that depends on the frame-base might no longer be valid
+  ;; if we alter the frame-base
+  (codegen-into-reg (codegen-begin-non-final cg body) cg out-frame-base
+                    main-reg)
+  (emit-reset-frame-base cg out-frame-base)
+  main-reg)
+
+(define-codegen-discarding (begin varrecs . body)
+  (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
+  (codegen-discarding (codegen-begin-non-final cg body) cg out-frame-base)
+  (emit-reset-frame-base cg out-frame-base))
+
+(define-codegen-conditional (begin varrecs . body)
+  (unless out-frame-base (set! out-frame-base (codegen-frame-base cg)))
+  (codegen-conditional (codegen-begin-non-final cg body) cg out-frame-base
+                       tlabel flabel)
+  ;; codegen-conditional should always handle the reset-frame-base
+  )
 
 ;;; If
 
-(define (emit-mov-to-main-reg cg oper)
-  (when oper (emit-mov-maybe cg oper main-reg)))
-
-(define-codegen (if attrs test then else)
+(define (codegen-if test then else cg out-frame-base codegen-clause)
   (let* ((l1 (gen-label))
          (l2 (gen-label))
          (l3 (gen-label)))
-    (if (eq? (car test) 'quote)
-        (emit-smart-jump cg (if (quote-false? test) l2 l1))
-        (emit-branch-on-operand cg (codegen test cg false) false
-                                l1 l2))
+    (codegen-conditional test cg false l1 l2)
     (emit-smart-label cg l1)
     (with-saved-frame-base cg
       (emit-comment-form cg then)
-      (emit-mov-to-main-reg cg (codegen then cg out-frame-base))
+      (funcall codegen-clause then)
       (emit-reset-frame-base cg out-frame-base))
     (emit-smart-jump cg l3)
     (emit-smart-label cg l2)
-
     (emit-comment-form cg else)
-    (emit-mov-to-main-reg cg (codegen else cg out-frame-base))
+    (funcall codegen-clause else)
     (emit-reset-frame-base cg out-frame-base)
+    (emit-smart-label cg l3)))
 
-    (emit-smart-label cg l3)
-    main-reg))
+(define-codegen (if attrs test then else)
+  (codegen-if test then else cg out-frame-base
+             (lambda (form) (codegen-into-reg form cg out-frame-base main-reg)))
+  main-reg)
+
+(define-codegen-discarding (if attrs test then else)
+  (codegen-if test then else cg out-frame-base
+              (lambda (form) (codegen-discarding form cg out-frame-base))))
+
+(define-codegen-conditional (if attrs test then else)
+  (codegen-if test then else cg out-frame-base
+    (lambda (form) (codegen-conditional form cg out-frame-base tlabel flabel))))
+
+(define-codegen-conditional (quote attrs)
+  (emit-reset-frame-base cg out-frame-base)
+  (emit-smart-jump cg (if (quote-false? form) flabel tlabel)))
 
 ;;; Operator support
 
@@ -129,11 +165,27 @@
               (unquote-splicing body)))))))))
 
 (defmarco (define-cc-operator template options . body)
-  (quasiquote
-    (define-operator (unquote template) ((temp-regs reg))
-      (emit-prepare-convert-cc-value cg reg)
-      (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
-      reg)))
+  (let* ((name (car template))
+         (registers-name (compound-symbol name "-registers"))
+         (param-specs (mapfor (p (cdr template))
+                              (if (pair? p) p (list p 'reg))))
+         (param-names (mapfor (ps param-specs) (first ps))))
+    (quasiquote (definitions
+      (define-codegen ((unquote name) attrs (unquote-splicing param-names))
+        (codegen-operator-args cg (cddr form) general-registers)
+        (bind ((unquote-splicing param-names) result-reg . spare-regs)
+              general-registers
+          (emit-prepare-convert-cc-value cg result-reg)
+          (emit-convert-cc-value cg (begin (unquote-splicing body)) result-reg)
+          result-reg))
+
+      (define-codegen-conditional ((unquote name) attrs
+                                   (unquote-splicing param-names))
+        (codegen-operator-args cg (cddr form) general-registers)
+        (bind ((unquote-splicing param-names) . spare-regs)
+              general-registers
+          (let* ((cc (begin (unquote-splicing body))))
+            (emit-smart-branch cg cc out-frame-base tlabel flabel))))))))
 
 ;;; Misc
 
