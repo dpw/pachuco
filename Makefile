@@ -108,7 +108,6 @@ clean:
 	rm -rf build
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
-	touch scripts/sbcl-wrapper
 
 $(eval $(call stage_template,$(BOOTSTRAP_COMPILER),stage0,stage1))
 $(eval $(call stage_template,build/stage1,stage1,stage2))
