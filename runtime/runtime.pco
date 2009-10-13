@@ -54,7 +54,7 @@
                     (list 'list '(quote quote) (cadr form))))
                ((eq? 'quasiquote keyword)
                 (quasiquote-transform false
-                                      (quasiquote-transform true (cadr form))))
+                                  (quasiquote-transform innermost (cadr form))))
                ((and (pair? keyword) (eq? 'unquote-splicing (car keyword)))
                 (list 'append (cadr keyword)
                       (quasiquote-transform innermost (cdr form))))
@@ -959,14 +959,14 @@
   (write-character ostr #\)))
 
 (define (print ostr obj)
-  (cond ((pair? obj)
-         (print-list ostr obj))
+  (cond ((string? obj)
+         (print-string ostr obj))
         ((number? obj)
          (print-number ostr obj))
-        ((string? obj)
-         (print-string ostr obj))
         ((symbol? obj)
          (print-symbol ostr obj))
+        ((pair? obj)
+         (print-list ostr obj))
         ((function? obj)
          (write-string ostr "#<function>"))
         (true
@@ -977,60 +977,135 @@
 
 ;;; Formatted IO
 
-(define (formout-list ostr control args)
-  (define pos 0)
-  (define write-from 0)
-  (define control-len (string-length control))
-  (define ch)
+(define (generate-formout-parser control to-write-substring to-write-character
+                                 to-use-arg)
+  (quasiquote (
+    (define pos 0)
+    (define write-from 0)
+    (define control-len (string-length control))
 
-  (define (flush)
-    (write-substring ostr control write-from (- pos write-from)))
-
-  (while (< pos control-len)
-    (set! ch (string-ref control pos)) 
-    (if (not (eq? ch #\~)) (set! pos (1+ pos))
-        (begin
-          (flush)
+    (while (< pos control-len)
+      (define ch (string-ref control pos)) 
+      (if (not (eq? ch #\~))
           (set! pos (1+ pos))
-          (if (>= pos control-len) (set! write-from pos)
-              (begin
-                (set! ch (string-ref control pos))
-                (set! pos (1+ pos))
+          (begin
+            (unless (= pos write-from)
+              (unquote (to-write-substring 'control 'write-from
+                                           '(- pos write-from))))
+            (set! pos (1+ pos))
+            (if (>= pos control-len)
                 (set! write-from pos)
-                (cond ((eq? ch #\~)
-                       (set! write-from (1- write-from)))
+                (begin
+                  (set! ch (string-ref control pos))
+                  (set! pos (1+ pos))
+                  (set! write-from pos)
+                  (cond ((eq? ch #\~)
+                         (set! write-from (1- write-from)))
 
-                      ((eq? ch #\%)
-                       (write-character ostr #\Newline))
+                        ((eq? ch #\%)
+                         (unquote (to-write-character #\Newline)))
 
-                      ((or (eq? ch #\A) (eq? ch #\a))
-                       (with-value (*print-readably* false)
-                         (print ostr (car args)))
-                       (set! args (cdr args)))
+                        ((or (eq? ch #\A) (eq? ch #\a))
+                         (unquote (to-use-arg (lambda (os arg)
+                           (quasiquote
+                             (with-value (*print-readably* false)
+                               (print (unquote os) (unquote arg))))))))
 
-                      ((or (eq? ch #\S) (eq? ch #\s))
-                       (with-value (*print-readably* true)
-                         (print ostr (car args)))
-                       (set! args (cdr args)))
+                        ((or (eq? ch #\S) (eq? ch #\s))
+                         (unquote (to-use-arg (lambda (os arg)
+                           (quasiquote
+                             (with-value (*print-readably* true)
+                               (print (unquote os) (unquote arg))))))))
 
-                      ((or (eq? ch #\D) (eq? ch #\d))
-                       (with-value (*print-radix* 10)
-                         (print ostr (car args)))
-                       (set! args (cdr args)))
+                        ((or (eq? ch #\D) (eq? ch #\d))
+                         (unquote (to-use-arg (lambda (os arg)
+                           (quasiquote
+                             (with-value (*print-radix* 10)
+                               (print (unquote os) (unquote arg))))))))
 
-                      ((or (eq? ch #\X) (eq? ch #\x))
-                       (with-value (*print-radix* 16)
-                         (print ostr (car args)))
-                       (set! args (cdr args)))
+                        ((or (eq? ch #\X) (eq? ch #\x))
+                         (unquote (to-use-arg (lambda (os arg)
+                           (quasiquote
+                             (with-value (*print-radix* 16)
+                               (print (unquote os) (unquote arg))))))))
 
-                      ((or (eq? ch #\C) (eq? ch #\c))
-                       (print-character ostr (car args))
-                       (set! args (cdr args)))
+                        ((or (eq? ch #\C) (eq? ch #\c))
+                         (unquote (to-use-arg (lambda (os arg)
+                           (quasiquote
+                             (print-character (unquote os) (unquote arg)))))))
 
-                      (true
-                       (error "Unknown format character ~C" ch))))))))
+                        (true
+                         (error "Unknown format character ~C" ch))))))))
 
-  (flush))
+    (unless (= pos write-from)
+      (unquote (to-write-substring 'control 'write-from
+                                   '(- pos write-from)))))))
+
+(defmacro (generate-formout-list)
+  (quasiquote
+    (define (formout-list os control args)
+      (define (consume-arg)
+        (define arg (car args))
+        (set! args (cdr args))
+        arg)
+
+      (unquote-splicing
+        (generate-formout-parser 'control
+          ;; to-write-substring
+          (lambda (str pos len)
+            (quasiquote
+              (write-substring os (unquote str) (unquote pos) (unquote len))))
+          ;; to-write-character
+          (lambda (ch) (quasiquote (write-character os (unquote ch))))
+          ;; to-use-arg
+          (lambda (template) (template 'os '(consume-arg))))))))
+(generate-formout-list)
+
+(defmacro (generate-formout-macro)
+  (quasiquote
+    (defmacro (formout os control . args)
+      (if (string? control)
+          (begin
+           (define stmts (list 'begin))
+           (define stmts-tail stmts)
+
+           (define (push-stmt stmt)
+             (set! stmt (list stmt))
+             (rplacd stmts-tail stmt)
+             (set! stmts-tail stmt))
+           
+           (define (consume-arg)
+             (define arg (car args))
+             (set! args (cdr args))
+             arg)
+
+           (unless (symbol? os)
+             (define os-var (gensym))
+             (push-stmt (list 'define os-var os))
+             (set! os os-var))
+
+           (unquote-splicing
+             (generate-formout-parser 'control
+               ;; to-write-substring
+               (lambda (str pos len)
+                 (quasiquote
+                   (push-stmt (list 'write-substring os
+                                    (substring (unquote str) (unquote pos)
+                                               (unquote len))
+                                    0 (unquote len)))))
+               ;; to-write-character
+               (lambda (ch)
+                 (quasiquote
+                   (push-stmt (list 'write-character os (unquote ch)))))
+
+               ;; to-use-arg
+               (lambda (template)
+                 (quasiquote
+                   (push-stmt ((unquote template) os (consume-arg)))))))
+          stmts)
+          (quasiquote (formout-list (unquote os) (unquote control)
+                                    (list (unquote-splicing args))))))))
+(generate-formout-macro)
 
 (define (formout ostr control . args)
   (formout-list ostr control args))
@@ -1475,6 +1550,10 @@
   (cond ((eq? out true) (apply formout stdout args))
         ((eq? out false) (apply format args))
         (true (apply formout out args))))
+(defmarco (format~ out . args)
+  (cond ((eq? out true) (list* 'formout 'stdout args))
+        ((eq? out false) (cons 'format args))
+        (true (list* 'format out args))))
 
 (define (reduce~ initial l f) (reduce initial l f))
 

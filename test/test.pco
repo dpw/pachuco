@@ -178,7 +178,10 @@
     
     (assert-non-uniform-format "Hello" "\"Hello\"" "Hello")
     (assert-non-uniform-format '("Hello" "there") "(\"Hello\" \"there\")"
-                               "(Hello there)"))
+                               "(Hello there)")
+
+    (assert-result (format "~%") "
+"))
 
   (assert-result (apply append '((1 2) (3 4)) '((5 6) (7 8)))
                  '((1 2) (3 4) 5 6 7 8))
