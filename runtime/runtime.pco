@@ -879,11 +879,6 @@
 (define *print-radix* 10)
 (define *print-readably* false)
 
-(define (character-string ch)
-  (define buf (make-string 1))
-  (string-set! buf 0 ch)
-  buf)
-
 (define (print-number ostr num)
   (if (= num 0)
       (write-character ostr #\0)
@@ -924,12 +919,17 @@
 (define character-names '((#\Space . "Space")
                           (#\Newline . "Newline")))
 
+(define (character-string ch)
+  (define buf (make-string 1))
+  (string-set! buf 0 ch)
+  buf)
+
 (define (print-character ostr ch)
   (if *print-readably*
       (begin
         (write-character ostr #\\)
         (define name (assoc ch character-names))
-        (write-string ostr (if name (character-string ch) (cdr name))))
+        (write-string ostr (if name (cdr name) (character-string ch))))
       (write-string ostr (character-string ch))))
 
 (define (print-symbol ostr sym)
