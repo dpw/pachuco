@@ -1118,6 +1118,14 @@
 (define (format control . args)
   (format-list control args))
 
+(defmacro (format control . args)
+  (define buf (gensym))
+  (quasiquote
+    (begin
+      (define (unquote buf) (make-buffer-ostream))
+      (formout (unquote buf) (unquote control) (unquote-splicing args))
+      (buffer-ostream-to-string (unquote buf)))))
+
 (set! (error message . args)
   (formout stderr "~A~%" (format-list message args))
   (error-halt))
