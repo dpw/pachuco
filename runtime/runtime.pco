@@ -792,19 +792,6 @@
 (define (acons key val tail)
   (cons (cons key val) tail))
 
-;;; Dynamic scope
-
-(defmacro (with-value binding . body)
-  (define temp (gensym))
-  (define res (gensym))
-  (quasiquote
-    (begin
-      (define (unquote temp) (unquote (first binding)))
-      (set! (unquote (first binding)) (unquote (second binding)))
-      (define (unquote res) (begin (unquote-splicing body)))
-      (set! (unquote (first binding)) (unquote temp))
-      (unquote res))))
-
 ;;; Strings
 
 (define (substring str offset len)
@@ -876,16 +863,13 @@
 
 (define print-number-digits "0123456789abcdefghijklmnopqrstuvwxyz")
 
-(define *print-radix* 10)
-(define *print-readably* false)
-
-(define (print-number ostr num)
+(define (print-number ostr num radix)
   (if (= num 0)
       (write-character ostr #\0)
       (begin
-        (unless (and (<= 2 *print-radix*)
-                     (<= *print-radix* (string-length print-number-digits)))
-          (error "Bad radix ~D" *print-radix*))
+        (unless (and (<= 2 radix)
+                     (<= radix (string-length print-number-digits)))
+          (error "Bad radix ~D" radix))
         
         (define negated false)
         (when (< num 0)
@@ -899,8 +883,8 @@
         (while (> num 0)
           (set! pos (1- pos))
           (string-set! buf pos (string-ref print-number-digits
-                                           (rem num *print-radix*)))
-          (set! num (truncate num *print-radix*)))
+                                           (rem num radix)))
+          (set! num (truncate num radix)))
         
         (when negated
          (set! pos (1- pos))
@@ -908,8 +892,8 @@
         
         (write-substring ostr buf pos (- buf-size pos)))))
 
-(define (print-string ostr str)
-  (if *print-readably*
+(define (print-string ostr str readably)
+  (if readably
       (begin
         (write-character ostr #\")
         (write-string ostr str)
@@ -924,8 +908,8 @@
   (string-set! buf 0 ch)
   buf)
 
-(define (print-character ostr ch)
-  (if *print-readably*
+(define (print-character ostr ch readably)
+  (if readably
       (begin
         (write-character ostr #\\)
         (define name (assoc ch character-names))
@@ -942,31 +926,31 @@
     (unspecified . "unspecified")
     (() . "()")))
 
-(define (print-list ostr l)
+(define (print-list ostr l readably)
   (write-character ostr #\()
-  (print ostr (car l))
+  (print ostr (car l) readably)
   (set! l (cdr l))
 
   (while (pair? l)
     (write-character ostr #\Space)
-    (print ostr (car l))
+    (print ostr (car l) readably)
     (set! l (cdr l)))
 
   (unless (null? l)
     (write-string ostr " . ")
-    (print ostr l))
+    (print ostr l readably))
 
   (write-character ostr #\)))
 
-(define (print ostr obj)
+(define (print ostr obj readably)
   (cond ((string? obj)
-         (print-string ostr obj))
+         (print-string ostr obj readably))
         ((number? obj)
-         (print-number ostr obj))
+         (print-number ostr obj 10))
         ((symbol? obj)
          (print-symbol ostr obj))
         ((pair? obj)
-         (print-list ostr obj))
+         (print-list ostr obj readably))
         ((function? obj)
          (write-string ostr "#<function>"))
         (true
@@ -1008,31 +992,28 @@
                         ((or (eq? ch #\A) (eq? ch #\a))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (with-value (*print-readably* false)
-                               (print (unquote os) (unquote arg))))))))
+                             (print (unquote os) (unquote arg) false))))))
 
                         ((or (eq? ch #\S) (eq? ch #\s))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (with-value (*print-readably* true)
-                               (print (unquote os) (unquote arg))))))))
+                             (print (unquote os) (unquote arg) true))))))
 
                         ((or (eq? ch #\D) (eq? ch #\d))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (with-value (*print-radix* 10)
-                               (print (unquote os) (unquote arg))))))))
+                             (print-number (unquote os) (unquote arg) 10))))))
 
                         ((or (eq? ch #\X) (eq? ch #\x))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (with-value (*print-radix* 16)
-                               (print (unquote os) (unquote arg))))))))
+                             (print-number (unquote os) (unquote arg) 16))))))
 
                         ((or (eq? ch #\C) (eq? ch #\c))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (print-character (unquote os) (unquote arg)))))))
+                             (print-character (unquote os) (unquote arg)
+                                              false))))))
 
                         (true
                          (error "Unknown format character ~C" ch))))))))
@@ -1089,10 +1070,13 @@
                ;; to-write-substring
                (lambda (str pos len)
                  (quasiquote
-                   (push-stmt (list 'write-substring os
-                                    (substring (unquote str) (unquote pos)
-                                               (unquote len))
-                                    0 (unquote len)))))
+                   (push-stmt (if (= 1 (unquote len))
+                                  (list 'write-character os
+                                       (string-ref (unquote str) (unquote pos)))
+                                  (list 'write-substring os
+                                        (substring (unquote str) (unquote pos)
+                                                   (unquote len))
+                                        0 (unquote len))))))
                ;; to-write-character
                (lambda (ch)
                  (quasiquote
