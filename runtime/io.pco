@@ -59,85 +59,91 @@
 ;;; The position must always be before the end of the buffer.  This
 ;;; means that a buffer of length 1 gives us unbuffered output.
 
+(define-struct ostream ((constructor make-ostream pos buf fd))
+  pos
+  buf
+  fd)
+
+(define (ostream-capacity os)
+  (string-length (ostream-buf os)))
+
 (define (make-fd-ostream fd size)
-  (make-vector-from-list (list 0 (make-string size) fd)))
+  (make-ostream 0 (make-string size) fd))
 
 (define (make-buffer-ostream) 
-  (make-fd-ostream false 100))
+  (make-ostream 0 (make-string 100) false))
 
-(define (buffer-ostream-to-string ostr)
-  (define buf-pos (vector-ref ostr 0))
-  (define str (make-string buf-pos))
-  (string-copy (vector-ref ostr 1) 0 str 0 buf-pos)
+(define (buffer-ostream-to-string os)
+  (define str (make-string (ostream-pos os)))
+  (string-copy (ostream-buf os) 0 str 0 (ostream-pos os))
   str)
 
-(define (write-substring ostr str pos len)
-  (define buf-pos (vector-ref ostr 0))
-  (define buf-pos-after (+ buf-pos len))
-  (define buf (vector-ref ostr 1))
-
-  (if (< buf-pos-after (string-length buf))
-      (string-copy str pos buf buf-pos len)
-      (begin
+(define (write-substring os str pos len)
+  (define buf-pos-after (+ (ostream-pos os) len))
+  (ostream-set-pos! os
+    (if (< buf-pos-after (ostream-capacity os))
+        (begin
+          (string-copy str pos (ostream-buf os) (ostream-pos os) len)
+          buf-pos-after)
         ;; new data won't fit
-        (define fd (vector-ref ostr 2))
-        (if fd
+        (if (ostream-fd os)
             (begin
-              (when (/= buf-pos 0)
-                ;; flush to the fd
-                (raw-write-substring fd buf 0 buf-pos))
+              ;; flush to the fd
+              (when (/= (ostream-pos os) 0)
+                (raw-write-substring (ostream-fd os) (ostream-buf os)
+                                     0 (ostream-pos os)))
              
-              ;; if the new data is bigger than half the buffer size, write
-              ;; it directly, otherwise copy into the buffer
-              (if (> (* 2 len) (string-length buf))
+              ;; if the new data is bigger than half the buffer size,
+              ;; write it to the fd directly, otherwise copy into the
+              ;; buffer
+              (if (> (+ len len) (ostream-capacity os))
                   (begin
-                    (raw-write-substring fd str pos len)
-                    (set! buf-pos-after 0))
+                    (raw-write-substring (ostream-fd os) str pos len)
+                    0)
                   (begin
-                    (string-copy str pos buf 0 len)
-                    (set! buf-pos-after len))))
+                    (string-copy str pos (ostream-buf os) 0 len)
+                    len)))
             (begin
               ;; grow the buffer
-              (define new-buf-size (make-string (* 2 (string-length buf))))
+              (define new-buf-size (make-string (* 2 (ostream-capacity os))))
               (while (> buf-pos-after new-buf-size)
                 (set! new-buf-size (* 2 new-buf-size)))
 
               (define new-buf (make-string new-buf-size))
-              (string-copy buf 0 new-buf 0 buf-pos)
-              (string-copy str pos new-buf buf-pos len)
-              (vector-set! ostr 1 new-buf)))))
-  (vector-set! ostr 0 buf-pos-after))
+              (string-copy (ostream-buf os) 0 new-buf 0 (ostream-pos os))
+              (string-copy str pos new-buf (ostream-pos os) len)
+              (ostream-set-buf! os new-buf)
+              buf-pos-after)))))
 
-(define (write-string ostr str)
-  (write-substring ostr str 0 (string-length str)))
+(define (write-string os str)
+  (write-substring os str 0 (string-length str)))
 
-(define (write-character ostr ch)
-  (define buf-pos (vector-ref ostr 0))
-  (define buf (vector-ref ostr 1))
-  (string-set! buf buf-pos ch)
+(define (write-character os ch)
+  (define buf-pos (ostream-pos os))
+  (string-set! (ostream-buf os) buf-pos ch)
   (set! buf-pos (1+ buf-pos))
 
-  (when (= buf-pos (string-length buf))
-    ;; buffer full
-    (define fd (vector-ref ostr 2))
-    (if fd
-        (begin
-          (raw-write-substring fd buf 0 buf-pos)
-          (set! buf-pos 0))
-        (begin
-          ;; grow the buffer
-          (define new-buf (make-string (* 2 (string-length buf))))
-          (string-copy buf 0 new-buf 0 buf-pos)
-          (vector-set! ostr 1 (set! buf new-buf)))))
+  (ostream-set-pos! os
+    (if (/= buf-pos (ostream-capacity os))
+        buf-pos
+        ;; buffer full
+        (if (ostream-fd os)
+            (begin
+              (raw-write-substring (ostream-fd os) (ostream-buf os) 0 buf-pos)
+              0)
+            (begin
+              ;; grow the buffer
+              (define new-buf (make-string (* 2 buf-pos)))
+              (string-copy (ostream-buf os) 0 new-buf 0 buf-pos)
+              (ostream-set-buf! os new-buf)
+              buf-pos)))))
 
-  (vector-set! ostr 0 buf-pos))
-
-(define (flush-ostream ostr)
-  (define buf-pos (vector-ref ostr 0))
-  (define fd (vector-ref ostr 2))
+(define (flush-ostream os)
+  (define buf-pos (ostream-pos os))
+  (define fd (ostream-fd os))
   (when (and fd (/= buf-pos 0))
-    (raw-write-substring fd (vector-ref ostr 1) 0 buf-pos)
-    (vector-set! ostr 0 0)))
+    (raw-write-substring fd (ostream-buf os) 0 buf-pos)
+    (ostream-set-pos! os 0)))
 
 (define stdout (make-fd-ostream raw-stdout 10000))
 (define stderr (make-fd-ostream raw-stderr 1))
