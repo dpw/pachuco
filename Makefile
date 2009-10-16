@@ -57,7 +57,7 @@ export CL_COMPILER_SOURCES
 TEST_SOURCES=test/test.pco
 GC_TEST_SOURCES=test/gc-test.pco
 
-RUNTIME_SOURCES=runtime/runtime.pco runtime/runtime2.pco runtime/gc.pco
+RUNTIME_SOURCES=runtime/runtime.pco runtime/runtime2.pco runtime/io.pco runtime/gc.pco
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 
 # The initial compiler used.  Default to bootstrapping from SBCL
