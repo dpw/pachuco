@@ -50,19 +50,12 @@
 
 ;;; Output streams
 
-;;; ostreams are represented as a vector of 4 elements:
-
-;;; - Write position in the buffer
-;;; - The buffer
-;;; - The output FD, or false for a buffer
-;;;
-;;; The position must always be before the end of the buffer.  This
-;;; means that a buffer of length 1 gives us unbuffered output.
-
 (define-struct ostream ((constructor make-ostream pos buf fd))
-  pos
-  buf
-  fd)
+  pos ; Current write position in the buffer; must always point before
+      ; the end of the buffer.  This means that a buffer of length 1
+      ; will give unbuffered output.
+  buf ; The buffer.
+  fd) ; The output FD, or false for a pure buffer.
 
 (define (ostream-capacity os)
   (string-length (ostream-buf os)))
