@@ -71,7 +71,7 @@ print-compiler-sources:
 	@echo $(SL_COMPILER_SOURCES)
 
 define stage_template
-.PHONY: $(2)-interp-test $(2)-compile $(2)-test-run
+.PHONY: $(2)-interp-test $(2)-compile $(2)-test-run $(2)-time
 
 $(2)-interp-test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	$(1) interpret $(RUNTIME_SOURCES) $(TEST_SOURCES)
@@ -102,6 +102,9 @@ $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 build/$(3) build/$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	mkdir -p build
 	scripts/compile -C $(1) $(COMPILEOPTS) -o build/$(3) $(SL_COMPILER_SOURCES)
+
+$(2)-time: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -T $(SL_COMPILER_SOURCES)
 endef
 
 clean:
