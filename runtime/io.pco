@@ -403,73 +403,74 @@
 
 ;;; Input streams
 
-;;; istreams are represented as a vector of 4 elements:
-;;; - Read position in the buffer
-;;; - End position of valid data in the buffer
-;;; - The buffer
-;;; - The reader function to get more data (false if no more data)
+(define-struct istream ((constructor make-istream pos end buf fd))
+  pos ; Current read position in the buffer
+  end ; End index of valid date in the buffer
+  buf ; The buffer
+  fd) ; The input FD, or false if no more data available
 
 (define (make-fd-istream fd)
-  (make-vector-from-list (list 0 0 (make-string 10000) fd)))
+  (make-istream 0 0 (make-string 10000) fd))
 
 (define stdin (make-fd-istream raw-stdin))
 
 (define (make-string-istream str)
-  (make-vector-from-list (list 0 (string-length str) str false)))
+  (make-istream 0 (string-length str) str false))
 
-(define (istream-refill istr)
+(define (istream-refill is)
   ;; Refill the buffer of an istream.  Returns false if there is no
   ;; more data available from the underlying reader function.
-  (if (vector-ref istr 3)
+  (if (istream-fd is)
       (begin
         ;; move data down within the buffer
-        (define pos (vector-ref istr 0))
-        (define len (- (vector-ref istr 1) pos))
-        (define buf (vector-ref istr 2))
+        (define pos (istream-pos is))
+        (define len (- (istream-end is) pos))
+        (define buf (istream-buf is))
         (when (> pos 0)
           (string-copy buf pos buf 0 len))
-        (vector-set! istr 0 0)
-        (define readlen (raw-read-substring (vector-ref istr 3) buf len
+        (istream-set-pos! is 0)
+        (define readlen (raw-read-substring (istream-fd is) buf len
                                             (- (string-length buf) len)))
-        (vector-set! istr 1 (+ len readlen))
-        (if (> readlen 0) true
+        (istream-set-end! is (+ len readlen))
+        (if (> readlen 0)
+            true
             (begin
-              (vector-set! istr 3 false)
+              (istream-set-fd! is false)
               false)))
       false))
 
-(define (istream-eos? istr)
-  (and (= (vector-ref istr 0) (vector-ref istr 1))
-       (not (istream-refill istr))))
+(define (istream-eos? is)
+  (and (= (istream-pos is) (istream-end is))
+       (not (istream-refill is))))
 
-(define (read-character istr . accept-eos)
+(define (read-character is . accept-eos)
   (set! accept-eos (if (null? accept-eos) false (car accept-eos)))
-  (define pos (vector-ref istr 0))
-  (cond ((< pos (vector-ref istr 1))
-         (vector-set! istr 0 (1+ pos))
-         (string-ref (vector-ref istr 2) pos))
-        ((istream-refill istr)
-         (read-character istr accept-eos))
+  (define pos (istream-pos is))
+  (cond ((< pos (istream-end is))
+         (istream-set-pos! is (1+ pos))
+         (string-ref (istream-buf is) pos))
+        ((istream-refill is)
+         (read-character is accept-eos))
         (accept-eos false)
         (true (error "read-character off end of stream"))))
 
-(define (consume-character istr)
-  (define pos (vector-ref istr 0))
-  (cond ((< pos (vector-ref istr 1))
-         (vector-set! istr 0 (1+ pos)))
-        ((istream-refill istr)
-         (consume-character istr))
+(define (consume-character is)
+  (define pos (istream-pos is))
+  (cond ((< pos (istream-end is))
+         (istream-set-pos! is (1+ pos)))
+        ((istream-refill is)
+         (consume-character is))
         (true (error "consume-character off end of stream"))))
 
-(define (peek-character istr offset)
-  (define pos (+ offset (vector-ref istr 0)))
-  (cond ((< pos (vector-ref istr 1))
-         (string-ref (vector-ref istr 2) pos))
-        ((istream-refill istr)
+(define (peek-character is offset)
+  (define pos (+ offset (istream-pos is)))
+  (cond ((< pos (istream-end is))
+         (string-ref (istream-buf is) pos))
+        ((istream-refill is)
          ;; FIXME: we may need to expand the buffered data to include
          ;; offset.  But for now, offset is always 0 or 1, and
          ;; therefore smaller than the buffer size
-         (peek-character istr offset))
+         (peek-character is offset))
         (true false)))
 
 ;;; Reader
