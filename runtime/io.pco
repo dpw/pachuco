@@ -428,8 +428,8 @@
         (define len (- (istream-end is) pos))
         (define buf (istream-buf is))
         (when (> pos 0)
-          (string-copy buf pos buf 0 len))
-        (istream-set-pos! is 0)
+          (string-copy buf pos buf 0 len)
+          (istream-set-pos! is 0))
         (define readlen (raw-read-substring (istream-fd is) buf len
                                             (- (string-length buf) len)))
         (istream-set-end! is (+ len readlen))
@@ -468,9 +468,6 @@
   (cond ((< pos (istream-end is))
          (string-ref (istream-buf is) pos))
         ((istream-refill is)
-         ;; FIXME: we may need to expand the buffered data to include
-         ;; offset.  But for now, offset is always 0 or 1, and
-         ;; therefore smaller than the buffer size
          (peek-character is offset))
         (true false)))
 
