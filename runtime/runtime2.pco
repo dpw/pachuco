@@ -202,9 +202,9 @@
   (string-range-hash str 0 (string-length str)))
 
 (define (string-range-hash str index len)
-  (labels ((scan (len mult hash)
-             (if (= len 0) hash
-               (scan (1- len) (* 31 mult)
-                     (+ hash (* mult (character-code
-                                        (string-ref str (+ index len -1)))))))))
-    (scan len 1 0)))
+  (labels ((scan (pos hash)
+             (if (= pos (string-length str))
+                 hash
+                 (scan (1+ pos)
+                       (+ hash (* 17 (character-code (string-ref str pos))))))))
+    (scan 0 0)))
