@@ -258,7 +258,7 @@
     (assert-result (read-character istr false) #\a)
     (assert-result (peek-character istr 0) #\b)
     (assert-result (peek-character istr 1) false)
-    (consume-character istr)
+    (istream-consume istr 1)
     (assert-result (read-character istr true) false))
 
   (begin
