@@ -444,8 +444,7 @@
   (and (= (istream-pos is) (istream-end is))
        (not (istream-refill is))))
 
-(define (read-character is . accept-eos)
-  (set! accept-eos (if (null? accept-eos) false (car accept-eos)))
+(define (read-character is accept-eos)
   (define pos (istream-pos is))
   (cond ((< pos (istream-end is))
          (istream-set-pos! is (1+ pos))
@@ -578,7 +577,7 @@
 
 (define (read-token istr)
   (define buf (make-buffer-ostream))
-  (write-character buf (read-character istr))
+  (write-character buf (read-character istr false))
 
   (define (scan-token)
     (define ch (peek-character istr 0))
@@ -651,10 +650,10 @@
   (define buf (make-buffer-ostream))
 
   (define (scan-string)
-    (define ch (read-character istr))
+    (define ch (read-character istr false))
     (unless (eq? ch #\")
       (when (eq? ch #\\)
-        (set! ch (read-character istr)))
+        (set! ch (read-character istr false)))
       (write-character buf ch)
       (scan-string)))
 
@@ -674,10 +673,10 @@
         (define named-character (rassoc-equal name character-names))
         (unless named-character (error "unknown character name ~A" name))
         (car named-character))
-      (read-character istr)))
+      (read-character istr false)))
 
 (define (read-sharp-signed istr)
-  (define ch (read-character istr))
+  (define ch (read-character istr false))
 
   (define (read-radixed-integer istr radix)
     (define val (read-integer istr radix))

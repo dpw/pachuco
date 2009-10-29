@@ -255,7 +255,7 @@
     (define istr (make-string-istream "ab"))
     (assert-result (peek-character istr 0) #\a)
     (assert-result (peek-character istr 1) #\b)
-    (assert-result (read-character istr) #\a)
+    (assert-result (read-character istr false) #\a)
     (assert-result (peek-character istr 0) #\b)
     (assert-result (peek-character istr 1) false)
     (consume-character istr)
