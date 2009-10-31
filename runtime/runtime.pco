@@ -576,7 +576,7 @@
 (define (check-string-range str offset len)
   (define str-len (string-length str))
   (unless (and (>= offset 0) (<= (+ offset len) str-len))
-    (error "string range out of bounds (offset: ~A, length: ~A, string length: ~A"
+    (error "string range out of bounds (offset: ~A, length: ~A, string length: ~A)"
            offset len str-len)))
 
 (define (string-ref str index)
