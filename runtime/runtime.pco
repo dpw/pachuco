@@ -816,13 +816,11 @@
   (define len (string-length a))
   (and (= (string-length b) len)
        (begin
-         (define pos 0)
-         (define (compare-chars)
+         (define (compare-chars pos)
            (or (= pos len)
                (and (eq? (string-ref a pos) (string-ref b pos))
-                    (begin (set! pos (1+ pos))
-                           (compare-chars)))))
-         (compare-chars))))
+                    (compare-chars (1+ pos)))))
+         (compare-chars 0))))
 
 (define (string-flatten strs)
   (define pos 0)
