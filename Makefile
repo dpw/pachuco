@@ -82,7 +82,7 @@ $(2)-compile: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 
 build/$(2)-test build/$(2)-test.s: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
 	mkdir -p build
-	scripts/compile -C $(1) $(COMPILEOPTS) -o $$@ $(TEST_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -o build/$(2)-test $(TEST_SOURCES)
 
 $(2)-test-run: build/$(2)-test
 	$$<
@@ -90,7 +90,7 @@ $(2)-test-run: build/$(2)-test
 
 build/$(2)-gc-test build/$(2)-gc-test.s: $(1) $(RUNTIME_SOURCES) $(GC_TEST_SOURCES)
 	mkdir -p build
-	scripts/compile -C $(1) $(COMPILEOPTS) -o $$@ $(GC_TEST_SOURCES)
+	scripts/compile -C $(1) $(COMPILEOPTS) -o build/$(2)-gc-test $(GC_TEST_SOURCES)
 
 $(2)-gc-test-run: build/$(2)-gc-test
 	$$<
