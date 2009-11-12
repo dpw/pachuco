@@ -159,6 +159,9 @@
     (emiti cg "ldmfd sp!, ~A" saved-regs)
     (emiti cg "mov pc, lr")
     
+    (codegen-do-out-of-line cg)
+    (emit cg ".size lisp, .-lisp")
+
     (codegen-program-end cg)))
 
 ;;; Stack layout:
@@ -190,7 +193,8 @@
   (when (codegen-have-closure cg) (emit-frame-push cg %closure))
   (trashy-codegen-discarding body cg 0)
   (codegen-do-out-of-line cg)
-  (emit-ltorg cg))
+  (emit-ltorg cg)
+  (emit cg ".size ~A, .-~A" label label))
 
 (define (stack-param-offset cg index)
   (* value-size (+ index (codegen-frame-base cg))))

@@ -40,7 +40,8 @@
   (codegen-set-frame-base! cg 2)
   (when (codegen-have-closure cg) (emit-frame-push cg %closure))
   (trashy-codegen-discarding body cg 1)
-  (codegen-do-out-of-line cg))
+  (codegen-do-out-of-line cg)
+  (emit cg ".size ~A, .-~A" label label))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emit cg "leave")
@@ -160,5 +161,8 @@
     (emit-set-ac-flag cg false)
     (emit cg "cld ; leave")
     (emit cg "ret")
+    
+    (codegen-do-out-of-line cg)
+    (emit cg ".size lisp, .-lisp")
     
     (codegen-program-end cg)))

@@ -77,7 +77,6 @@
   (emit-bss-label "top_level_end"))
 
 (define (codegen-program-end cg)
-  (codegen-do-out-of-line cg)
   (codegen-heap-exhausted cg)
   (codegen-symbols cg))
 
