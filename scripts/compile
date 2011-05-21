@@ -1,5 +1,23 @@
 #!/bin/sh -
 
+help="Driver script for the pachuco compiler
+
+Usage: compile [ options ] [ source files ... ]
+
+Options:
+
+-o: Output executable
+-s: Don't delete the generated assembly files after compilation
+-v: Verbose - display the actual compilation command
+-S: Split the generated assembly into multiple files.  For use on
+    very memory-limited machines where assembling a single file would cause
+    swapping.
+-T: Time the compiler.  Compiler output is sent to /dev/null.
+-C: Use the specified compiler executable.
+-D: Don't use the compiler and runtime under the specified directory,
+    rather than the one in the same tree as this script.
+"
+
 set -e
 basedir=$(dirname $(dirname $0))
 
@@ -51,6 +69,11 @@ while [ $# -gt 0 ] ; do
     -v)
         verbose=1
         shift 1
+        ;;
+
+    -h)
+        echo "$help" 1>&2
+        exit 0
         ;;
 
     -*)
