@@ -1,4 +1,4 @@
-#!/bin/sh - 
+#!/bin/sh -
 
 set -e
 basedir=$(dirname $(dirname $0))
@@ -15,7 +15,7 @@ compiler=$basedir/build/stage2
 runtimedir=$basedir/runtime
 
 while [ $# -gt 0 ] ; do
-    case $1 in 
+    case $1 in
     -o)
         dest="$2"
         shift 2
@@ -25,7 +25,7 @@ while [ $# -gt 0 ] ; do
         time=1
         shift 1
         ;;
-        
+
     -D)
         runtimedir="$2/runtime"
         compiler="$2/build/stage2"
@@ -37,7 +37,7 @@ while [ $# -gt 0 ] ; do
         echo "$compiler" | grep '/' >/dev/null || compiler="./$compiler"
         shift 2
         ;;
-    
+
     -s)
         leaveasm=1
         shift 1
@@ -96,13 +96,13 @@ else
         asmclean="$asmout $asmdir"
         asmfiles=`awk -v dir=$asmdir 'BEGIN { l = 0; fnum = 0; fn=dir "/0.s"; print fn; } /^# BREAK$/ { if (l > 10000) { l = 0; fnum++; fn=dir "/" fnum ".s"; print fn; next; } } { l++; print $0 >fn; }' $asmout`
     fi
-    
+
     target=''
     # bit of a hack: if we are on x86-86, but it looks like the compiler
     # didn't produce x86-64 asm, assume a i386 target
     if [ "$(uname -m)" = x86_64 ] && ! grep -m1 '^movq' $asmout >/dev/null ; then
         target='-m32'
     fi
-    
+
     gcc -Wall -g $target $asmfiles $runtimedir/main.c -o $dest
 fi
