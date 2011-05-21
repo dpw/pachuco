@@ -10,6 +10,7 @@ dest=
 time=
 leaveasm=
 splitasm=
+verbose=
 compiler=$basedir/build/stage2
 runtimedir=$basedir/runtime
 
@@ -47,6 +48,11 @@ while [ $# -gt 0 ] ; do
         shift 1
         ;;
 
+    -v)
+        verbose=1
+        shift 1
+        ;;
+
     -*)
         echo "Unknown option $1" 1>&2
         exit 1
@@ -60,6 +66,8 @@ while [ $# -gt 0 ] ; do
 done
 
 cmd="$compiler compile $runtimedir/runtime.pco $runtimedir/runtime2.pco $runtimedir/gc.pco $files"
+
+[ -n "$verbose" ] && echo $cmd 1>&2
 
 if [ -n "$time" ] ; then
     $(which time) -f "%E" $cmd >/dev/null
