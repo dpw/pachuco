@@ -191,9 +191,6 @@
   ;; This isn't very general, but it's good enough for top-level defines
   `(progn ,@body))
 
-(defmacro defmarco (lhs &rest body)
-  `(defmacro ,(car lhs) ,(restify-params (cdr lhs)) ,@body))
-
 (defmacro bind (to val &rest body)
   `(destructuring-bind ,(restify-params to) ,val ,@body))
 
@@ -239,3 +236,7 @@
 (defun code-character (a) (code-char a))
 (defun character-code (a) (char-code a))
 (defun character-alphanumeric? (a) (alphanumericp a))
+
+(shadow 'defmacro)
+(common-lisp:defmacro defmacro (lhs &rest body)
+  `(common-lisp:defmacro ,(car lhs) ,(restify-params (cdr lhs)) ,@body))

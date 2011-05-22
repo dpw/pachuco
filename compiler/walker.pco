@@ -12,7 +12,7 @@
       (append (mapfor (key keys) (cons key val)) rest)
       (acons keys val rest)))
 
-(defmarco (define-walker name implicit-vars)
+(defmacro (define-walker name implicit-vars)
   (let* ((form-name name)
          (recurse-name (compound-symbol name "-recurse"))
          (define-name (compound-symbol "define-" name))
@@ -27,7 +27,7 @@
               (funcall (cdr a) form (unquote-splicing implicit-vars))
               ((unquote recurse-name) form (unquote-splicing implicit-vars)))))
 
-      (defmarco ((unquote define-name) template . body)
+      (defmacro ((unquote define-name) template . body)
         (quasiquote
           (set! (unquote (unquote alist-name))
                 (multi-acons '(unquote (car template))
@@ -40,7 +40,7 @@
 ;;; a recusrion function that does a straightforward recursion into
 ;;; subforms
 
-(defmarco (define-trivial-walker name implicit-vars)
+(defmacro (define-trivial-walker name implicit-vars)
   (let* ((form-name name)
          (recurse-name (compound-symbol name "-recurse"))
          (forms-name (compound-symbol name "-forms")))

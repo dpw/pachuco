@@ -28,7 +28,7 @@
 ;;; option name to the value given by the option with the same name,
 ;;; or the default value if no such option appears.
 
-(defmarco (options-bind option-specs options . body)
+(defmacro (options-bind option-specs options . body)
   (let* ((opts-state (gensym))          ; the state of each option
          (opt (gensym))                 ; the option being considered
          (name (gensym))                ; the option name
@@ -92,7 +92,7 @@
         n
         (struct-field-position f (cdr fields) (1+ n)))))
 
-(defmarco (define-struct struct options . fields)
+(defmacro (define-struct struct options . fields)
   (options-bind ((constructor false)) options
     (let* ((num-fields (length fields))
            (constr-name (if constructor
@@ -192,7 +192,7 @@
                (for-buckets buckets (1+ n)))))
     (for-buckets (hashtable-buckets ht) 0)))
 
-(defmarco (for-hashtable k-v-ht . body)
+(defmacro (for-hashtable k-v-ht . body)
   (quasiquote
     (for-hashtable-call (unquote (third k-v-ht))
       (lambda ((unquote (first k-v-ht)) (unquote (second k-v-ht)))

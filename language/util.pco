@@ -42,8 +42,8 @@
 (define (make-symboltable)
   (make-hashtable (function symbol-id) (function eq?)))
 
-(defmarco (symboltable-ref st sym) (list 'hashtable-ref st sym))
-(defmarco (symboltable-set! st sym val) (list 'hashtable-set! st sym val))
+(defmacro (symboltable-ref st sym) (list 'hashtable-ref st sym))
+(defmacro (symboltable-set! st sym val) (list 'hashtable-set! st sym val))
 
 (define (symboltable-list-ref l sym)
   (and (not (null? l))

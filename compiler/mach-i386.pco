@@ -22,5 +22,5 @@
 
 ;;; No special handling required for indirect operands on i386
 
-(defmarco (indirect-operand addr)
+(defmacro (indirect-operand addr)
   addr)

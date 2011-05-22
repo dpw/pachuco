@@ -4,7 +4,7 @@
 
 (define interpreter-builtin-forms (make-symboltable))
 
-(defmarco (define-interpreter-builtin-form keyword . body)
+(defmacro (define-interpreter-builtin-form keyword . body)
   (quasiquote
     (symboltable-set! interpreter-builtin-forms '(unquote keyword)
                       (lambda (keyword args env in-body)
@@ -12,7 +12,7 @@
 
 (define interpreter-builtin-vars (make-symboltable))
 
-(defmarco (define-interpreter-builtin-var name val)
+(defmacro (define-interpreter-builtin-var name val)
   (quasiquote
     (symboltable-set! interpreter-builtin-vars
                       '(unquote name) (cons (unquote val) ()))))
@@ -105,7 +105,7 @@
 (define-interpreter-builtin-form quote
   (first args))
 
-(defmarco (define-interpreter-builtin-op op . body)
+(defmacro (define-interpreter-builtin-op op . body)
   (quasiquote
     (define-interpreter-builtin-form (unquote op)
       (let* ((evaled-args (eval-forms args env)))
@@ -120,7 +120,7 @@
                           (bind (unquote (car body)) evaled-args
                                 (unquote-splicing (cdr body)))))))))))
 
-(defmarco (define-interpreter-builtin-boolean-op op)
+(defmacro (define-interpreter-builtin-boolean-op op)
   (quasiquote
     (define-interpreter-builtin-form (unquote op)
       (if (apply (function (unquote op)) (eval-forms args env))

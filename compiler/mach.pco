@@ -10,10 +10,10 @@
       (make-vector-from-list
         (quote ((unquote name) (unquote false) (unquote-splicing variants)))))))
 
-(defmarco (define-register name . variants)
+(defmacro (define-register name . variants)
   (register-definition name variants))
 
-(defmarco (define-numbered-registers template start stop . variant-templates)
+(defmacro (define-numbered-registers template start stop . variant-templates)
   (labels ((make-defs (n)
              (if (< n stop)
                  (let* ((name
@@ -53,7 +53,7 @@
 
 ;;; Assembler bits
 
-(defmarco (emit-without-flushing template . args)
+(defmacro (emit-without-flushing template . args)
   (if (string? template)
       (quasiquote
         (format~ true (unquote (string-concat template "~%"))
@@ -63,17 +63,17 @@
           (format~ true (unquote template) (unquote-splicing args))
           (format~ true "~%")))))
 
-(defmarco (emit cg template . args)
+(defmacro (emit cg template . args)
   (quasiquote (begin
     (flush-labels-and-jumps (unquote cg))
     (emit-without-flushing (unquote template) (unquote-splicing args)))))
 
-(defmarco (emit-comment cg template . args)
+(defmacro (emit-comment cg template . args)
   (quasiquote
     (format~ true (unquote (string-concat "# " template "~%"))
              (unquote-splicing args))))
 
-(defmarco (with-saved-frame-base cg . body)
+(defmacro (with-saved-frame-base cg . body)
   (let* ((orig-frame-base (gensym)))
     (quasiquote
       (let* (((unquote orig-frame-base) (codegen-frame-base (unquote cg))))

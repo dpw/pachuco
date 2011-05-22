@@ -804,7 +804,7 @@
               (vec-address (unquote attrs) (unquote dest) (unquote dest-index))
               (unquote len))))
 
-(defmarco (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
+(defmacro (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
   (let* ((type-attrs (compound-symbol name "-type-attrs")))
     ;; define how to convert from the operators on a specific vector
     ;; type into generic vec operators
@@ -850,7 +850,7 @@
 (define raw-base-type-attrs
   (list (cons 'tag 0) (cons 'tag-bits 0) (cons 'header-size 0)))
 
-(defmarco (define-raw-type name scale)
+(defmacro (define-raw-type name scale)
   (let* ((type-attrs (compound-symbol name "-type-attrs")))
     ;; define how to convert from the operators on a specific raw type
     ;; into generic raw operators

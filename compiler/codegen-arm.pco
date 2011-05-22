@@ -22,7 +22,7 @@
 
 (define (register? x) (vector? x))
 
-(defmarco (register-operand reg)
+(defmacro (register-operand reg)
   (list 'register-variant reg 0))
 
 (define (insn-operand x)
@@ -54,7 +54,7 @@
 
 (define instructions-since-pool 0)
 
-(defmarco (emit-ltorg cg)
+(defmacro (emit-ltorg cg)
   (quote
     (begin
       (emit-without-flushing ".ltorg")
@@ -68,7 +68,7 @@
       (emit-ltorg cg)
       (emit-smart-label cg label))))
 
-(defmarco (emiti cg template . args)
+(defmacro (emiti cg template . args)
   (quasiquote
     (begin
       (check-instructions-since-pool (unquote cg))
@@ -123,7 +123,7 @@
         (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure)
                closure-tag))))
 
-(defmarco (define-tag-check name tag tag-bits)
+(defmacro (define-tag-check name tag tag-bits)
   (quasiquote
     (define-cc-operator ((unquote name) val) ()
       (let* ((valreg (register-operand val)))
@@ -403,7 +403,7 @@
 
 ;;; Comparisons
 
-(defmarco (define-cmp-operator name cc)
+(defmacro (define-cmp-operator name cc)
   (quasiquote (define-cc-operator ((unquote name) a b) ()
                 (emiti cg "cmp ~A, ~A" (register-operand a) (register-operand b))
                 (unquote cc))))
@@ -420,7 +420,7 @@
 
 (define-tag-check number? number-tag number-tag-bits)
 
-(defmarco (define-simple-number-operator name insn)
+(defmacro (define-simple-number-operator name insn)
   (quasiquote
     (define-operator ((unquote name) a b) ()
       (emiti cg (unquote (string-concat insn " ~A, ~A, ~A"))

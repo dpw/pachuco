@@ -312,7 +312,7 @@
 
 ;;; Simplifications of arithmetic operators
 
-(defmarco (define-simplify-binary-op op identity unary-op)
+(defmacro (define-simplify-binary-op op identity unary-op)
   (quasiquote
     (define-simplify ((unquote op) attrs . args)
       (simplify-recurse form)

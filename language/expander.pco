@@ -8,7 +8,7 @@
 (define (make-initial-macro-env)
   (list (cons false false) (cons builtin-expanders false)))
 
-(defmarco (define-form-expander keyword . body)
+(defmacro (define-form-expander keyword . body)
   (quasiquote
     (symboltable-set! builtin-expanders (unquote keyword)
                       (lambda (form keyword args dual-env)

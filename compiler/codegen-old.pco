@@ -61,7 +61,7 @@
   (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
                   reg))
 
-(defmarco (define-trashy-codegen template . body)
+(defmacro (define-trashy-codegen template . body)
   (quasiquote (definitions
     (define-reg-use (unquote template)
       (dolist (arg (cddr form)) (reg-use arg))
@@ -282,7 +282,7 @@
         (rplacd pre (cons item (cdr pre)))
         l2)))
 
-(defmarco (define-operator template options . body)
+(defmacro (define-operator template options . body)
   (options-bind ((temp-regs ())
                  (tail-form false)
                  (temp-fixed-regs ()))
@@ -369,7 +369,7 @@
             (let* ((result reg))
               (unquote-splicing body)))))))))
 
-(defmarco (define-cc-operator template options . body)
+(defmacro (define-cc-operator template options . body)
   ;; define how to generate code for an operator that is free of
   ;; side-effects and produces its result in a condition code
   (let* ((name (car template))

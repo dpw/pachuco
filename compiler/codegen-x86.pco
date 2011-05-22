@@ -21,7 +21,7 @@
 (define (register? x) (vector? x))
 (define (mem? x) (pair? x))
 
-(defmarco (register-operand reg scale)
+(defmacro (register-operand reg scale)
   (list 'register-variant reg scale))
 
 (define (mem1 x)
@@ -122,7 +122,7 @@
 
 ;;; Instructions
 
-(defmarco (define-insn-2 name insn)
+(defmacro (define-insn-2 name insn)
   (quasiquote
     (define ((unquote name) cg src dest . scale)
       (emit-insn-2 cg (unquote insn) src dest scale))))
@@ -174,7 +174,7 @@
 (define (emit-set cg cc reg)
   (emit cg "set~A ~A" cc (insn-operand reg 0)))
 
-(defmarco (define-insn-1 name insn)
+(defmacro (define-insn-1 name insn)
   (quasiquote
     (define ((unquote name) cg oper . scale)
       (emit-insn-1 cg (unquote insn) oper
@@ -192,7 +192,7 @@
       (emit cg "ret")
       (emit cg "ret $~D" imm)))
 
-(defmarco (define-insn-0 name insn)
+(defmacro (define-insn-0 name insn)
   (quasiquote
     (define ((unquote name) cg . scale)
       (emit cg "~A~A" (unquote insn)
@@ -240,7 +240,7 @@
   (emit-shl cg special-tag-bits reg 0)
   (emit-or cg special-tag reg 0))
 
-(defmarco (define-tag-check name tag tag-bits)
+(defmacro (define-tag-check name tag tag-bits)
   (quasiquote
     (define-cc-operator ((unquote name) val) ()
       ;; just check the low-order byte
@@ -413,7 +413,7 @@
 
 ;;; Comparisons
 
-(defmarco (define-cmp-operator name cc)
+(defmacro (define-cmp-operator name cc)
   (quasiquote (define-cc-operator ((unquote name) a (b reg-mem-imm)) ()
                 (emit-cmp cg b a)
                 (unquote cc))))

@@ -11,24 +11,24 @@
 (define (codegen-into-reg form cg out-frame-base reg)
   (emit-mov-maybe cg (codegen form cg out-frame-base) reg))
 
-(defmarco (define-codegen-discarding template . body)
+(defmacro (define-codegen-discarding template . body)
   (quasiquote (define-codegen (unquote template)
                 (unquote-splicing body)
                 false)))
 
 ;;; codegen functions called from outside this file
 
-(defmarco (trashy-codegen form cg out-frame-base)
+(defmacro (trashy-codegen form cg out-frame-base)
   (quasiquote (codegen (unquote form) (unquote cg) (unquote out-frame-base))))
 
-(defmarco (trashy-codegen-discarding form cg out-frame-base)
+(defmacro (trashy-codegen-discarding form cg out-frame-base)
   (quasiquote (codegen (unquote form) (unquote cg) (unquote out-frame-base))))
 
-(defmarco (trashy-codegen-into-reg form cg out-frame-base reg)
+(defmacro (trashy-codegen-into-reg form cg out-frame-base reg)
   (quasiquote (codegen-into-reg (unquote form) (unquote cg)
                                 (unquote out-frame-base) (unquote reg))))
 
-(defmarco (define-trashy-codegen template . body)
+(defmacro (define-trashy-codegen template . body)
   (quasiquote (define-codegen (unquote template) (unquote-splicing body))))
 
 ;;; Begin
@@ -94,7 +94,7 @@
     (unless (null? args)
       (codegen-next-arg args regs))))
 
-(defmarco (define-operator template options . body)
+(defmacro (define-operator template options . body)
   ;; define how to generate code for an operator
   (options-bind ((temp-regs ())
                  (tail-form false)
@@ -128,7 +128,7 @@
             (let* ((result main-reg))
               (unquote-splicing body)))))))))
 
-(defmarco (define-cc-operator template options . body)
+(defmacro (define-cc-operator template options . body)
   (quasiquote
     (define-operator (unquote template) ((temp-regs reg))
       (emit-prepare-convert-cc-value cg reg)

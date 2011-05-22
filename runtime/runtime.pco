@@ -771,9 +771,6 @@
                     (list* 'define (cons (car func) (cadr func)) (cddr func))))
                 (unquote-splicing body))))
 
-(defmacro (defmarco template . body)
-  (quasiquote (defmacro (unquote template) (unquote-splicing body))))
-
 (defmacro (defconstant name val)
   (quasiquote (defmacro (unquote name) (unquote val))))
 
@@ -789,7 +786,7 @@
   (cond ((eq? out true) (apply formout stdout args))
         ((eq? out false) (apply format args))
         (true (apply formout out args))))
-(defmarco (format~ out . args)
+(defmacro (format~ out . args)
   (cond ((eq? out true) (list* 'formout 'stdout args))
         ((eq? out false) (cons 'format args))
         (true (list* 'format out args))))
