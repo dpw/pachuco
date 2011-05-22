@@ -322,9 +322,9 @@
              (overwrite-form form (list* '(unquote unary-op) () args)))
             ((not (null? (cddr args)))
              (overwrite-form form
-                             (reduce~ (car args) (cdr args)
-                                      (lambda (a b)
-                                        (list '(unquote op) () a b)))))))))
+                             (reduce (car args) (cdr args)
+                                     (lambda (a b)
+                                       (list '(unquote op) () a b)))))))))
 
 (define-simplify-binary-op + 0 begin)
 (define-simplify-binary-op * 1 begin)
@@ -334,7 +334,7 @@
   (cond ((null? args) (rplaca form 'negate))
         ((not (null? (cdr args)))
          (overwrite-form form
-                         (reduce~ a args (lambda (a b) (list '- () a b)))))))
+                         (reduce a args (lambda (a b) (list '- () a b)))))))
 
 ;;; Function calls
 
