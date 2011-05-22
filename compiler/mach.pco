@@ -5,7 +5,7 @@
 ;;; Registers
 
 (define (register-definition name variants)
-  (quasiquote 
+  (quasiquote
     (define (unquote name)
       (make-vector-from-list
         (quote ((unquote name) (unquote false) (unquote-splicing variants)))))))

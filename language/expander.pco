@@ -38,7 +38,7 @@
 ;; the evaluation environment for evaluation of macros.
 
 (define (expand-form form dual-env)
-  (cond ((pair? form) 
+  (cond ((pair? form)
          (let* ((keyword (car form))
                 (expander (and (symbol? keyword)
                                (macro-env-expander (car dual-env) keyword))))

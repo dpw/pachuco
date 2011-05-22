@@ -71,7 +71,7 @@ To start the interpreter-based REPL, do "make repl":
 
 You can type Pachuco expressions and programs at the ">>>" prompt:
 
-  >>> (define (fact n)  
+  >>> (define (fact n)
         (if (= n 0)
             1
             (* n (fact (- n 1)))))

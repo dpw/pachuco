@@ -33,7 +33,7 @@
 
 ;;; Functions, calls, returns, etc.
 
-(define (codegen-function label closure-size body cg) 
+(define (codegen-function label closure-size body cg)
   (codegen-function-intro label closure-size cg)
   (emit-push cg %bp)
   (emit-mov cg %sp %bp)
@@ -89,8 +89,8 @@
          (retaddr (return-address-slot cg))
          (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
-        (begin 
-          (copy-tail-call-args cg out-arg-count out-retaddr 
+        (begin
+          (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
           (emit-mov cg (fixnum-representation out-arg-count) %nargs)
           (emit cg "leave")
@@ -108,9 +108,9 @@
     ;; access %closure
     (trashy-codegen-into-reg arg-count cg false in-arg-count-reg)
     (emit-scale-number cg value-scale in-arg-count-reg)
-    (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
+    (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count))
               in-arg-count-reg)
-    (codegen-tail-call cg func retaddr out-arg-count in-arg-count-reg 
+    (codegen-tail-call cg func retaddr out-arg-count in-arg-count-reg
                        (cdr general-registers))
     (codegen-function-tail cg out-frame-base)))
 
@@ -144,7 +144,7 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
     (codegen-program-sections program cg)
-    
+
     (emit cg ".text")
     (emit cg ".globl lisp")
     (emit cg "lisp:")
@@ -161,8 +161,8 @@
     (emit-set-ac-flag cg false)
     (emit cg "cld ; leave")
     (emit cg "ret")
-    
+
     (codegen-do-out-of-line cg)
     (emit cg ".size lisp, .-lisp")
-    
+
     (codegen-program-end cg)))

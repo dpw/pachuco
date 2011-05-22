@@ -243,7 +243,7 @@
       (unless (null? args)
         (raw-vec-set! args-base index (car args))
         (copy-final-args (cdr args) args-base (1+ index))))
-      
+
     (define (copy-args args args-base index)
       (if (null? (cdr args)) (copy-final-args (car args) args-base index)
           (begin
@@ -331,7 +331,7 @@
           (begin
             (rplacd l (car ls))
             (find-end (car ls) (cdr ls))))))
-  
+
   (if (null? ls) ()
       (if (null? (car ls))
           (flatten* (cdr ls))
@@ -556,7 +556,7 @@
 
       (add-symbols 0 (raw->fixnum (raw-- (raw-label "symbols_end")
                                          (raw-label "symbols_start")))))
-    
+
     (define res (hashtable-ref symbol-table str))
     (if res res
         (begin
@@ -798,7 +798,7 @@
 
 (define (reduce~ initial l f) (reduce initial l f))
 
-;; Not a full destructuring-bind  
+;; Not a full destructuring-bind
 (defmacro (bind vars values . body)
   (quasiquote
     (apply (lambda (unquote vars) (unquote-splicing body)) (unquote values))))

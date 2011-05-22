@@ -54,7 +54,7 @@
 
   (assert-result (list 1 2 3) '(1 2 3))
   (assert-result (append '(1 2) '(3 4)) '(1 2 3 4))
-  
+
   (begin
     (define ht (make-hashtable string-hash string-equal?))
     (assert-result (hashtable-ref ht "foo") false)
@@ -62,7 +62,7 @@
     (assert-result (hashtable-ref ht "foo") "bar")
     (hashtable-set! ht "foo" "baz")
     (assert-result (hashtable-ref ht "foo") "baz")
-    
+
     (define l ())
     (for-hashtable (k v ht)
       (set! l (acons k v l)))
@@ -84,7 +84,7 @@
   (assert-result (nconc () (copy-list '(1 2)) () (copy-list '(3 4)))
                  '(1 2 3 4))
 
-  (assert-result (remove 1 '(0 1 2 1)) '(0 2)) 
+  (assert-result (remove 1 '(0 1 2 1)) '(0 2))
   (assert-result (delete 1 (copy-list '(0 1 2 1))) '(0 2))
   (assert-result (sort '(3 6 4 8 7 5 2 9 1 0) <) '(0 1 2 3 4 5 6 7 8 9))
   (assert-result (sort '(1 2 1 2) <) '(1 1 2 2))
@@ -110,7 +110,7 @@
 
   (begin
     (define x '(1 2))
-    
+
     (assert-result (quasiquote (a b c)) '(a b c))
     (assert-result (quasiquote ((unquote x) b c)) '((1 2) b c))
     (assert-result (quasiquote (a (unquote x) c)) '(a (1 2) c))
@@ -140,7 +140,7 @@
     (assert-applied-result (- 1) -1)
     (assert-applied-result (- 1 2) -1)
     (assert-applied-result (- 1 2 3) -4)
-    
+
     (assert-applied-result (list 1 2 3) '(1 2 3)))
 
   (begin
@@ -175,7 +175,7 @@
     (assert-uniform-format '(a b) "(a b)")
     (assert-uniform-format '(a . b) "(a . b)")
     (assert-uniform-format (lambda ()) "#<function>")
-    
+
     (assert-non-uniform-format "Hello" "\"Hello\"" "Hello")
     (assert-non-uniform-format '("Hello" "there") "(\"Hello\" \"there\")"
                                "(Hello there)")
@@ -229,10 +229,10 @@
     (assert-read "((x . ()) y)" '((x) y))
 
     (assert-read "'(x)" '(quote (x)))
-    
+
     (assert-read "\"hello\"" "hello")
     (assert-read "\"\\\" \\\\ \\\"\"" "\" \\ \"")
-    
+
     (assert-read "#\\x" #\x)
     (assert-read "#\\\"" #\")
     (assert-read "#\\Space" #\Space)
@@ -250,7 +250,7 @@ y)" '(x y))
   (with-open-file-for-reading (f "test/testfile")
     (assert-result (read f) '("hello" world))
     (assert-result (read f false) false))
-  
+
   ;; check that body forms at the end of bodies are evaluated correctly
   (assert-result (begin (define x true) (define y x)) true)
   (assert-result (begin

@@ -1,12 +1,12 @@
 ;;; Interpreter
 
-;;; An interpreter environment is a list of alists, each mapping 
+;;; An interpreter environment is a list of alists, each mapping
 
 (define interpreter-builtin-forms (make-symboltable))
 
 (defmarco (define-interpreter-builtin-form keyword . body)
   (quasiquote
-    (symboltable-set! interpreter-builtin-forms '(unquote keyword) 
+    (symboltable-set! interpreter-builtin-forms '(unquote keyword)
                       (lambda (keyword args env in-body)
                         (unquote-splicing body)))))
 
@@ -127,7 +127,7 @@
          'true 'false))))
 
 (define-interpreter-builtin-op error-halt)
-       
+
 (define-interpreter-builtin-boolean-op eq?)
 (define-interpreter-builtin-boolean-op function?)
 

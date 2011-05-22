@@ -139,7 +139,7 @@
 
 (define (hashtable-ref ht key)
   (let* ((buckets (hashtable-buckets ht))
-         (index (mod (funcall (hashtable-hashf ht) key) 
+         (index (mod (funcall (hashtable-hashf ht) key)
                      (vector-length buckets)))
          (hte (ht-entry-find key (vector-ref buckets index)
                              (hashtable-equalf ht))))

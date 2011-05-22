@@ -1,5 +1,5 @@
 (when-compiling
-  ;; gc-type table is a vector mapping from the low-order bits of a value 
+  ;; gc-type table is a vector mapping from the low-order bits of a value
   ;; to the appropriate type-specific GC routine
   (define gc-type-table false)
 
@@ -20,7 +20,7 @@
     (if (and (<= gc-from-space val) (< val gc-from-space-end))
         ;; value could be a reference into from-space; dispatch to a
         ;; type-specific GC routine
-        (funcall (raw-vector-ref gc-type-table 
+        (funcall (raw-vector-ref gc-type-table
                                  (raw->fixnum (raw-logand gc-raw-tag-mask val)))
                  val)
         ;; not a reference to from-space, therefore a reference into
@@ -58,7 +58,7 @@
     ;; doesn't get disrupted by copying.  So we construct it afresh at
     ;; the start of each GC.
     (construct-gc-type-table)
-    
+
     ;; copy all live data
     (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
     (gc-root-set (raw-args-base) runtime-main-args-base)
@@ -70,7 +70,7 @@
     (c-call "free_heap" gc-from-space)
     (raw-global-set! heap_start gc-to-space)
     (raw-global-set! heap_end gc-to-space-end)
-    
+
     ;; all done
     (set! gc-active (set! gc-from-space (set! gc-from-space-end
       (set! gc-to-space (set! gc-to-space-end
@@ -78,7 +78,7 @@
 
     (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
       (formout stderr "done, ~D bytes live~%" live-bytes)))
-  
+
   (define (gc-test-copy val)
     ;; a test function that uses the GC machinery to destructively
     ;; copy objects
@@ -90,7 +90,7 @@
     (set! gc-to-space (raw-global-ref heap_start))
     (set! gc-to-space-end gc-from-space)
     (construct-gc-type-table)
-    
+
     (define res (gc-live val))
 
     (set! gc-from-space (set! gc-from-space-end
@@ -112,23 +112,23 @@
         (define tag (list 'compiler-constant (compound-symbol type "-tag")))
         (define bits
             (list 'compiler-constant (compound-symbol type "-tag-bits")))
-        (quasiquote 
+        (quasiquote
           (list (unquote tag) (unquote bits)
                 ((unquote (second type-gc)) (unquote tag) (unquote bits)
                                         (unquote-splicing (cddr type-gc)))))))
-    
+
     (quasiquote
       (define (construct-gc-type-table)
         (define tag-bits-funcs (list
           (list 0 0 (lambda (val)
-                      (error "unknown type with tag ~D" 
+                      (error "unknown type with tag ~D"
                              (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
           (unquote-splicing tbf-form)))
         (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
         (define table-size (ash 1 max-bits))
         (set! gc-type-table (make-vector table-size))
         (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
-    
+
         ;; fill in the table
         (dolist (tbf tag-bits-funcs)
           (define step (ash 1 (second tbf)))
@@ -195,7 +195,7 @@
       (raw-set! addr copy)
       (raw-string-copy val 0 copy 0 len)
       copy)
-    
+
     (symbol gc-address-type
       ;; This won't work for a symbol a circular name or id slot.  But
       ;; that would be really perverse.

@@ -20,19 +20,19 @@
   '(begin if
 
     eq? function?
-    
+
     symbol? symbol-name symbol-id raw-make-symbol
-    
+
     pair? car cdr cons rplaca rplacd
-    
+
     number? < <= > >= = /= + * - rem truncate
     logand logior logxor
-    
+
     character? character-code code-character
 
     string? make-string string-length raw-string-address
     raw-string-ref raw-string-set! raw-string-copy
-    
+
     vector? make-vector vector-length raw-vector-address
     raw-vector-ref raw-vector-set! raw-vector-copy
     raw-vec-set! raw-vec-ref raw-ref raw-set! raw-copy
@@ -43,7 +43,7 @@
     fixnum->raw raw->fixnum
 
     raw-logand raw-- raw-+
-    
+
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
 (define keywords-2 '(define lambda set! quote
@@ -307,7 +307,7 @@
 ;;; ! (6) - error
 ;;;
 ;;;               R W E F I r !
-;;;                           
+;;;
 ;;; define        ! W E ! R E !
 ;;; define lambda ! W E ! R F !
 ;;; ref           R W E F r r !
@@ -474,7 +474,7 @@
     (dolist (local-varrec (append (car self-closure-cell)
                                   (car local-closure-cell)))
       (let* ((origin-varrec (varrec-attr local-varrec 'origin)))
-        (varrec-attr-set! origin-varrec 'closure-stack 
+        (varrec-attr-set! origin-varrec 'closure-stack
                           (cdr (varrec-attr origin-varrec 'closure-stack)))
         (varrec-attr-set! local-varrec 'source
             (resolve-closure-var origin-varrec 'closure depth closure-cell))))))
@@ -510,7 +510,7 @@
 
 (define-introduce-boxes (ref varrec)
   (when (varrec-boxed? varrec)
-    (overwrite-form form 
+    (overwrite-form form
                     (quasiquote (raw-box-ref () (ref (unquote varrec)))))))
 
 (define-introduce-boxes (set! varrec val)
@@ -751,7 +751,7 @@
 
     (when self-varrec
       (emit-comment cg "~S" (car self-varrec)))
-    
+
     ;; we don't care about the number of registers used, but we still
     ;; need to do the reg-use pass to "prime" forms for codegen pass
     (emit-comment-form cg body)
@@ -847,7 +847,7 @@
 
 ;;; Raw accesss to memory
 
-(define raw-base-type-attrs 
+(define raw-base-type-attrs
   (list (cons 'tag 0) (cons 'tag-bits 0) (cons 'header-size 0)))
 
 (defmarco (define-raw-type name scale)

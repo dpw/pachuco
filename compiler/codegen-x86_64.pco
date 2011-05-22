@@ -28,7 +28,7 @@
 
 (define-trashy-codegen (c-call attrs . args)
   (trashy-codegen-into-regs cg args c-call-arg-regs)
-  
+
   (emit cg "cld")
   (emit-set-ac-flag cg false)
 
@@ -37,7 +37,7 @@
   (emit-and cg -16 %sp)
   (emit cg "call ~A" (attr-ref attrs 'c-function-name))
   (emit-mov cg %b %sp)
-  
+
   (emit-set-ac-flag cg true)
   (unless (member? %closure c-callee-saved-regs) (emit-restore-%closure cg))
   %a)

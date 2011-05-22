@@ -1,7 +1,7 @@
 ;;; More-or-less the simplest code generation strategy that could
 ;;; possibly work
 
-;; codegen emits the code to evaluate the form, with the result going into 
+;; codegen emits the code to evaluate the form, with the result going into
 ;; %funcres
 (define-walker codegen (cg out-frame-base))
 (define (codegen-recurse form cg out-frame-base)

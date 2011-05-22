@@ -62,7 +62,7 @@
                   reg))
 
 (defmarco (define-trashy-codegen template . body)
-  (quasiquote (definitions 
+  (quasiquote (definitions
     (define-reg-use (unquote template)
       (dolist (arg (cddr form)) (reg-use arg))
       general-register-count)
@@ -248,7 +248,7 @@
           (rplaca c false)))
 
       (set! non-trashy-regs (nconc result-regs (delete false non-trashy-regs)))
-      
+
       ;; Now generate code for non-trashy args, reducing the available
       ;; registers after each one.
       (dolist (arg (reverse non-trashy-args))
@@ -259,7 +259,7 @@
                              (car c)))
           (when (operand-using-reg? (car c) (first non-trashy-regs))
             (set! non-trashy-regs (cdr non-trashy-regs)))))
-  
+
       ;; reload trashy arg results from stack
       (dolist (arg (reverse trashy-args))
         (emit-frame-pop cg (elt regs arg)))
@@ -448,5 +448,5 @@
     (emit-frame-push cg (codegen arg cg false general-registers
                                  (first general-registers))))
   (unless (func-no-closure func)
-    (emit-mov-maybe cg (codegen func cg false general-registers 
+    (emit-mov-maybe cg (codegen func cg false general-registers
                                 (first general-registers)) %closure)))

@@ -41,16 +41,16 @@ int main(int argc, char **argv)
 
         /* Setting VERBOSE_GC displays GC progress on stderr. */
         verbose_gc = getenv("VERBOSE_GC");
-        
+
         if (heap_size_env)
                 heap_size = (unsigned long)atoi(heap_size_env) * 1024 * 1024;
-        
+
         heap_threshold = heap_start = alloc_heap(heap_size);
         heap_alloc = heap_end = heap_start + heap_size;
 
         lisp_argv = argv;
 
 	lisp();
-	
+
         return 0;
 }

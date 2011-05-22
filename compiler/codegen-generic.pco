@@ -105,8 +105,8 @@
 ;;;     L1b:      ; A false
 ;;;     jmp L2b   ; branch to code for D
 ;;;
-;;;     L1c:      ; code following (if A B false) would go here... 
-;;;     
+;;;     L1c:      ; code following (if A B false) would go here...
+;;;
 ;;;     L2a:
 ;;;     <code for C>
 ;;;     jmp L2c
@@ -124,7 +124,7 @@
 ;;;     L1a:      ; A true
 ;;;     <code to yield B as boolean in CC2>
 ;;;     jnCC2 L2b ; branch to code for D
-;;;     
+;;;
 ;;;     L2a:
 ;;;     <code for C>
 ;;;     jmp L2c
@@ -186,7 +186,7 @@
              (emit-branch cg cc tlabel)
              (unless (member? flabel here-labels)
                (emit-jump cg flabel))))))))
- 
+
 (define (emit-raw-label cg label)
   (emit-without-flushing "~A:" label))
 
@@ -321,13 +321,13 @@
             ((null? (cdr args))
              (overwrite-form form (list* '(unquote unary-op) () args)))
             ((not (null? (cddr args)))
-             (overwrite-form form 
+             (overwrite-form form
                              (reduce~ (car args) (cdr args)
                                       (lambda (a b)
                                         (list '(unquote op) () a b)))))))))
 
-(define-simplify-binary-op + 0 begin) 
-(define-simplify-binary-op * 1 begin) 
+(define-simplify-binary-op + 0 begin)
+(define-simplify-binary-op * 1 begin)
 
 (define-simplify (- attrs a . args)
   (simplify-recurse form)

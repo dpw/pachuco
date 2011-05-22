@@ -60,7 +60,7 @@
   `(mapl #'(lambda (,c) (rplaca ,c (let ((,var (car ,c))) ,@body))) ,l)))
 
 (defmacro flatten*-mapfor ((var l) &rest body)
-  `(mapcan #'(lambda (,var) ,@body) ,l)) 
+  `(mapcan #'(lambda (,var) ,@body) ,l))
 
 
 (defun member? (item l) (member item l))
@@ -97,9 +97,9 @@
            :start2 src-index))
 
 (defun string-range-equal? (a astart b bstart len)
-  (equalp (make-array len :element-type 'character 
+  (equalp (make-array len :element-type 'character
 :displaced-to a :displaced-index-offset astart)
-          (make-array len :element-type 'character 
+          (make-array len :element-type 'character
 :displaced-to b :displaced-index-offset bstart)))
 
 ;;; Vector primitives

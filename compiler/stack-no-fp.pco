@@ -35,7 +35,7 @@
 
 ;;; Functions, calls, returns, etc.
 
-(define (codegen-function label closure-size body cg) 
+(define (codegen-function label closure-size body cg)
   (codegen-function-intro label closure-size cg)
   (codegen-set-frame-base! cg 1)
   (when (codegen-have-closure cg) (emit-frame-push cg %closure))
@@ -83,8 +83,8 @@
          (retaddr (return-address-slot cg))
          (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
-        (begin 
-          (copy-tail-call-args cg out-arg-count out-retaddr 
+        (begin
+          (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
           (emit-reset-frame-base cg out-frame-base)
           ;; setting up %nargs must be the last thing we do, since
@@ -105,9 +105,9 @@
     ;; access %closure
     (trashy-codegen-into-reg arg-count cg false in-arg-count-reg)
     (emit-scale-number cg value-scale in-arg-count-reg)
-    (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count)) 
+    (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count))
               in-arg-count-reg)
-    (codegen-tail-call func retaddr out-arg-count in-arg-count-reg 
+    (codegen-tail-call func retaddr out-arg-count in-arg-count-reg
                        (cdr general-registers) cg)
     (codegen-function-tail cg out-frame-base)))
 
@@ -138,7 +138,7 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
     (codegen-program-sections program cg)
-    
+
     (emit cg ".text")
     (emit cg ".globl lisp")
     (emit cg "lisp:")

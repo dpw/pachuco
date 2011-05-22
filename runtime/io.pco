@@ -63,7 +63,7 @@
 (define (make-fd-ostream fd size)
   (make-ostream 0 (make-string size) fd))
 
-(define (make-buffer-ostream) 
+(define (make-buffer-ostream)
   (make-ostream 0 (make-string 100) false))
 
 (define (buffer-ostream-to-string os)
@@ -85,7 +85,7 @@
               (when (/= (ostream-pos os) 0)
                 (raw-write-substring (ostream-fd os) (ostream-buf os)
                                      0 (ostream-pos os)))
-             
+
               ;; if the new data is bigger than half the buffer size,
               ;; write it to the fd directly, otherwise copy into the
               ;; buffer
@@ -152,26 +152,26 @@
         (unless (and (<= 2 radix)
                      (<= radix (string-length print-number-digits)))
           (error "Bad radix ~D" radix))
-        
+
         (define negated false)
         (when (< num 0)
           (set! negated true)
           (set! num (- num)))
-        
+
         (defmacro buf-size 21)
         (define buf (make-string buf-size))
         (define pos buf-size)
-        
+
         (while (> num 0)
           (set! pos (1- pos))
           (string-set! buf pos (string-ref print-number-digits
                                            (rem num radix)))
           (set! num (truncate num radix)))
-        
+
         (when negated
          (set! pos (1- pos))
          (string-set! buf pos #\-))
-        
+
         (write-substring ostr buf pos (- buf-size pos)))))
 
 (define (print-string ostr str readably)
@@ -251,7 +251,7 @@
     (define control-len (string-length control))
 
     (while (< pos control-len)
-      (define ch (string-ref control pos)) 
+      (define ch (string-ref control pos))
       (if (not (eq? ch #\~))
           (set! pos (1+ pos))
           (begin
@@ -336,7 +336,7 @@
              (set! stmt (list stmt))
              (rplacd stmts-tail stmt)
              (set! stmts-tail stmt))
-           
+
            (define (consume-arg)
              (define arg (car args))
              (set! args (cdr args))
@@ -512,7 +512,7 @@
   (vector-set! readtable (character-code #\") rt-double-quote)
   (vector-set! readtable (character-code #\') rt-single-quote)
   (vector-set! readtable (character-code #\#) rt-sharp-sign)
-  
+
   (vector-set-range! readtable (character-code #\A) 26 rt-alpha-uc)
   (vector-set-range! readtable (character-code #\a) 26 rt-alpha-lc)
   (vector-set-range! readtable (character-code #\0) 10 rt-digit)
@@ -614,7 +614,7 @@
   (consume-whitespace istr)
   (define ch (peek-character istr 0))
   (cond ((eq? #\) ch)
-         (consume-character istr) 
+         (consume-character istr)
          ())
         ((and (eq? #\. ch)
               (not (rt-constituent? (rt-character-type (peek-character istr 1)))))
@@ -634,7 +634,7 @@
                    (error "more than one object follows . in list"))
                  (find-rparen))))
          (find-rparen)
-         
+
          result)
         (true
          (if (read-maybe istr c)
@@ -683,7 +683,7 @@
 
   (define (read-radixed-integer istr radix)
     (define val (read-integer istr radix))
-    (unless (and val 
+    (unless (and val
                  (not (rt-constituent? (rt-character-type (peek-character istr
                                                                           0)))))
       (error "bad digit ~C" (peek-character istr 0)))

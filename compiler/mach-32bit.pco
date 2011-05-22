@@ -42,7 +42,7 @@
 (defconstant true-representation #b1100)
 (defconstant unspecified-representation #b10100)
 
-(defconstant simple-representations 
+(defconstant simple-representations
   ;; The quotes here are significant for CL compatibility
   (list (cons 'false false-representation)
         (cons 'true true-representation)

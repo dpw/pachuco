@@ -74,7 +74,7 @@
   (assert (loopy-equal? () ()))
   (assert (loopy-equal? (list 'x) (list 'x)))
   (assert (not (loopy-equal? (list 'x) (list 'y))))
-  
+
   (assert (loopy-equal? (looped-list 1) (looped-list 1)))
   (assert (not (loopy-equal? (looped-list 1) (looped-list 2))))
 
@@ -116,7 +116,7 @@
     (define looped-closure-copy (gc-test-copy looped-closure))
 
     (assert-result (funcall looped-closure-copy) looped-closure-copy))
-  
+
   (gc))
 
 (define (main)

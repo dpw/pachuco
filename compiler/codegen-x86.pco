@@ -288,12 +288,12 @@
     (emit cg ".text")
     (emit cg ".globl heap_exhausted")
     (emit cg "heap_exhausted:")
-    
+
     ;; Push live registers onto the stack, guided by the bitset in
     ;; %closure.  This preserves their values, and also means that
     ;; they get treated as part of the root set by the GC.
     (for-live-registers general-registers (function emit-push))
-    
+
     ;; We need to save the live reg bitset from %closure, in order to
     ;; restore the live registers after the GC.  But if we put it on
     ;; the stack it it's original form, the GC will see it and try to
@@ -301,13 +301,13 @@
     ;; fixnum first.
     (emit-shl cg number-tag-bits %closure)
     (emit-push cg %closure)
-    
+
     (emit-mov cg (fixnum-representation 0) %nargs)
     (emit cg "call ~A" gc-label)
-    
+
     (emit-pop cg %closure)
     (emit-sar cg number-tag-bits %closure)
-  
+
     ;; Restore live registers
     (for-live-registers (reverse general-registers) (function emit-pop))
 
@@ -414,10 +414,10 @@
 ;;; Comparisons
 
 (defmarco (define-cmp-operator name cc)
-  (quasiquote (define-cc-operator ((unquote name) a (b reg-mem-imm)) () 
+  (quasiquote (define-cc-operator ((unquote name) a (b reg-mem-imm)) ()
                 (emit-cmp cg b a)
                 (unquote cc))))
- 
+
 (define-cmp-operator eq? "e")
 (define-cmp-operator = "e")
 (define-cmp-operator /= "ne")

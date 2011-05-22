@@ -76,7 +76,7 @@ Currently, characters are also represented as numbers:
 
   #\x       ; the character code for the character 'x'
   #\"       ; the character code for the character '"'
-  #\Space   ; a readable way to write the character code for the space 
+  #\Space   ; a readable way to write the character code for the space
             ; character
   #\Newline ; a readable way to write the character code for the newline
             ; character
