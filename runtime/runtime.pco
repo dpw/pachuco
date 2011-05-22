@@ -785,8 +785,6 @@
 (defmacro (subject-language-intern str) (list 'intern str))
 (defmacro (string-symbolcase str) str)
 
-(defmacro (read~ . args) (cons 'read args))
-
 (define (format~ out . args)
   (cond ((eq? out true) (apply formout stdout args))
         ((eq? out false) (apply format args))

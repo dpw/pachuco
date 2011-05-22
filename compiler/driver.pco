@@ -4,7 +4,7 @@
   (let* ((eof (cons () ())))
     (with-open-file-for-reading (s file)
       (labels ((read-forms ()
-                 (let* ((form (read~ s eof)))
+                 (let* ((form (read s eof)))
                    (unless (eq? form eof)
                      (buffer-add buf form)
                      (read-forms)))))

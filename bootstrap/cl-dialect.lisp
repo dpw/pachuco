@@ -211,10 +211,11 @@
   `(let* ((*print-pretty* false))
      (format ,@args)))
 
-(defun read~ (in &rest eos)
+(shadow 'read)
+(defun read (in &rest eos)
   (if eos
-      (read in nil (car eos))
-      (read in)))
+      (common-lisp:read in nil (car eos))
+      (common-lisp:read in)))
 
 (defmacro with-open-file-for-reading (&rest body)
   `(with-open-file ,@body))
