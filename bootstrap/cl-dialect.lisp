@@ -131,6 +131,7 @@
 (defvar raw-stdout *standard-output*)
 (defvar raw-stderr *error-output*)
 (defvar raw-stdin *standard-input*)
+(defvar stdout *standard-output*)
 
 (defun raw-write-substring (fd str pos len)
   (write-sequence str fd :start pos :end (+ pos len)))
@@ -204,9 +205,14 @@
                    str))))
     (string-replace-from str 0)))
 
-(defmacro format~ (&rest args)
+(shadow 'format)
+(defmacro format (&rest args)
   `(let* ((*print-pretty* false))
-     (format ,@args)))
+     (common-lisp:format false ,@args)))
+
+(defmacro formout (os &rest args)
+  `(let* ((*print-pretty* false))
+     (common-lisp:format ,os ,@args)))
 
 (shadow 'read)
 (defun read (in &rest eos)

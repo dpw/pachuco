@@ -22,7 +22,7 @@
 (define (indirect-operand addr)
   (unless (string? addr)
     (error "indirect operand ~S, which is surprising" addr))
-  (format~ false "~A(%rip)" addr))
+  (format "~A(%rip)" addr))
 
 ;;; C calls
 

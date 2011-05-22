@@ -26,7 +26,7 @@
   (list 'register-variant reg 0))
 
 (define (insn-operand x)
-  (cond ((number? x) (format~ false "#~D" x))
+  (cond ((number? x) (format "#~D" x))
         ((string? x) x)
         ((vector? x) (register-operand x))
         (true (error "strange operand ~S" x))))
@@ -545,7 +545,7 @@
 (define (scale-number-expr scale)
   (let* ((shift (- number-tag-bits scale)))
     (cond ((= shift 0) "")
-          ((> shift 0) (format~ false ", asr #~D" shift))
+          ((> shift 0) (format ", asr #~D" shift))
           (true (error "unexpected vec scale ~D" scale)))))
 
 (define-operator (make-vec len) ((temp-regs size))

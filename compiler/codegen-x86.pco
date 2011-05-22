@@ -67,15 +67,15 @@
       (cons (+ (car m) offset) (cdr m))))
 
 (define (insn-operand x scale)
-  (cond ((immediate? x) (format~ false "$~A" x))
+  (cond ((immediate? x) (format "$~A" x))
         ((vector? x) (register-operand x scale))
         ((pair? x)
          (cond ((null? (cdr x)) (indirect-operand (car x)))
                ((null? (cddr x))
-                (format~ false "~A(~A)" (if (eq? 0 (car x)) "" (car x))
+                (format "~A(~A)" (if (eq? 0 (car x)) "" (car x))
                          (register-operand (second x) value-scale)))
                (true
-                (format~ false "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
+                (format "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
                          (register-operand (second x) value-scale)
                          (register-operand (third x) value-scale)))))
         (true (error "strange operand ~S" x))))
@@ -211,12 +211,12 @@
          (let* ((shift (- number-tag-bits scale)))
            (if (register? oper)
                (begin (emit-sar cg shift oper) oper)
-               (format~ true "~A>>~A" oper shift))))
+               (formout stdout "~A>>~A" oper shift))))
         (true
          (let* ((shift (- scale number-tag-bits)))
            (if (register? oper)
                (begin (emit-shl cg shift oper) oper)
-               (format~ true "~A<<~A" oper shift))))))
+               (formout stdout "~A<<~A" oper shift))))))
 
 (define (emit-branch cg cc label)
   (emit-without-flushing "j~A ~A" cc label))

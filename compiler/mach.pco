@@ -17,9 +17,9 @@
   (labels ((make-defs (n)
              (if (< n stop)
                  (let* ((name
-                          (subject-language-intern (format~ false template n)))
+                          (subject-language-intern (format template n)))
                         (variants
-                          (mapfor (vt variant-templates) (format~ false vt n))))
+                          (mapfor (vt variant-templates) (format vt n))))
                    (cons (register-definition name variants)
                          (make-defs (1+ n))))
                  ())))
@@ -56,12 +56,12 @@
 (defmacro (emit-without-flushing template . args)
   (if (string? template)
       (quasiquote
-        (format~ true (unquote (string-concat template "~%"))
+        (formout stdout (unquote (string-concat template "~%"))
                  (unquote-splicing args)))
       (quasiquote
         (begin
-          (format~ true (unquote template) (unquote-splicing args))
-          (format~ true "~%")))))
+          (formout stdout (unquote template) (unquote-splicing args))
+          (formout stdout "~%")))))
 
 (defmacro (emit cg template . args)
   (quasiquote (begin
@@ -70,7 +70,7 @@
 
 (defmacro (emit-comment cg template . args)
   (quasiquote
-    (format~ true (unquote (string-concat "# " template "~%"))
+    (formout stdout (unquote (string-concat "# " template "~%"))
              (unquote-splicing args))))
 
 (defmacro (with-saved-frame-base cg . body)

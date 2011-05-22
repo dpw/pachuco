@@ -36,7 +36,7 @@
     (eval-form form (cdr dual-env))))
 
 (define (do-expand-files files)
-  (expand-files files (lambda (expanded) (format~ true "~S~%" expanded))))
+  (expand-files files (lambda (expanded) (formout stdout "~S~%" expanded))))
 
 (define (do-compile-files files form)
   (let* ((program (make-buffer)))

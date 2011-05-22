@@ -782,15 +782,6 @@
 (defmacro (subject-language-intern str) (list 'intern str))
 (defmacro (string-symbolcase str) str)
 
-(define (format~ out . args)
-  (cond ((eq? out true) (apply formout stdout args))
-        ((eq? out false) (apply format args))
-        (true (apply formout out args))))
-(defmacro (format~ out . args)
-  (cond ((eq? out true) (list* 'formout 'stdout args))
-        ((eq? out false) (cons 'format args))
-        (true (list* 'format out args))))
-
 ;; Not a full destructuring-bind
 (defmacro (bind vars values . body)
   (quasiquote

@@ -28,7 +28,7 @@
 (define label-counter 0)
 
 (define (gen-label)
-  (format~ false ".L~D" (set! label-counter (1+ label-counter))))
+  (format ".L~D" (set! label-counter (1+ label-counter))))
 
 (define (label-name-ok? name i)
   (or (= i (string-length name))
@@ -41,8 +41,8 @@
   ;; label if necessary
   (let* ((name (subject-language-symbol-name sym)))
     (if (label-name-ok? name 0)
-        (format~ false "~A_~A" prefix (string-replace name "-" "_"))
-        (format~ false "~A~D" prefix (set! label-counter (1+ label-counter))))))
+        (format "~A_~A" prefix (string-replace name "-" "_"))
+        (format "~A~D" prefix (set! label-counter (1+ label-counter))))))
 
 (define (emit-data cg label scale)
   (emit cg ".section .rodata")
@@ -254,14 +254,14 @@
     (emit-data cg label pair-tag-bits)
     (emit-literal cg a)
     (emit-literal cg d)
-    (format~ false "~A+~D" label pair-tag)))
+    (format "~A+~D" label pair-tag)))
 
 (define (codegen-quoted-string str cg)
   (let* ((label (gen-label)))
     (emit-data cg label string-tag-bits)
     (emit-literal cg (fixnum-representation (string-length str)))
     (emit cg ".ascii \"~A\"" (escape-string-literal str))
-    (format~ false "~A+~D" label string-tag)))
+    (format "~A+~D" label string-tag)))
 
 (define (escape-string-literal str)
   (string-replace (string-replace (string-replace str "\\" "\\\\")
@@ -282,7 +282,7 @@
           (emit-literal cg name)
           (emit-literal cg (fixnum-representation
                     (set! emitted-symbol-counter (1+ emitted-symbol-counter))))
-          (set! lit (format~ false "~A+~D" label symbol-tag))
+          (set! lit (format "~A+~D" label symbol-tag))
           (symboltable-set! emitted-symbols sym lit)
           lit))))
 
