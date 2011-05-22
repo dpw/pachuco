@@ -98,7 +98,7 @@
                     len)))
             (begin
               ;; grow the buffer
-              (define new-buf-size (make-string (* 2 (ostream-capacity os))))
+              (define new-buf-size (* 2 (ostream-capacity os)))
               (while (> buf-pos-after new-buf-size)
                 (set! new-buf-size (* 2 new-buf-size)))
 
