@@ -103,7 +103,7 @@
                               ())))
       (quasiquote (definitions
         (define ((unquote constr-name) (unquote-splicing constr-params))
-            (let* ((s (make-vector (unquote num-fields))))
+            (let* ((s (make-vector (unquote num-fields) false)))
               (unquote-splicing (struct-field-initializers fields 0))
               (unquote-splicing
                 (mapfor (cp constr-params)
@@ -120,9 +120,7 @@
 (define-struct hashtable ((constructor make-hashtable hashf equalf))
   hashf
   equalf
-  (buckets (let* ((buckets (make-vector hashtable-initial-size)))
-             (vector-set-range! buckets 0 hashtable-initial-size false)
-             buckets))
+  (buckets (make-vector hashtable-initial-size false))
   (size 0))
 
 (define-struct ht-entry ((constructor make-ht-entry key value hash next))
@@ -164,8 +162,7 @@
 (define (hashtable-grow ht)
   (let* ((buckets (hashtable-buckets ht))
          (new-buckets-len (1+ (* 2 (vector-length buckets))))
-         (new-buckets (make-vector new-buckets-len)))
-    (vector-set-range! new-buckets 0 (vector-length new-buckets) false)
+         (new-buckets (make-vector new-buckets-len false)))
     (labels ((rehash-hte (hte)
                (when hte
                  (let* ((index (mod (ht-entry-hash hte) new-buckets-len))

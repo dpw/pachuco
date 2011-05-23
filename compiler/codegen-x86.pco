@@ -199,6 +199,7 @@
             (insn-size-suffix (if (null? scale) value-scale (car scale)))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
+(define-insn-0 emit-rep-stos "rep ; stos")
 (define-insn-0 emit-pushf "pushf")
 (define-insn-0 emit-popf "popf")
 
@@ -277,7 +278,7 @@
 
 (define gc-label (make-label-for 'gc function-label-prefix))
 
-(define (codegen-heap-exhausted cg)
+(define (codegen-helpers cg)
   (labels ((for-live-registers (regs op)
              (dolist (reg regs)
                (let* ((l (gen-label)))
@@ -530,15 +531,21 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define-operator (make-vec len) ((temp-regs alloc saved-len))
+(define-operator (make-vec len (init fixed-reg %a))
+                 ((temp-regs alloc) (temp-fixed-regs %c %di))
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
-    (emit-mov cg len saved-len)
+    (emit-mov cg len %c)
     (emit-scale-number cg scale len)
     (emit-add cg value-size len)
-    (emit-alloc cg tag-bits len alloc spare-regs scale)
-    (emit-mov cg saved-len (mem alloc))
+    (emit-alloc cg tag-bits len alloc (list* %di spare-regs) scale)
+    (emit-mov cg alloc %di)
+    (emit-mov cg %c (mem alloc))
+    (emit-add cg value-size %di)
+    (emit-scale-number cg 0 %c)
+    (emit cg "cld")
+    (emit-rep-stos cg scale)
     (emit-lea cg (mem1+ alloc tag) result))
   result)
 

@@ -27,9 +27,8 @@
 
   (define (make-c-string str)
     (define len (string-length str))
-    (define c-str (make-string (1+ len)))
+    (define c-str (make-string (1+ len) (code-character 0)))
     (string-copy str 0 c-str 0 len)
-    (string-set! c-str len (code-character 0))
     (raw-string-address c-str 0))
 
   (define (syscall-open pathname flags mode)
@@ -61,15 +60,13 @@
   (string-length (ostream-buf os)))
 
 (define (make-fd-ostream fd size)
-  (make-ostream 0 (make-string size) fd))
+  (make-ostream 0 (make-string size (code-character 0)) fd))
 
 (define (make-buffer-ostream)
-  (make-ostream 0 (make-string 100) false))
+  (make-ostream 0 (make-string 100 (code-character 0)) false))
 
 (define (buffer-ostream-to-string os)
-  (define str (make-string (ostream-pos os)))
-  (string-copy (ostream-buf os) 0 str 0 (ostream-pos os))
-  str)
+  (substring (ostream-buf os) 0 (ostream-pos os)))
 
 (define (write-substring os str pos len)
   (define buf-pos-after (+ (ostream-pos os) len))
@@ -102,7 +99,7 @@
               (while (> buf-pos-after new-buf-size)
                 (set! new-buf-size (* 2 new-buf-size)))
 
-              (define new-buf (make-string new-buf-size))
+              (define new-buf (make-string new-buf-size (code-character 0)))
               (string-copy (ostream-buf os) 0 new-buf 0 (ostream-pos os))
               (string-copy str pos new-buf (ostream-pos os) len)
               (ostream-set-buf! os new-buf)
@@ -126,7 +123,7 @@
               0)
             (begin
               ;; grow the buffer
-              (define new-buf (make-string (* 2 buf-pos)))
+              (define new-buf (make-string (* 2 buf-pos) (code-character 0)))
               (string-copy (ostream-buf os) 0 new-buf 0 buf-pos)
               (ostream-set-buf! os new-buf)
               buf-pos)))))
@@ -159,7 +156,7 @@
           (set! num (- num)))
 
         (defmacro buf-size 21)
-        (define buf (make-string buf-size))
+        (define buf (make-string buf-size (code-character 0)))
         (define pos buf-size)
 
         (while (> num 0)
@@ -186,8 +183,7 @@
                           (#\Newline . "Newline")))
 
 (define (character-string ch)
-  (define buf (make-string 1))
-  (string-set! buf 0 ch)
+  (define buf (make-string 1 ch))
   buf)
 
 (define (print-character ostr ch readably)
@@ -410,7 +406,7 @@
   fd) ; The input FD, or false if no more data available
 
 (define (make-fd-istream fd)
-  (make-istream 0 0 (make-string 10000) fd))
+  (make-istream 0 0 (make-string 10000 (code-character 0)) fd))
 
 (define stdin (make-fd-istream raw-stdin))
 
@@ -478,8 +474,6 @@
 ;;; Reader syntax is currently intended to be consistent with the CL
 ;;; spec.
 
-(define readtable (make-vector 128))
-
 (defmacro rt-illegal -1)
 
 (defmacro rt-alpha-uc 0)
@@ -498,11 +492,14 @@
 (defmacro rt-sharp-sign 11)
 (defmacro rt-max 11)
 
-(define digit-bases (make-vector (1+ rt-max)))
+;;; The readtable type for each character
+(define readtable (make-vector 128 rt-illegal))
+
+;;; For each readtable type that can be interpreted as a digit, the
+;;; value to subtract from a character byte to get its digit value.
+(define digit-bases (make-vector (1+ rt-max) false))
 
 (begin
-  (vector-set-range! readtable 0 128 rt-illegal)
-
   (dolist (n '(9 10 13 32))
     (vector-set! readtable n rt-whitespace))
 
@@ -519,7 +516,6 @@
   (dolist (ch '(#\. #\* #\+ #\- #\_ #\? #\< #\> #\= #\/ #\! #\~ #\% #\$))
     (vector-set! readtable (character-code ch) rt-constituent-misc))
 
-  (vector-set-range! digit-bases 0 rt-max false)
   (vector-set! digit-bases rt-digit (character-code #\0))
   (vector-set! digit-bases rt-alpha-uc (- (character-code #\A) 10))
   (vector-set! digit-bases rt-alpha-lc (- (character-code #\a) 10)))

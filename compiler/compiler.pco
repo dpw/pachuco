@@ -813,7 +813,8 @@
         (list (cons 'tag (unquote tag)) (cons 'tag-bits (unquote tag-bits))
               (cons 'scale (unquote scale)) (cons 'header-size value-size)))
 
-      (define-simplify ((unquote (compound-symbol "make-" name)) attrs len)
+      (define-simplify ((unquote (compound-symbol "make-" name)) attrs len init)
+        (rplaca (cdddr form) ((unquote to-vec-rep) init))
         (genericize-vec-op form 'make-vec (unquote type-attrs)))
 
       (define-simplify ((unquote (compound-symbol name "-length")) attrs vec)

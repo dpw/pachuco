@@ -150,11 +150,11 @@
 (reify (code-character a))
 
 (reify (string? a))
-(reify (make-string a))
+(reify (make-string a init))
 (reify (string-length a))
 
 (reify (vector? a))
-(reify (make-vector a))
+(reify (make-vector a init))
 (reify (vector-length a))
 
 (when-interpreting
@@ -631,7 +631,7 @@
       (vector-set! vec pos (car l))
       (copy-list-to-vector (cdr l) vec (1+ pos))))
 
-  (define vec (make-vector (length l)))
+  (define vec (make-vector (length l) false))
   (copy-list-to-vector l vec 0)
   vec)
 
@@ -651,7 +651,7 @@
 ;;; Strings
 
 (define (substring str offset len)
-  (define newstr (make-string len))
+  (define newstr (make-string len (code-character 0)))
   (string-copy str offset newstr 0 len)
   newstr)
 
@@ -669,7 +669,7 @@
   (define pos 0)
   (dolist (str strs)
     (set! pos (+ pos (string-length str))))
-  (define res (make-string pos))
+  (define res (make-string pos (code-character 0)))
   (set! pos 0)
   (dolist (str strs)
     (string-copy str 0 res pos (string-length str))
@@ -727,7 +727,7 @@
       (aux 0))
 
     (define len (strlen addr))
-    (define str (make-string len))
+    (define str (make-string len (code-character 0)))
     (raw-1-copy addr (raw-string-address str 0) len)
     str)
 

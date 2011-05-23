@@ -126,7 +126,7 @@
           (unquote-splicing tbf-form)))
         (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
         (define table-size (ash 1 max-bits))
-        (set! gc-type-table (make-vector table-size))
+        (set! gc-type-table (make-vector table-size false))
         (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
 
         ;; fill in the table
@@ -182,7 +182,7 @@
 
     (vector gc-address-type
       (define len (vector-length val))
-      (define copy (make-vector len))
+      (define copy (make-vector len false))
       (raw-set! addr copy)
       (gc-copy-vec addr
                    (raw-- copy (fixnum->raw (compiler-constant vector-tag)))
@@ -191,7 +191,7 @@
 
     (string gc-address-type
       (define len (string-length val))
-      (define copy (make-string len))
+      (define copy (make-string len 0))
       (raw-set! addr copy)
       (raw-string-copy val 0 copy 0 len)
       copy)

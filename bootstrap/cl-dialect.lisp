@@ -70,6 +70,10 @@
 (defmacro set! (var val)
   `(setq ,var ,val))
 
+(shadow 'make-string)
+(defun make-string (len init)
+  (common-lisp:make-string len :initial-element init))
+
 (defun substring (str start len)
   (subseq str start (+ start len)))
 
@@ -104,8 +108,8 @@
 
 ;;; Vector primitives
 
-(defun make-vector (len)
-  (make-array len))
+(defun make-vector (len init)
+  (make-array len :initial-element init))
 
 (defun vector-length (vec)
   (length vec))

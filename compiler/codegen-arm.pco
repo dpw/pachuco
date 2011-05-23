@@ -132,6 +132,44 @@
         (emiti cg "cmp ~A, #~D" valreg (unquote tag)))
       cc-eq)))
 
+(define (scale-load-store-suffix scale)
+  (cond ((= scale 0) "b")
+        ((= scale 2) "")
+        (true (error "unexpected vec scale ~D" scale))))
+
+;;; Helper init-mem function
+;;;
+;;; Init-mem functions are used by make-vec and alloc-closure to clear
+;;; the allocated memory.  The caller sets up %init-mem-count and
+;;; %init-mem-val.
+
+(defconstant %init-mem-count (first general-registers))
+(defconstant %init-mem-val (second general-registers))
+(defconstant %init-mem-ptr (third general-registers))
+
+(define (codegen-init-mem cg scale)
+  (let* ((loop-label (gen-label))
+         (name (format "init_mem~A" (scale-load-store-suffix scale)))
+         (count (register-operand %init-mem-count))
+         (ptr (register-operand %init-mem-ptr)))
+    (emit cg ".text")
+    (emit cg ".globl ~A" name)
+    (emit cg "~A:" name)
+
+    ;; If %init-mem-count is zero, return straight away
+    (emiti cg "cmp ~A, #0" count)
+    (emiti cg "moveq pc, lr")
+
+    (emiti cg "add ~A, ~A, #~D" ptr (register-operand %alloc) value-size)
+
+    (emit-raw-label cg loop-label)
+    (emiti cg "subs ~A, ~A, #1" count count)
+    (emiti cg "str~A ~A, [~A], #~D" (scale-load-store-suffix scale)
+           (register-operand %init-mem-val) ptr (ash 1 scale))
+    (emiti cg "bne ~A" loop-label)
+
+    (emiti cg "mov pc, lr")))
+
 ;;; C-callable program wrapper
 
 (define (codegen-program program)
@@ -537,26 +575,30 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define (scale-load-store-suffix scale)
-  (cond ((= scale 0) "b")
-        ((= scale 2) "")
-        (true (error "unexpected vec scale ~D" scale))))
-
 (define (scale-number-expr scale)
   (let* ((shift (- number-tag-bits scale)))
     (cond ((= shift 0) "")
           ((> shift 0) (format ", asr #~D" shift))
           (true (error "unexpected vec scale ~D" scale)))))
 
-(define-operator (make-vec len) ((temp-regs size))
+(define-operator (make-vec len (init fixed-reg %init-mem-val))
+                 ((temp-fixed-regs %init-mem-count %init-mem-ptr))
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
          (scale (attr-ref attrs 'scale)))
-    (emiti cg "mov ~A, #~D" (register-operand size) value-size)
-    (emiti cg "add ~A, ~A, ~A~A" (register-operand size) (register-operand size)
-          (register-operand len) (scale-number-expr scale))
-    (emit-alloc cg tag-bits size scale spare-regs)
+    (emiti cg "mov ~A, #~D" (register-operand %init-mem-count) value-size)
+    (emiti cg "add ~A, ~A, ~A~A" (register-operand %init-mem-count)
+           (register-operand %init-mem-count) (register-operand len)
+           (scale-number-expr scale))
+    (emit-alloc cg tag-bits %init-mem-count scale
+                (list* %init-mem-ptr spare-regs))
     (emiti cg "str ~A, [~A]" (register-operand len) (register-operand %alloc))
+
+    ;; Call the helper routine to clear the vector
+    (emiti cg "mov ~A, ~A, asr #~D" (register-operand %init-mem-count)
+           (register-operand len) number-tag-bits)
+    (emiti cg "bl init_mem~A" (scale-load-store-suffix scale))
+
     (emiti cg "add ~A, ~A, #~D" (register-operand result)
           (register-operand %alloc) tag))
   result)
@@ -702,6 +744,11 @@
         (emit-ltorg cg)))))
 
 (define gc-label (make-label-for 'gc function-label-prefix))
+
+(define (codegen-helpers cg)
+  (codegen-heap-exhausted cg)
+  (codegen-init-mem cg 0)
+  (codegen-init-mem cg 2))
 
 (define (codegen-heap-exhausted cg)
   (labels ((for-live-registers (regs insn-template)

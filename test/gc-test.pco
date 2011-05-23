@@ -62,7 +62,7 @@
     l)
 
   (define (looped-vector)
-    (define v (make-vector 3))
+    (define v (make-vector 3 false))
     (vector-set! v 0 v)
     (vector-set! v 1 42)
     (vector-set! v 2 v)
