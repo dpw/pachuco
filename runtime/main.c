@@ -8,6 +8,7 @@
 unsigned long heap_size = 32UL * 1024 * 1024;
 
 unsigned long heap_start, heap_end, heap_alloc, heap_threshold;
+unsigned long heap2_start, heap2_end;
 
 char *verbose_gc;
 
@@ -47,6 +48,9 @@ int main(int argc, char **argv)
 
         heap_threshold = heap_start = alloc_heap(heap_size);
         heap_alloc = heap_end = heap_start + heap_size;
+
+        heap2_start = alloc_heap(heap_size);
+        heap2_end = heap2_start + heap_size;
 
         lisp_argv = argv;
 

@@ -43,9 +43,9 @@
     (set! gc-from-space (raw-global-ref heap_start))
     (set! gc-from-space-end (raw-global-ref heap_end))
 
-    ;; Allocate the new heap
-    (set! gc-to-space (c-call "alloc_heap"))
-    (set! gc-to-space-end (raw-+ gc-to-space (raw-global-ref heap_size)))
+    ;; Set up the new heap
+    (set! gc-to-space (raw-global-ref heap2_start))
+    (set! gc-to-space-end (raw-global-ref heap2_end))
 
     (raw-global-set! heap_alloc gc-to-space-end)
     (raw-global-set! heap_threshold gc-to-space)
@@ -67,9 +67,10 @@
             (raw->fixnum (raw-- gc-to-space-end (raw-global-ref heap_alloc))))
 
     ;; dispose of the old heap
-    (c-call "free_heap" gc-from-space)
     (raw-global-set! heap_start gc-to-space)
     (raw-global-set! heap_end gc-to-space-end)
+    (raw-global-set! heap2_start gc-from-space)
+    (raw-global-set! heap2_end gc-from-space-end)
 
     ;; all done
     (set! gc-active (set! gc-from-space (set! gc-from-space-end
