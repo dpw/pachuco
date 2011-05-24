@@ -36,9 +36,6 @@
                    end-addr)))
 
   (define (gc)
-    (when gc-active (error "Recursive GC"))
-    (set! gc-active true)
-
     ;; Record the extent of the old heap
     (set! gc-from-space (raw-global-ref heap_start))
     (set! gc-from-space-end (raw-global-ref heap_end))
@@ -51,6 +48,9 @@
     (raw-global-set! heap_threshold gc-to-space)
 
     ;; We should be ok to do new allocations now
+    (when gc-active (error "Recursive GC"))
+    (set! gc-active true)
+
     (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
       (formout stderr "GC... "))
 
