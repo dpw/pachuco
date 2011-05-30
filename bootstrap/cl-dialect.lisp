@@ -136,6 +136,7 @@
 (defvar raw-stderr *error-output*)
 (defvar raw-stdin *standard-input*)
 (defvar stdout *standard-output*)
+(defvar stderr *error-output*)
 
 (defun raw-write-substring (fd str pos len)
   (write-sequence str fd :start pos :end (+ pos len)))

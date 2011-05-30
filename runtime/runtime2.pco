@@ -115,7 +115,7 @@
 
 ;;; hash tables
 
-(defconstant hashtable-initial-size 11)
+(defconstant hashtable-initial-size 16)
 
 (define-struct hashtable ((constructor make-hashtable hashf equalf))
   hashf
@@ -137,8 +137,8 @@
 
 (define (hashtable-ref ht key)
   (let* ((buckets (hashtable-buckets ht))
-         (index (mod (funcall (hashtable-hashf ht) key)
-                     (vector-length buckets)))
+         (index (logand (funcall (hashtable-hashf ht) key)
+                        (1- (vector-length buckets))))
          (hte (ht-entry-find key (vector-ref buckets index)
                              (hashtable-equalf ht))))
     (and hte (ht-entry-value hte))))
@@ -149,7 +149,7 @@
 
   (let* ((keyhash (funcall (hashtable-hashf ht) key))
          (buckets (hashtable-buckets ht))
-         (index (mod keyhash (vector-length buckets)))
+         (index (logand keyhash (1- (vector-length buckets))))
          (bucket (vector-ref buckets index))
          (hte (ht-entry-find key bucket (hashtable-equalf ht))))
     (if hte
@@ -161,11 +161,12 @@
 
 (define (hashtable-grow ht)
   (let* ((buckets (hashtable-buckets ht))
-         (new-buckets-len (1+ (* 2 (vector-length buckets))))
+         (new-buckets-len (* 2 (vector-length buckets)))
          (new-buckets (make-vector new-buckets-len false)))
     (labels ((rehash-hte (hte)
                (when hte
-                 (let* ((index (mod (ht-entry-hash hte) new-buckets-len))
+                 (let* ((index (logand (ht-entry-hash hte)
+                                       (1- new-buckets-len)))
                         (next (ht-entry-next hte)))
                    (ht-entry-set-next! hte (vector-ref new-buckets index))
                    (vector-set! new-buckets index hte)
