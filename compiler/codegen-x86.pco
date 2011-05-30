@@ -324,13 +324,36 @@
 
 ;;; Functions and closures
 
-(define-operator (alloc-closure) ((temp-regs alloc))
-  (emit-alloc cg closure-tag-bits
-              (* value-size (1+ (length (attr-ref attrs 'closure))))
-              alloc spare-regs)
-  (emit-mov cg (attr-ref attrs 'label) (mem alloc))
-  (emit-lea cg (mem1+ alloc closure-tag) result)
+(define-operator (alloc-closure)
+                 ((temp-regs alloc)
+                  (temp-fixed-regs %a %c %di)
+                  )
+  (let* ((slot-count (length (attr-ref attrs 'closure))))
+    (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count)) alloc
+                (list* %a %c %di spare-regs))
+    (emit-mov cg (attr-ref attrs 'label) (mem alloc))
+    (init-closure-slots cg unspecified-representation (mem1+ alloc value-size)
+                        slot-count value-scale)
+    (emit-lea cg (mem1+ alloc closure-tag) result))
   result)
+
+(define (init-closure-slots cg val base count scale)
+  (cond ((= count 0))
+        ((= count 1)
+         (emit-mov cg val base))
+        (true
+         (emit-mov cg val %a)
+         (if (<= count 4)
+             (labels ((fill-from (index)
+                        (when (< index count)
+                          (emit-mov cg %a (mem1+ base (ash index scale)) scale)
+                          (fill-from (1+ index)))))
+               (fill-from 0))
+             (begin
+               (emit-lea cg base %di)
+               (emit-mov cg count %c)
+               (emit cg "cld")
+               (emit-rep-stos cg scale))))))
 
 (define (closure-slot closure index)
   (tagged-mem closure-tag closure (1+ index)))

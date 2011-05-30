@@ -269,14 +269,36 @@
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
-(define-operator (alloc-closure) ((temp-regs label))
-  (emiti cg "ldr ~A, =~A" (register-operand label) (attr-ref attrs 'label))
-  (emit-alloc cg closure-tag-bits
-              (* value-size (1+ (length (attr-ref attrs 'closure))))
-              value-scale spare-regs)
-  (emiti cg "str ~A, [~A]" (register-operand label) (register-operand %alloc))
-  (emiti cg "add ~A, ~A, #~D" (register-operand result)
-         (register-operand %alloc) closure-tag)
+(define-operator (alloc-closure) ((temp-fixed-regs %init-mem-val %init-mem-ptr
+                                                   %init-mem-count))
+  (let* ((slot-count (length (attr-ref attrs 'closure))))
+    (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count))
+                value-scale
+                (list* %init-mem-val %init-mem-ptr %init-mem-count spare-regs))
+    (emiti cg "ldr ~A, =~A" (register-operand %init-mem-val)
+           (attr-ref attrs 'label))
+    (emiti cg "str ~A, [~A]" (register-operand %init-mem-val)
+           (register-operand %alloc))
+
+    ;; Initialize the closure slots.
+    (unless (= slot-count 0)
+      (emiti cg "mov ~A, #~D" (register-operand %init-mem-val)
+             unspecified-representation)
+      (if (<= slot-count 4)
+          (labels ((fill-from (index)
+                   (when (< index (1+ slot-count))
+                     (emiti cg "str ~A, [~A, #~D]"
+                            (register-operand %init-mem-val)
+                            (register-operand %alloc) (ash index value-scale))
+                     (fill-from (1+ index)))))
+            (fill-from 1))
+          (begin
+            (emiti cg "mov ~A, #~D" (register-operand %init-mem-count)
+                   slot-count)
+            (emiti cg "bl init_mem"))))
+
+    (emiti cg "add ~A, ~A, #~D" (register-operand result)
+           (register-operand %alloc) closure-tag))
   result)
 
 (define (emit-store-into-closure cg closure index val)
