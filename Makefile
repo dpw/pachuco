@@ -23,16 +23,6 @@ MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
 CODEGEN_SOURCES+=compiler/codegen-arm.pco
 else
 
-ifeq ($(TARGET),i386)
-MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
-CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-i386.pco
-else ifeq ($(TARGET),x86_64)
-MACH_SOURCES+=compiler/mach-64bit.pco compiler/mach-x86_64.pco
-CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-x86_64.pco
-else
-$(error unknown target $(TARGET))
-endif
-
 STACK_REGIME=no-fp
 
 ifeq ($(STACK_REGIME),no-fp)
@@ -41,6 +31,16 @@ else ifeq ($(STACK_REGIME),fp)
 CODEGEN_SOURCES+=compiler/stack-traditional.pco compiler/stack-fp.pco
 else
 $(error unknown stack regime $(STACK_REGIME))
+endif
+
+ifeq ($(TARGET),i386)
+MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
+CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-i386.pco
+else ifeq ($(TARGET),x86_64)
+MACH_SOURCES+=compiler/mach-64bit.pco compiler/mach-x86_64.pco
+CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-x86_64.pco
+else
+$(error unknown target $(TARGET))
 endif
 
 endif
