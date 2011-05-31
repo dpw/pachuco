@@ -382,7 +382,7 @@
                    (begin))))
 
           (bind ((unquote-splicing param-names)
-                 (unquote-splicing temp-fixed-regs)
+                 (unquote-splicing (mapfor (r temp-fixed-regs) (gensym)))
                  (unquote-splicing temp-regs)
                  . spare-regs)
                 (operator-args-codegen form cg regs
