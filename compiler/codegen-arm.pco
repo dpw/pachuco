@@ -200,7 +200,10 @@
     (codegen-do-out-of-line cg)
     (emit cg ".size lisp, .-lisp")
 
-    (codegen-program-end cg)))
+    (codegen-program-end cg)
+
+    ;; This indicates to the linker that we support a non-executable stack
+    (emit cg ".section .note.GNU-stack,\"\",%progbits")))
 
 ;;; Stack layout:
 ;;;
