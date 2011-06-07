@@ -29,7 +29,6 @@
 (define-trashy-codegen (c-call attrs . args)
   (trashy-codegen-into-regs cg args c-call-arg-regs)
 
-  (emit cg "cld")
   (emit-set-ac-flag cg false)
 
   ;; C ABI requires us to align stack to 16 byte bundary

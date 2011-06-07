@@ -352,7 +352,6 @@
              (begin
                (emit-lea cg base %di)
                (emit-mov cg count %c)
-               (emit cg "cld")
                (emit-rep-stos cg scale))))))
 
 (define (closure-slot closure index)
@@ -567,7 +566,6 @@
     (emit-mov cg %c (mem alloc))
     (emit-add cg value-size %di)
     (emit-scale-number cg 0 %c)
-    (emit cg "cld")
     (emit-rep-stos cg scale)
     (emit-lea cg (mem1+ alloc tag) result))
   result)
@@ -624,19 +622,18 @@
                                     (len fixed-reg %c))
                  ((temp-regs scaled-len))
   (let* ((tag (attr-ref attrs 'tag))
-         (scale (attr-ref attrs 'scale)))
-    (if (attr-ref attrs 'forward)
-        (emit cg "cld")
-        (begin
-          ;; when coping backwards, we need to offset src-addr and dest-addr
-          (emit cg "std")
-          (emit-mov cg len scaled-len)
-          (emit-scale-number cg scale scaled-len)
-          (emit-lea cg (tagged-mem (ash 1 scale) src-addr scaled-len) src-addr)
-          (emit-lea cg (tagged-mem (ash 1 scale) dest-addr scaled-len)
-                    dest-addr)))
+         (scale (attr-ref attrs 'scale))
+         (forward (attr-ref attrs 'forward)))
+    (unless forward
+      ;; when copying backwards, we need to offset src-addr and dest-addr
+      (emit cg "std")
+      (emit-mov cg len scaled-len)
+      (emit-scale-number cg scale scaled-len)
+      (emit-lea cg (tagged-mem (ash 1 scale) src-addr scaled-len) src-addr)
+      (emit-lea cg (tagged-mem (ash 1 scale) dest-addr scaled-len) dest-addr))
     (emit-sar cg number-tag-bits len)
-    (emit-rep-movs cg scale))
+    (emit-rep-movs cg scale)
+    (unless forward (emit cg "cld")))
   unspecified-representation)
 
 ;;; Raw memory access
