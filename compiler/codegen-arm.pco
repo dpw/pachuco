@@ -183,11 +183,9 @@
 
     ;; load register globals from the variables assigned by the C setup
     ;; code
-    (bind (reg temp . rest) general-registers
+    (bind (temp . rest) general-registers
       (dolist (rglob register-globals)
-        (access-global cg "ldr" reg (car rglob) temp)
-        (emiti cg "mov ~A, ~A" (register-operand (cdr rglob))
-               (register-operand reg))))
+        (access-global cg "ldr" (cdr rglob) (car rglob) temp)))
 
     (codegen-set-frame-base! cg 0)
     (codegen-set-have-closure! cg false)
@@ -682,10 +680,9 @@
   result)
 
 (define (access-global cg insn reg name temp)
-  (set! reg (register-operand reg))
   (set! temp (register-operand temp))
   (emiti cg "ldr ~A, =~A" temp (subject-language-symbol-name name))
-  (emiti cg "~A ~A, [~A]" insn reg temp))
+  (emiti cg "~A ~A, [~A]" insn (register-operand reg) temp))
 
 (define-operator (raw-global-set! val) ((temp-regs temp))
   (let* ((name (attr-ref attrs 'name))
