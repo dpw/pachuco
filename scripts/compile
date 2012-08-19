@@ -14,8 +14,8 @@ Options:
     swapping.
 -T: Time the compiler.  Compiler output is sent to /dev/null.
 -C: Use the specified compiler executable.
--D: Don't use the compiler and runtime under the specified directory,
-    rather than the one in the same tree as this script.
+-D: Use the compiler and runtime under the specified directory, rather
+    than the one in the same tree as this script.
 "
 
 set -e
