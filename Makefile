@@ -57,11 +57,14 @@ export CL_COMPILER_SOURCES
 TEST_SOURCES=test/test.pco
 GC_TEST_SOURCES=test/gc-test.pco
 
-RUNTIME_SOURCES=runtime/runtime.pco runtime/runtime2.pco runtime/io.pco runtime/gc.pco
+RUNTIME_SOURCES=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco runtime/io.pco runtime/gc.pco
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 
 # The initial compiler used.  Default to bootstrapping from SBCL
 BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
+
+# The phase to stop at when dumping the intermediate program
+DUMP_PHASE=decompose-lambdas
 
 .PHONY: all clean print-compiler-sources compare-stage3
 
@@ -98,6 +101,16 @@ $(2)-gc-test-run: build/$(2)-gc-test
 
 $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	$(1) expand $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+
+$(2)-dump: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	$(1) dump $(DUMP_PHASE) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+
+$(2)-expand-test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	$(1) expand $(RUNTIME_SOURCES) $(TEST_SOURCES)
+
+$(2)-dump-test: $(1) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+	$(1) dump $(DUMP_PHASE) $(RUNTIME_SOURCES) $(TEST_SOURCES)
+
 
 build/$(3) build/$(3).s: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	mkdir -p build

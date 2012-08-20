@@ -1,20 +1,43 @@
 ;;; The compiler
 
+;;; Here we define the sequence of program-transformation phases
+;;; within the compiler (i.e. prior to the final code generation
+;;; phase).
+
+(defmacro (expand-compiler-phases . phases)
+  (cons 'list
+    (mapfor (ph phases)
+      (quasiquote (cons (unquote (subject-language-symbol-name (car ph)))
+                    (lambda (program) (unquote ph)))))))
+
+(define compiler-phases (expand-compiler-phases
+                          (normalize-lambdas program)
+                          (simplify program)
+                          (resolve-variables program ())
+                          (classify-variables program)
+                          (mark-top-level-definitions program)
+                          (collect-closures program)
+                          (introduce-boxes program)
+                          (decompose-lambdas program false)))
+
 (define (compile-program program)
   ;; Compile the program, printing the resulting assembly on standard
   ;; output
   (set! program (list* 'begin () (normalize-forms program)))
-  (normalize-lambdas program)
-  (simplify program)
-  (resolve-variables program ())
-  (classify-variables program)
-  (mark-top-level-definitions program)
-  (collect-closures program)
-  (introduce-boxes program)
-  (decompose-lambdas program false)
+  (dolist (ph compiler-phases) (funcall (cdr ph) program))
   (codegen-program program)
   ;(formout stdout "~S~%" (debug-form program))
   )
+
+(define (dump-program to-phase program)
+  ;; Run compilation up to the given phase, then dump the program
+  (set! program (list* 'begin () (normalize-forms program)))
+  (let* ((done false))
+    (dolist (ph compiler-phases)
+      (unless done
+        (funcall (cdr ph) program)
+        (set! done (string-equal? to-phase (car ph))))))
+  (formout-pretty stdout "~S~%" (debug-form program)))
 
 (define keywords-1
   '(begin if

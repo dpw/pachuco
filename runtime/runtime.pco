@@ -754,34 +754,6 @@
   (main)
   (flush-ostream stdout))
 
-;;; CL compatibility
-
-(defmacro (let* bindings . body)
-  (quasiquote (begin
-                (unquote-splicing (mapfor (binding bindings)
-                                          (if (pair? binding)
-                                              (cons 'define binding)
-                                              (list 'define binding))))
-                (unquote-splicing body))))
-
-(defmacro (labels funcs . body)
-  (quasiquote (begin
-                (unquote-splicing
-                  (mapfor (func funcs)
-                    (list* 'define (cons (car func) (cadr func)) (cddr func))))
-                (unquote-splicing body))))
-
-(defmacro (defconstant name val)
-  (quasiquote (defmacro (unquote name) (unquote val))))
-
-(defmacro (funcall . form) form)
-(defmacro (function f) f)
-
-(defmacro (subject-language-boolean bool) bool)
-(defmacro (subject-language-symbol-name sym) (list 'symbol-name sym))
-(defmacro (subject-language-intern str) (list 'intern str))
-(defmacro (string-symbolcase str) str)
-
 ;; Not a full destructuring-bind
 (defmacro (bind vars values . body)
   (quasiquote

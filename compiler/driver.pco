@@ -36,10 +36,18 @@
     (eval-form form (cdr dual-env))))
 
 (define (do-expand-files files)
-  (expand-files files (lambda (expanded) (formout stdout "~S~%" expanded))))
+  (expand-files files (lambda (expanded)
+                        (formout-pretty stdout "~S~%" expanded))))
 
 (define (do-compile-files files form)
   (let* ((program (make-buffer)))
     (expand-files files (lambda (expanded) (buffer-add program expanded)))
     (buffer-add program form)
     (compile-program (buffer-list program))))
+
+(define (do-dump-program to-phase files form)
+  (let* ((program (make-buffer)))
+    (expand-files files (lambda (expanded) (buffer-add program expanded)))
+    (buffer-add program form)
+    (dump-program to-phase (buffer-list program))))
+

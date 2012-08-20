@@ -8,20 +8,28 @@ done
 func=$1
 shift
 
-form=
-for f in $* ; do
-    form="$form \"$f\""
-done
+string_list () {
+    l=""
+    for f in $* ; do
+        l="$l \"$f\""
+    done
+    echo $l
+}
 
 case $func in
 interpret)
-    form="(do-interpret-files '($form) '(runtime-main))"
+    form="(do-interpret-files '($(string_list $*)) '(runtime-main))"
     ;;
 compile)
-    form="(do-compile-files '($form) '(runtime-main))"
+    form="(do-compile-files '($(string_list $*)) '(runtime-main))"
     ;;
 expand)
-    form="(do-expand-files '($form))"
+    form="(do-expand-files '($(string_list $*)))"
+    ;;
+dump)
+    phase=$1
+    shift
+    form="(do-dump-program \"$phase\" '($(string_list $*)) '(runtime-main))"
     ;;
 *)
     echo "unknown command $1" 1>&2

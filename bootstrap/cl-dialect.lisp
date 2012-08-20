@@ -106,6 +106,8 @@
           (make-array len :element-type 'character
 :displaced-to b :displaced-index-offset bstart)))
 
+(defun string-equal? (a b) (equalp a b))
+
 ;;; Vector primitives
 
 (defun make-vector (len init)
@@ -218,6 +220,9 @@
 (defmacro formout (os &rest args)
   `(let* ((*print-pretty* false))
      (common-lisp:format ,os ,@args)))
+
+(defmacro formout-pretty (os &rest args)
+  `(common-lisp:format ,os ,@args))
 
 (shadow 'read)
 (defun read (in &rest eos)
