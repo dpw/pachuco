@@ -477,7 +477,9 @@
     ;; the function inside the function.
     (let* ((self-varrec (attr-ref attrs 'self)))
       (when (and self-varrec (not (varrec-written? self-varrec)))
-        (resolve-closure-var self-varrec 'self (1+ depth) self-closure-cell)))
+        (form-attr-set! form 'self
+          (resolve-closure-var self-varrec 'self (1+ depth)
+                               self-closure-cell))))
 
     (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
                            local-closure-cell)
@@ -540,11 +542,11 @@
                 (raw-make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
-  ;; Where a parameter should be boxed, we need to replace the
-  ;; substitute the original parameter variable with a temporary
-  ;; parameter variable with a gensymmed name, and then add code to
-  ;; the lambda body to copy the parameter value from the temporary to
-  ;; the original parameter variable.
+  ;; Where a parameter should be boxed, we need to substitute the
+  ;; original parameter variable with a temporary parameter variable
+  ;; with a gensymmed name, and then add code to the lambda body to
+  ;; copy the parameter value from the temporary to the original
+  ;; parameter variable.
   ;;
   ;; When we add this copying code, we put it at the start of the
   ;; wrapped-begin form that was provided by wrap-lambda-body.  (We
@@ -667,20 +669,21 @@
 (define-walker debug-form ())
 
 (define (debug-substitute-varrec varrec)
-  (list (car varrec) (cadr varrec)))
+  (if (pair? varrec) (car varrec) varrec))
 
 (define (debug-uniquify-varrec varrec)
-  (rplacd varrec
-          (cons (gensym)
-                (flatten*-mapfor (attr (cdr varrec))
-                  (let* ((key (car attr))
-                         (val (cdr attr)))
-                    (cond ((not val)
-                           ())
-                          ((or (eq? key 'source) (eq? key 'origin))
-                           (list (cons key (debug-substitute-varrec val))))
-                          (true
-                           (list attr))))))))
+  (when (and (pair? varrec) (not (pair? (car varrec))))
+    (rplaca varrec (cons (car varrec) (gensym)))
+    (rplacd varrec (flatten*-mapfor (attr (cdr varrec))
+                     (let* ((key (car attr))
+                            (val (cdr attr)))
+                       (cond ((not val)
+                              ())
+                             ((or (eq? key 'source) (eq? key 'origin))
+                              (list (cons key (debug-substitute-varrec val))))
+                             (true
+                              (list attr)))))))
+  varrec)
 
 (define (debug-uniquify-varrecs varrecs)
   (mapfor (varrec varrecs) (debug-uniquify-varrec varrec)))
@@ -689,28 +692,35 @@
   (list* 'begin (debug-uniquify-varrecs varrecs) (debug-forms body)))
 
 (define (debug-lambda-attrs attrs)
-  (flatten*-mapfor (attr attrs)
-    (let* ((key (car attr))
-           (val (cdr attr)))
-      (cond ((not val)
-             ())
-            ((or (eq? key 'params) (eq? key 'closure))
-             (list (cons key (debug-uniquify-varrecs val))))
-            ((eq? key 'self)
-             (list (cons key (debug-substitute-varrec val))))
-            ((eq? key 'body)
-             (list (cons key (debug-form val))))
-            (true
-             (list attr))))))
+    ;; Need to process the body attr after attrs introducing varrecs.
+  (let* ((body-attr false)
+         (res (flatten*-mapfor (attr attrs)
+                (let* ((key (car attr))
+                       (val (cdr attr)))
+                  (cond ((not val)
+                         ())
+                        ((or (eq? key 'params) (eq? key 'closure))
+                         (list (cons key (debug-uniquify-varrecs val))))
+                        ((eq? key 'self)
+                         (list (cons key (debug-uniquify-varrec val))))
+                        ((eq? key 'wrapped-begin)
+                         (list (cons key 'etc)))
+                        ((eq? key 'body)
+                         (list (set! body-attr (cons key val))))
+                        (true
+                         (list attr)))))))
+    (when body-attr
+      (rplacd body-attr (debug-form (cdr body-attr))))
+    res))
 
-(define-debug-form (lambda attrs body)
-  (list 'lambda (debug-lambda-attrs attrs) (debug-form body)))
+(define-debug-form (lambda attrs . body)
+  (list* 'lambda (debug-lambda-attrs attrs) (debug-forms body)))
 
 (define-debug-form (alloc-closure attrs)
   (list* 'alloc-closure (debug-lambda-attrs attrs)))
 
-(define-debug-form ((define set!) varrec val)
-  (list (car form) (debug-substitute-varrec varrec) (debug-form val)))
+(define-debug-form ((define set!) varrec . val)
+  (list* (car form) (debug-substitute-varrec varrec) (debug-forms val)))
 
 (define-debug-form (ref varrec)
   (list 'ref (debug-substitute-varrec varrec)))
