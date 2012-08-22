@@ -468,6 +468,6 @@
   (dolist (arg (reverse args))
     (emit-frame-push cg (codegen arg cg false general-registers
                                  (first general-registers))))
-  (unless (func-no-closure func)
+  (when (func-needs-closure? func)
     (emit-mov-maybe cg (codegen func cg false general-registers
                                 (first general-registers)) %closure)))

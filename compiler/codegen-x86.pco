@@ -368,7 +368,7 @@
   (emit-smart-label cg label))
 
 (define (emit-call-or-jump cg insn func)
-  (let* ((label (func-lambda-label func))
+  (let* ((label (func-lambda-attr func 'label false))
          (comment (comment-form func)))
     (if label
         (emit cg "~A ~A # ~S" insn label comment)

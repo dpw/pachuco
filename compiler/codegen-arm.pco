@@ -104,7 +104,7 @@
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
 (define (emit-function-call cg func)
-  (let* ((label (func-lambda-label func))
+  (let* ((label (func-lambda-attr func 'label false))
          (comment (comment-form func)))
     (if label
         (emiti cg "bl ~A @ ~S" label comment)
@@ -115,7 +115,7 @@
           (emiti cg "mov pc, r0")))))
 
 (define (emit-function-jump cg func)
-  (let* ((label (func-lambda-label func))
+  (let* ((label (func-lambda-attr func 'label false))
          (comment (comment-form func)))
     (if label
         (emiti cg "b ~A @ ~S" label comment)

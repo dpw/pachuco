@@ -338,16 +338,13 @@
 
 ;;; Function calls
 
-(define (func-lambda-label func)
-  (and (eq? 'ref (first func))
-       (let* ((varrec (attr-ref (second func) 'varrec)))
-         (varrec-origin-attr varrec 'lambda-label))))
+(define (func-lambda-attr func attr if-not-resolved)
+  (if (eq? 'ref (first func))
+      (varrec-lambda-attr (form-attr func 'varrec) attr if-not-resolved)
+      if-not-resolved))
 
-(define (func-no-closure func)
-  (and (eq? 'ref (first func))
-       (let* ((varrec (attr-ref (second func) 'varrec)))
-         (and (varrec-origin-attr varrec 'lambda-label)
-              (varrec-origin-attr varrec 'no-closure)))))
+(define (func-needs-closure? func)
+  (not (null? (func-lambda-attr func 'closure true))))
 
 (define-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))

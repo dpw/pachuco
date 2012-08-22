@@ -105,6 +105,10 @@
     (unless a (error "no attribute ~S in ~S" attr attrs))
     (cdr a)))
 
+(define (attr-ref-defaulting attrs attr default)
+  (let* ((a (assoc attr attrs)))
+    (if a (cdr a) default)))
+
 (define (attr-set! attrs attr val)
   (let* ((a (assoc attr attrs)))
     (if a (begin (rplacd a val)
@@ -130,9 +134,11 @@
   (rplaca (cdr form) (attr-set! (second form) attr val))
   val)
 
-
 (define (varrec-attr varrec attr)
   (attr-ref (cdr varrec) attr))
+
+(define (varrec-attr-defaulting varrec attr default)
+  (attr-ref-defaulting (cdr varrec) attr default))
 
 (define (varrec-attr-set! varrec attr val)
   (rplacd varrec (attr-set! (cdr varrec) attr val))
@@ -140,6 +146,10 @@
 
 (define (varrec-attr-remove varrec attr)
   (attr-remove varrec attr))
+
+(define (varrec-lambda-attr varrec attr if-not-resolved)
+  (let* ((l (varrec-attr-defaulting (varrec-origin varrec) 'lambda false)))
+    (if l (attr-ref (car l) attr) if-not-resolved)))
 
 (define (overwrite-form form replacement)
   (rplaca form (car replacement))
@@ -368,7 +378,12 @@
                                                 varrec-define-lambda-state-table
                                                 varrec-define-state-table))))
     (when (= state 2) (rplaca form 'set!))
-    (when lambda? (form-attr-set! val 'self varrec))))
+    (when lambda?
+      ;; Record the lambda in the varrec.  We don't know if the varrec
+      ;; is read-only at this point, but if it turns out not to be, we
+      ;; remove this attr later on.
+      (varrec-attr-set! varrec 'lambda (cdr val))
+      (form-attr-set! val 'self varrec))))
 
 (define (classify-block-variables varrecs init mode form)
   (dolist (varrec varrecs)
@@ -377,12 +392,14 @@
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
     (let* ((state (varrec-attr-remove varrec 'state)))
-      (cond ((= state 6) (error "bad variable ~S" (car varrec)))
+      (cond ((>= state 4) (error "bad variable ~S" (car varrec)))
             ((= state 2)
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form)))))
-      (varrec-attr-set! varrec 'access
-                        (vector-ref varrec-access-table state)))))
+      (let* ((access (vector-ref varrec-access-table state)))
+        (varrec-attr-set! varrec 'access access)
+        (when (eq? access 'written)
+          (varrec-attr-remove varrec 'lambda))))))
 
 (define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 4 'local form))
@@ -513,11 +530,11 @@
 ;;; have to rename the original parameter.  This involves wrapping the
 ;;; lambda body with a begin form.
 
-(define (varrec-origin-attr varrec attr)
-  (varrec-attr (or (varrec-attr varrec 'origin) varrec) attr))
+(define (varrec-origin varrec)
+  (or (varrec-attr varrec 'origin) varrec))
 
 (define (varrec-boxed? varrec)
-  (varrec-origin-attr varrec 'boxed))
+  (varrec-attr (varrec-origin varrec) 'boxed))
 
 (define-trivial-walker introduce-boxes ())
 
@@ -588,10 +605,7 @@
 ;;; the classify-variables phase as early-access functions (with
 ;;; predicate varrec-early-function?).
 ;;;
-;;; This phase also assigns a label for the code for each function (in
-;;; the label attribute of the alloc-closure), and where possible,
-;;; propagates it to the associated variable (in the lambda-label
-;;; attribute of the varrec).
+;;; This phase also assigns labels to functions.
 ;;;
 ;;; So, for example, the effect is similar to a transformation from:
 ;;;
@@ -613,8 +627,6 @@
 (define-trivial-walker decompose-lambdas (begin-form))
 
 (define-decompose-lambdas (begin varrecs . body)
-  (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'lambda-label false))
   (decompose-lambdas-forms body form))
 
 (define-decompose-lambdas (lambda attrs body)
@@ -625,8 +637,6 @@
       (let* ((label (if (varrec-top-level? varrec)
                         (make-label-for (car varrec) function-label-prefix)
                         (gen-label))))
-        (varrec-attr-set! varrec 'lambda-label label)
-        (varrec-attr-set! varrec 'no-closure (null? (form-attr val 'closure)))
         (if (varrec-early-function? varrec)
             (begin
               (rplacd (cdr begin-form)
@@ -644,12 +654,12 @@
                                                          begin-form))))
 
 (define (make-alloc-closure lambda-form label begin-form)
-  (dolist (varrec (form-attr lambda-form 'params))
-    (varrec-attr-set! varrec 'lambda-label false))
   (decompose-lambdas (third lambda-form) begin-form)
-  (list 'alloc-closure (list* (cons 'label label)
+  (let* ((lambda-attrs (list* (cons 'label label)
                               (cons 'body (third lambda-form))
                               (second lambda-form))))
+    (rplaca (cdr lambda-form) lambda-attrs)
+    (list 'alloc-closure lambda-attrs)))
 
 (define (make-fill-closure lambda-form closure-form)
   (let* ((closure (form-attr lambda-form 'closure)))
@@ -668,22 +678,26 @@
 
 (define-walker debug-form ())
 
-(define (debug-substitute-varrec varrec)
-  (if (pair? varrec) (car varrec) varrec))
-
 (define (debug-uniquify-varrec varrec)
-  (when (and (pair? varrec) (not (pair? (car varrec))))
-    (rplaca varrec (cons (car varrec) (gensym)))
-    (rplacd varrec (flatten*-mapfor (attr (cdr varrec))
-                     (let* ((key (car attr))
-                            (val (cdr attr)))
-                       (cond ((not val)
-                              ())
-                             ((or (eq? key 'source) (eq? key 'origin))
-                              (list (cons key (debug-substitute-varrec val))))
-                             (true
-                              (list attr)))))))
-  varrec)
+  (cond ((not (pair? varrec))
+         varrec)
+        ((pair? (car varrec))
+         (car varrec))
+        (true
+         (rplaca varrec (cons (car varrec) (gensym)))
+         (rplacd varrec
+            (flatten*-mapfor (attr (cdr varrec))
+              (let* ((key (car attr))
+                     (val (cdr attr)))
+                (cond ((not val)
+                       ())
+                      ((or (eq? key 'source) (eq? key 'origin))
+                       (list (cons key (debug-uniquify-varrec val))))
+                      ((eq? key 'lambda)
+                       (list (list key (debug-lambda-attrs (first val) false)
+                                   'etc)))
+                      (true
+                       (list attr)))))))))
 
 (define (debug-uniquify-varrecs varrecs)
   (mapfor (varrec varrecs) (debug-uniquify-varrec varrec)))
@@ -691,7 +705,7 @@
 (define-debug-form (begin varrecs . body)
   (list* 'begin (debug-uniquify-varrecs varrecs) (debug-forms body)))
 
-(define (debug-lambda-attrs attrs)
+(define (debug-lambda-attrs attrs show-body)
     ;; Need to process the body attr after attrs introducing varrecs.
   (let* ((body-attr false)
          (res (flatten*-mapfor (attr attrs)
@@ -706,7 +720,9 @@
                         ((eq? key 'wrapped-begin)
                          (list (cons key 'etc)))
                         ((eq? key 'body)
-                         (list (set! body-attr (cons key val))))
+                         (list (if show-body
+                                   (set! body-attr (cons key val)))
+                                   '(body . etc)))
                         (true
                          (list attr)))))))
     (when body-attr
@@ -714,16 +730,16 @@
     res))
 
 (define-debug-form (lambda attrs . body)
-  (list* 'lambda (debug-lambda-attrs attrs) (debug-forms body)))
+  (list* 'lambda (debug-lambda-attrs attrs true) (debug-forms body)))
 
 (define-debug-form (alloc-closure attrs)
-  (list* 'alloc-closure (debug-lambda-attrs attrs)))
+  (list* 'alloc-closure (debug-lambda-attrs attrs true)))
 
 (define-debug-form ((define set!) varrec . val)
-  (list* (car form) (debug-substitute-varrec varrec) (debug-forms val)))
+  (list* (car form) (debug-uniquify-varrec varrec) (debug-forms val)))
 
 (define-debug-form (ref varrec)
-  (list 'ref (debug-substitute-varrec varrec)))
+  (list 'ref (debug-uniquify-varrec varrec)))
 
 ;;; Produce a comment form
 
