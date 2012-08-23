@@ -33,15 +33,10 @@
 
 ;;; Functions, calls, returns, etc.
 
-(define (codegen-function label closure-size body cg)
-  (codegen-function-intro label closure-size cg)
+(define (emit-function-prologue cg)
   (emit-push cg %bp)
   (emit-mov cg %sp %bp)
-  (codegen-set-frame-base! cg 2)
-  (when (codegen-have-closure cg) (emit-frame-push cg %closure))
-  (trashy-codegen-discarding body cg 1)
-  (codegen-do-out-of-line cg)
-  (emit cg ".size ~A, .-~A" label label))
+  (codegen-set-frame-base! cg 2))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emit cg "leave")
@@ -132,7 +127,6 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
-  (emit-reset-frame-base cg out-frame-base)
   (emit-mov cg func %closure)
   (emit cg "leave ; jmp *~A" (value-sized (tagged-mem closure-tag %closure)))
   (codegen-function-tail cg out-frame-base))

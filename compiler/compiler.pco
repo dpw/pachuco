@@ -789,11 +789,9 @@
     (when self-varrec
       (emit-comment cg "~S" (car self-varrec)))
 
-    ;; we don't care about the number of registers used, but we still
-    ;; need to do the reg-use pass to "prime" forms for codegen pass
     (emit-comment-form cg body)
     (codegen-set-have-closure! cg (not (null? closure)))
-    (codegen-function (attr-ref attrs 'label) (1+ (length closure)) body cg)))
+    (codegen-function attrs cg)))
 
 (define (wrap-lambda-body lambda-form body)
   ;; wrap a lambda body with code required to check that the number of

@@ -360,13 +360,6 @@
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
 
-(define (codegen-function-intro label closure-size cg)
-  (emit cg ".text")
-  (emit-align  cg value-scale)
-  (emit-literal cg (fixnum-representation closure-size))
-  (emit cg ".globl ~A" label)
-  (emit-smart-label cg label))
-
 (define (emit-call-or-jump cg insn func)
   (let* ((label (func-lambda-attr func 'label false))
          (comment (comment-form func)))

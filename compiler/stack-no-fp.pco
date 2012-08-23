@@ -35,16 +35,11 @@
 
 ;;; Functions, calls, returns, etc.
 
-(define (codegen-function label closure-size body cg)
-  (codegen-function-intro label closure-size cg)
-  (codegen-set-frame-base! cg 1)
-  (when (codegen-have-closure cg) (emit-frame-push cg %closure))
-  (trashy-codegen-discarding body cg 1)
-  (codegen-do-out-of-line cg)
-  (emit cg ".size ~A, .-~A" label label))
+(define (emit-function-prologue cg)
+  (codegen-set-frame-base! cg 1))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
-  (emit-reset-frame-base cg out-frame-base)
+  (emit-reset-frame-base cg 1)
   (emit-ret cg (* value-size (attr-ref attrs 'nparams)))
   (codegen-function-tail cg out-frame-base))
 
@@ -86,7 +81,7 @@
         (begin
           (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
-          (emit-reset-frame-base cg out-frame-base)
+          (emit-reset-frame-base cg 1)
           ;; setting up %nargs must be the last thing we do, since
           ;; %nargs is in general-regs and so might be the same as one
           ;; of our temp regs
@@ -128,7 +123,7 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
-  (emit-reset-frame-base cg out-frame-base)
+  (emit-reset-frame-base cg 1)
   (emit-mov cg func %closure)
   (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure)))
   (codegen-function-tail cg out-frame-base))

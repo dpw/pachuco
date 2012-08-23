@@ -54,11 +54,10 @@
 
 (define instructions-since-pool 0)
 
-(defmacro (emit-ltorg cg)
-  (quote
-    (unless (= instructions-since-pool 0)
-      (emit-without-flushing ".ltorg")
-      (set! instructions-since-pool 0))))
+(define (emit-ltorg cg)
+  (unless (= instructions-since-pool 0)
+    (emit-without-flushing ".ltorg")
+    (set! instructions-since-pool 0)))
 
 (define (check-instructions-since-pool cg)
   (when (> (set! instructions-since-pool (1+ instructions-since-pool)) 1000)
@@ -120,7 +119,8 @@
     (if label
         (emiti cg "b ~A @ ~S" label comment)
         (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure)
-               closure-tag))))
+               closure-tag))
+    (emit-ltorg cg)))
 
 (defmacro (define-tag-check name tag tag-bits)
   (quasiquote
@@ -220,19 +220,9 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
-(define (codegen-function label closure-size body cg)
-  (emit cg ".text")
-  (emit-align cg value-scale)
-  (emit-literal cg (fixnum-representation closure-size))
-  (emit cg ".globl ~A" label)
-  (emit-smart-label cg label)
+(define (emit-function-prologue cg)
   (codegen-set-frame-base! cg 0)
-  (emit-frame-push cg %lr)
-  (when (codegen-have-closure cg) (emit-frame-push cg %closure))
-  (trashy-codegen-discarding body cg 0)
-  (codegen-do-out-of-line cg)
-  (emit-ltorg cg)
-  (emit cg ".size ~A, .-~A" label label))
+  (emit-frame-push cg %lr))
 
 (define (stack-param-offset cg index)
   (* value-size (+ index (codegen-frame-base cg))))
@@ -330,6 +320,7 @@
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg (attr-ref attrs 'nparams)))
   (emiti cg "mov pc, lr")
+  (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
@@ -339,6 +330,7 @@
   (emiti cg "add sp, sp, ~A~A" (register-operand arg-count)
         (scale-number-expr value-scale))
   (emiti cg "mov pc, lr")
+  (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
 (define (codegen-copy-stack cg dest-offset count regs)
@@ -412,6 +404,7 @@
         (scale-number-expr value-scale))
   (emiti cg "mov ~A, #0" (register-operand %nargs))
   (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
+  (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
@@ -419,6 +412,7 @@
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)
+  (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
 ;;; Variables

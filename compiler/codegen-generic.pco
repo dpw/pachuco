@@ -76,6 +76,20 @@
 
   (emit-bss-label "top_level_end"))
 
+(define (codegen-function attrs cg)
+  (let* ((label (attr-ref attrs 'label)))
+    (emit cg ".text")
+    (emit-align cg value-scale)
+    (emit-literal cg (fixnum-representation
+                       (1+ (length (attr-ref attrs 'closure)))))
+    (emit cg ".globl ~A" label)
+    (emit-smart-label cg label)
+    (emit-function-prologue cg)
+    (when (codegen-have-closure cg) (emit-frame-push cg %closure))
+    (trashy-codegen-discarding (attr-ref attrs 'body) cg false)
+    (codegen-do-out-of-line cg)
+    (emit cg ".size ~A, .-~A" label label)))
+
 (define (codegen-program-end cg)
   (codegen-helpers cg)
   (codegen-symbols cg))
@@ -224,7 +238,10 @@
 
 (define (codegen-function-tail cg out-frame-base)
   ;; signals unreachable code after the tail form of a function,
-  ;; e.g. after a return instruction, tail call, etc.
+  ;; e.g. after a return instruction, tail call, etc.  A tail form is
+  ;; quite likely to have messed with the stack pointer, but we can
+  ;; pretend for the sake of the context that it set it to the
+  ;; expected value.
   (codegen-set-frame-base! cg out-frame-base)
   (unless (codegen-deferred-jump cg)
     (codegen-set-deferred-jump! cg (lambda ()))))
