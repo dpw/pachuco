@@ -125,7 +125,7 @@
                  (codegen-into-reg (car args) cg false (car regs))
                  (begin
                    (emit-frame-push cg (codegen (car args) cg false))
-                   (codegen-operator-args cg (cdr args) (cdr regs))
+                   (codegen-next-arg (cdr args) (cdr regs))
                    (emit-frame-pop cg (car regs))))))
     (unless (null? args)
       (codegen-next-arg args regs))))
