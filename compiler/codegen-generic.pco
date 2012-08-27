@@ -7,7 +7,8 @@
   (deferred-jump false)
   (here-labels ())
   (redirect-labels ())
-  (out-of-line ()))
+  (out-of-line ())
+  (arity-mismatch-varrec false))
 
 (define (codegen-push-out-of-line cg f)
   ;; When we push an out-of-line function, we need to save the
@@ -49,23 +50,26 @@
   (emit-align cg scale)
   (emit cg "~A:" label))
 
-(define (codegen-top-level-variable cg name label)
-  (emit-comment cg "top-level ~S" name)
+(define (emit-bss-label cg label)
   (emit cg ".section .bss")
   (emit cg ".globl ~A" label)
-  (emit cg "~A:" label)
+  (emit cg "~A:" label))
+
+(define (codegen-top-level-variable cg name label)
+  (emit-comment cg "top-level ~S" name)
+  (emit-bss-label cg label)
   (emit-literal cg 0))
 
 (define (codegen-program-sections program cg)
-  (define (emit-bss-label l)
-    (emit cg ".section .bss")
-    (emit-align cg value-scale)
-    (emit cg ".globl ~A" l)
-    (emit cg "~A:" l))
+  (emit cg ".section .bss")
+  (emit-align cg value-scale)
 
-  (emit-bss-label "top_level_start")
+  (emit-bss-label cg "top_level_start")
 
   (dolist (varrec (second program))
+    (when (eq? 'arity-mismatch (car varrec))
+      (codegen-set-arity-mismatch-varrec! cg varrec))
+
     (let* ((label (make-label-for (car varrec) variable-label-prefix)))
       (varrec-attr-set! varrec 'label label)
       (codegen-top-level-variable cg (car varrec) label)))
@@ -74,21 +78,39 @@
     (codegen-sections form cg)
     (emit-comment cg "BREAK"))
 
-  (emit-bss-label "top_level_end"))
+  (emit-bss-label cg "top_level_end"))
 
 (define (codegen-function attrs cg)
-  (let* ((label (first (attr-ref attrs 'labels))))
+  (let* ((labels (attr-ref attrs 'labels)))
     (emit cg ".text")
     (emit-align cg value-scale)
     (emit-literal cg (fixnum-representation
                        (1+ (length (attr-ref attrs 'closure)))))
-    (emit cg ".globl ~A" label)
-    (emit-smart-label cg label)
+    (emit cg ".globl ~A" (first labels))
+    (emit-smart-label cg (first labels))
+
+    (unless (null? (cdr labels))
+      (let* ((nparams (length (attr-ref attrs 'params)))
+             (bad-nargs-label (gen-label)))
+        (emit-check-nargs cg nparams bad-nargs-label)
+        (codegen-push-out-of-line cg
+          (lambda ()
+            (emit-smart-label cg bad-nargs-label)
+            (emit-function-prologue cg)
+            (trashy-codegen-discarding (quasiquote
+               (tail-call ((nparams . 2))
+                 (ref ((varrec . (unquote (codegen-arity-mismatch-varrec cg)))))
+                 (quote ((quoted . (unquote nparams))))
+                 (arg-count ())))
+                                       cg false)))
+        (emit cg ".globl ~A" (second labels))
+        (emit-smart-label cg (second labels))))
+
     (emit-function-prologue cg)
     (when (codegen-have-closure cg) (emit-frame-push cg %closure))
     (trashy-codegen-discarding (attr-ref attrs 'body) cg false)
     (codegen-do-out-of-line cg)
-    (emit cg ".size ~A, .-~A" label label)))
+    (emit cg ".size ~A, .-~A" (first labels) (first labels))))
 
 (define (codegen-program-end cg)
   (codegen-helpers cg)

@@ -253,7 +253,12 @@
       (propagate-last (cdr forms) operator)))
 
 (define-propagate (begin attrs . body)
-  (propagate-last body operator))
+  (propagate-last body operator)
+
+  ;; bind is a bit broken.  'body' does not share structure with the
+  ;; actual form.  Work around that by patching 'body' back into the
+  ;; form
+  (rplacd (cdr form) body))
 
 (define-propagate (if attrs test then else)
   ;; we need to avoid aliasing operator, so one of these needs to copy
@@ -651,10 +656,16 @@
 
 (define (make-alloc-closure lambda-form varrec begin-form)
   (decompose-lambdas (third lambda-form) begin-form)
-  (let* ((label (if (and varrec (varrec-top-level? varrec))
-                    (make-label-for (car varrec) function-label-prefix)
-                    (gen-label)))
-         (lambda-attrs (list* (list 'labels label)
+  (let* ((varargs? (form-attr lambda-form 'vararg))
+         (labels (if (and varrec (varrec-top-level? varrec))
+                     (cons (make-label-for (car varrec)
+                                           indirect-function-label-prefix)
+                           (if varargs?
+                               ()
+                               (list (make-label-for (car varrec)
+                                               direct-function-label-prefix))))
+                     (cons (gen-label) (if varargs? () (list (gen-label))))))
+         (lambda-attrs (list* (cons 'labels labels)
                               (cons 'body (third lambda-form))
                               (second lambda-form))))
     (rplaca (cdr lambda-form) lambda-attrs)
@@ -814,11 +825,7 @@
                                     (unquote wrapped-begin)))))
           (quasiquote
             ((return ((nparams . (unquote nparams)))
-                     (if () (check-arg-count ((nparams . (unquote nparams))))
-                         (unquote wrapped-begin)
-                         (call () (ref arity-mismatch)
-                               (quote (unquote nparams))
-                               (arg-count ()))))))))))
+               (unquote wrapped-begin))))))))
 
 ;;; Strings and vectors
 

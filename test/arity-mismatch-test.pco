@@ -1,0 +1,8 @@
+(define (func x)
+  x)
+
+(set! (func x y) y)
+
+(define (main)
+  (func 42))
+

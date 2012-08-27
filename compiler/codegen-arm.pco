@@ -104,11 +104,18 @@
 
 (define (prepare-for-call cg func nargs)
   (let* ((attrs (func-lambda-attrs func)))
-    (emiti cg "mov ~A, #~A" (register-operand %nargs)
-           (fixnum-representation nargs))
-    (and attrs (begin
-                 (check-call-nargs attrs nargs)
-                 (first (attr-ref attrs 'labels))))))
+    (if attrs
+        (let* ((labels (attr-ref attrs 'labels)))
+          (if (null? (cdr labels))
+              (begin
+                (emiti cg "mov ~A, #~A" (register-operand %nargs)
+                       (fixnum-representation nargs))
+                (first labels))
+              (second labels)))
+        (begin
+          (emiti cg "mov ~A, #~A" (register-operand %nargs)
+                 (fixnum-representation nargs))
+          false))))
 
 (define (emit-function-call cg func nargs)
   (let* ((label (prepare-for-call cg func nargs)))
@@ -301,9 +308,12 @@
         (register-operand closure) (closure-slot-offset index)))
 
 (define-cc-operator (check-arg-count) ()
-  (emiti cg "cmp ~A, #~A" (register-operand %nargs)
-        (fixnum-representation (attr-ref attrs 'nparams)))
   cc-eq)
+
+(define (emit-check-nargs cg nparams bad-nargs-label)
+  (emiti cg "cmp ~A, #~A" (register-operand %nargs)
+         (fixnum-representation nparams))
+  (emit-branch cg cc-ne bad-nargs-label))
 
 (define-operator (arg-count) () %nargs)
 
@@ -759,7 +769,7 @@
         (emiti cg "b ~A" again-label)
         (emit-ltorg cg)))))
 
-(define gc-label (make-label-for 'gc function-label-prefix))
+(define gc-label (make-label-for 'gc direct-function-label-prefix))
 
 (define (codegen-helpers cg)
   (codegen-heap-exhausted cg)
@@ -791,11 +801,7 @@
       ;; fixnum first.
       (emiti cg "mov ~A, ~A, asl #~D" reg reg number-tag-bits)
       (emiti cg "str ~A, [sp, #-4]!" reg)
-
-      (emiti cg "mov ~A, #~D" (register-operand %nargs)
-            (fixnum-representation 0))
       (emiti cg "bl ~A" gc-label)
-
       (emiti cg "ldr ~A, [sp], #4" reg)
       (emiti cg "mov ~A, ~A, asr #~D" reg reg number-tag-bits))
 

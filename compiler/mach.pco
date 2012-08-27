@@ -39,8 +39,7 @@
 
 ;;; %nargs is used to pass the number of arguments to functions.  We
 ;;; reuse one of the general-registers for this, which means we have
-;;; to be careful about invoking the operators that use it
-;;; (check-arg-count, arg-count).
+;;; to be careful about invoking raw-arg-count.
 (define %nargs)
 
 (define (add-general-registers regs)
@@ -80,6 +79,7 @@
         (unquote-splicing body)
         (codegen-set-frame-base! (unquote cg) (unquote orig-frame-base))))))
 
-(define function-label-prefix "lf")
+(define indirect-function-label-prefix "li")
+(define direct-function-label-prefix "ld")
 (define variable-label-prefix "lv")
 (define symbol-label-prefix "ls")

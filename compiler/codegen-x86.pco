@@ -276,7 +276,7 @@
         (emit-restore-%closure cg)
         (emit-jump cg again-label)))))
 
-(define gc-label (make-label-for 'gc function-label-prefix))
+(define gc-label (make-label-for 'gc direct-function-label-prefix))
 
 (define (codegen-helpers cg)
   (labels ((for-live-registers (regs op)
@@ -302,10 +302,7 @@
     ;; fixnum first.
     (emit-shl cg number-tag-bits %closure)
     (emit-push cg %closure)
-
-    (emit-mov cg (fixnum-representation 0) %nargs)
     (emit cg "call ~A" gc-label)
-
     (emit-pop cg %closure)
     (emit-sar cg number-tag-bits %closure)
 
@@ -363,13 +360,20 @@
 (define (emit-call-or-jump cg insn func nargs)
   (let* ((comment (comment-form func))
          (attrs (func-lambda-attrs func)))
-    (emit-mov cg (fixnum-representation nargs) %nargs)
     (if attrs
         (begin
           (check-call-nargs attrs nargs)
-          (emit cg "~A ~A # ~S" insn (first (attr-ref attrs 'labels)) comment))
-        (emit cg "~A *~A # ~S" insn
-              (value-sized (tagged-mem closure-tag %closure)) comment))))
+          (let* ((labels (attr-ref attrs 'labels))
+                 (label (if (null? (cdr labels))
+                            (begin
+                              (emit-mov cg (fixnum-representation nargs) %nargs)
+                              (first labels))
+                            (second labels))))
+            (emit cg "~A ~A # ~S" insn label comment)))
+        (begin
+          (emit-mov cg (fixnum-representation nargs) %nargs)
+          (emit cg "~A *~A # ~S" insn
+                (value-sized (tagged-mem closure-tag %closure)) comment)))))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
@@ -419,9 +423,9 @@
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
-(define-cc-operator (check-arg-count) ()
-  (emit-cmp cg (fixnum-representation (attr-ref attrs 'nparams)) %nargs)
-  "e")
+(define (emit-check-nargs cg nparams bad-nargs-label)
+  (emit-cmp cg (fixnum-representation nparams) %nargs)
+  (emit-branch cg "ne" bad-nargs-label))
 
 (define-operator (arg-count) () %nargs)
 
