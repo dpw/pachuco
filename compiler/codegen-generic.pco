@@ -355,13 +355,33 @@
 
 ;;; Function calls
 
+(define (func-lambda-attrs func)
+  (let* ((l (and (eq? 'ref (first func))
+                (varrec-attr-defaulting (varrec-origin (form-attr func 'varrec))
+                                        'lambda false))))
+    (and l (car l))))
+
 (define (func-lambda-attr func attr if-not-resolved)
-  (if (eq? 'ref (first func))
-      (varrec-lambda-attr (form-attr func 'varrec) attr if-not-resolved)
-      if-not-resolved))
+  (let* ((attrs (func-lambda-attrs func)))
+    (if attrs
+        (attr-ref-defaulting attrs attr if-not-resolved)
+        if-not-resolved)))
 
 (define (func-needs-closure? func)
   (not (null? (func-lambda-attr func 'closure true))))
+
+(define (check-call-nargs lambda-attrs nargs)
+  (let* ((expected (length (attr-ref lambda-attrs 'params)))
+         (at-least ""))
+    (when (if (attr-ref lambda-attrs 'vararg)
+              (begin
+                (set! at-least "at least ")
+                (< nargs expected))
+              (/= nargs expected))
+      (let* ((varrec (attr-ref-defaulting lambda-attrs 'self false)))
+        (error "bad number of arguments in call to ~A (expected ~A~D, got ~D)"
+               (if varrec (car varrec) "anonymous function")
+               at-least expected nargs)))))
 
 (define-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))

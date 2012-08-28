@@ -102,24 +102,29 @@
   (emiti cg "cmp ~A, #~A" (register-operand reg) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
-(define (emit-function-call cg func)
-  (let* ((label (func-lambda-attr func 'label false))
-         (comment (comment-form func)))
+(define (prepare-for-call cg func nargs)
+  (let* ((attrs (func-lambda-attrs func)))
+    (emiti cg "mov ~A, #~A" (register-operand %nargs)
+           (fixnum-representation nargs))
+    (and attrs (begin
+                 (check-call-nargs attrs nargs)
+                 (attr-ref attrs 'label)))))
+
+(define (emit-function-call cg func nargs)
+  (let* ((label (prepare-for-call cg func nargs)))
     (if label
-        (emiti cg "bl ~A @ ~S" label comment)
+        (emiti cg "bl ~A @ ~S" label (comment-form func))
         (begin
           (emiti cg "ldr r0, [~A, #-~D]" (register-operand %closure)
                  closure-tag)
           (emiti cg "mov lr, pc")
           (emiti cg "mov pc, r0")))))
 
-(define (emit-function-jump cg func)
-  (let* ((label (func-lambda-attr func 'label false))
-         (comment (comment-form func)))
+(define (emit-function-jump cg func nargs)
+  (let* ((label (prepare-for-call cg func nargs)))
     (if label
-        (emiti cg "b ~A @ ~S" label comment)
-        (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure)
-               closure-tag))
+        (emiti cg "b ~A @ ~S" label (comment-form func))
+        (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag))
     (emit-ltorg cg)))
 
 (defmacro (define-tag-check name tag tag-bits)
@@ -310,9 +315,7 @@
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
     (codegen-call-args cg func args)
-    (emiti cg "mov ~A, #~A" (register-operand %nargs)
-          (fixnum-representation (length args)))
-    (emit-function-call cg func))
+    (emit-function-call cg func (length args)))
   (emit-restore-%closure cg)
   %funcres)
 
@@ -347,9 +350,7 @@
 (define (codegen-tail-call cg func args out-arg-count out-param-offset regs)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (codegen-copy-stack cg out-param-offset out-arg-count regs)
-  (emiti cg "mov ~A, #~A" (register-operand %nargs)
-        (fixnum-representation out-arg-count))
-  (emit-function-jump cg func))
+  (emit-function-jump cg func out-arg-count))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)

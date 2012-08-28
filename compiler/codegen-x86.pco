@@ -361,11 +361,13 @@
   (emit-mov cg val (closure-slot closure index)))
 
 (define (emit-call-or-jump cg insn func nargs)
-  (let* ((label (func-lambda-attr func 'label false))
-         (comment (comment-form func)))
+  (let* ((comment (comment-form func))
+         (attrs (func-lambda-attrs func)))
     (emit-mov cg (fixnum-representation nargs) %nargs)
-    (if label
-        (emit cg "~A ~A # ~S" insn label comment)
+    (if attrs
+        (begin
+          (check-call-nargs attrs nargs)
+          (emit cg "~A ~A # ~S" insn (attr-ref attrs 'label) comment))
         (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
 

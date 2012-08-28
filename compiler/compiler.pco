@@ -147,10 +147,6 @@
 (define (varrec-attr-remove varrec attr)
   (attr-remove varrec attr))
 
-(define (varrec-lambda-attr varrec attr if-not-resolved)
-  (let* ((l (varrec-attr-defaulting (varrec-origin varrec) 'lambda false)))
-    (if l (attr-ref (car l) attr) if-not-resolved)))
-
 (define (overwrite-form form replacement)
   (rplaca form (car replacement))
   (rplacd form (cdr replacement)))
