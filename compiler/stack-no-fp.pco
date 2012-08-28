@@ -65,11 +65,7 @@
     (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
     (emit-lea cg (mem out-retaddr) %sp)
     (emit-mov cg retaddr-reg (mem %sp))
-    ;; setting up %nargs must be the last thing we do, since %nargs is
-    ;; in general-regs and so might be the same as one of our temp
-    ;; regs
-    (emit-mov cg (fixnum-representation out-arg-count) %nargs)
-    (emit-call-or-jump cg "jmp" func)))
+    (emit-call-or-jump cg "jmp" func out-arg-count)))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -82,11 +78,7 @@
           (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
           (emit-reset-frame-base cg 1)
-          ;; setting up %nargs must be the last thing we do, since
-          ;; %nargs is in general-regs and so might be the same as one
-          ;; of our temp regs
-          (emit-mov cg (fixnum-representation out-arg-count) %nargs)
-          (emit-call-or-jump cg "jmp" func))
+          (emit-call-or-jump cg "jmp" func out-arg-count))
         (codegen-tail-call func retaddr out-arg-count out-retaddr
                            general-registers cg))
     (codegen-function-tail cg out-frame-base)))

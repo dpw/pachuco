@@ -360,9 +360,10 @@
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
 
-(define (emit-call-or-jump cg insn func)
+(define (emit-call-or-jump cg insn func nargs)
   (let* ((label (func-lambda-attr func 'label false))
          (comment (comment-form func)))
+    (emit-mov cg (fixnum-representation nargs) %nargs)
     (if label
         (emit cg "~A ~A # ~S" insn label comment)
         (emit cg "~A *~A # ~S" insn
@@ -371,8 +372,7 @@
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
     (codegen-call-args cg func args)
-    (emit-mov cg (fixnum-representation (length args)) %nargs)
-    (emit-call-or-jump cg "call" func))
+    (emit-call-or-jump cg "call" func (length args)))
   (emit-restore-%closure cg)
   %funcres)
 
