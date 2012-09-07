@@ -108,7 +108,7 @@
            (fixnum-representation nargs))
     (and attrs (begin
                  (check-call-nargs attrs nargs)
-                 (attr-ref attrs 'label)))))
+                 (first (attr-ref attrs 'labels))))))
 
 (define (emit-function-call cg func nargs)
   (let* ((label (prepare-for-call cg func nargs)))
@@ -271,7 +271,7 @@
                 value-scale
                 (list* %init-mem-val %init-mem-ptr %init-mem-count spare-regs))
     (emiti cg "ldr ~A, =~A" (register-operand %init-mem-val)
-           (attr-ref attrs 'label))
+           (first (attr-ref attrs 'labels)))
     (emiti cg "str ~A, [~A]" (register-operand %init-mem-val)
            (register-operand %alloc))
 

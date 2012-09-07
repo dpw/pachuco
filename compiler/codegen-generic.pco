@@ -77,7 +77,7 @@
   (emit-bss-label "top_level_end"))
 
 (define (codegen-function attrs cg)
-  (let* ((label (attr-ref attrs 'label)))
+  (let* ((label (first (attr-ref attrs 'labels))))
     (emit cg ".text")
     (emit-align cg value-scale)
     (emit-literal cg (fixnum-representation

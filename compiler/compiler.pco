@@ -395,7 +395,10 @@
       (let* ((access (vector-ref varrec-access-table state)))
         (varrec-attr-set! varrec 'access access)
         (when (eq? access 'written)
-          (varrec-attr-remove varrec 'lambda))))))
+          ;; Remove lambda/self cross references
+          (let* ((lambda (varrec-attr-remove varrec 'lambda)))
+            (when lambda
+              (attr-set! (car lambda) 'self false))))))))
 
 (define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 4 'local form))
@@ -626,32 +629,32 @@
   (decompose-lambdas-forms body form))
 
 (define-decompose-lambdas (lambda attrs body)
-  (decompose-lambda form (gen-label) begin-form))
+  (decompose-lambda form false begin-form))
 
 (define-decompose-lambdas (define varrec val)
   (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-      (let* ((label (if (varrec-top-level? varrec)
-                        (make-label-for (car varrec) function-label-prefix)
-                        (gen-label))))
-        (if (varrec-early-function? varrec)
-            (begin
-              (rplacd (cdr begin-form)
-                      (cons (list 'define varrec
-                                  (make-alloc-closure val label begin-form))
-                            (cddr begin-form)))
-              (overwrite-form form (make-fill-closure val (list 'ref varrec))))
-            (decompose-lambda val label begin-form)))
-      (decompose-lambdas val begin-form)))
+    (if (varrec-early-function? varrec)
+        (begin
+          (rplacd (cdr begin-form)
+                  (cons (list 'define varrec
+                              (make-alloc-closure val varrec begin-form))
+                        (cddr begin-form)))
+          (overwrite-form form (make-fill-closure val (list 'ref varrec))))
+        (decompose-lambda val varrec begin-form))
+    (decompose-lambdas val begin-form)))
 
-(define (decompose-lambda lambda-form label begin-form)
+(define (decompose-lambda lambda-form varrec begin-form)
   (overwrite-form lambda-form
                   (make-fill-closure lambda-form
-                                     (make-alloc-closure lambda-form label
+                                     (make-alloc-closure lambda-form varrec
                                                          begin-form))))
 
-(define (make-alloc-closure lambda-form label begin-form)
+(define (make-alloc-closure lambda-form varrec begin-form)
   (decompose-lambdas (third lambda-form) begin-form)
-  (let* ((lambda-attrs (list* (cons 'label label)
+  (let* ((label (if (and varrec (varrec-top-level? varrec))
+                    (make-label-for (car varrec) function-label-prefix)
+                    (gen-label)))
+         (lambda-attrs (list* (list 'labels label)
                               (cons 'body (third lambda-form))
                               (second lambda-form))))
     (rplaca (cdr lambda-form) lambda-attrs)
@@ -742,9 +745,6 @@
 (define (comment-form-recurse form)
   (list* (car form) (mapfor (subform (cddr form)) (comment-form subform))))
 (define-walker comment-form ())
-
-(define-comment-form (lambda attrs body)
-  (list 'lambda (attr-ref attrs 'label) 'etc.))
 
 (define-comment-form (begin . rest) '(begin etc.))
 (define-comment-form (if attrs test then else)

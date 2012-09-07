@@ -331,7 +331,7 @@
   (let* ((slot-count (length (attr-ref attrs 'closure))))
     (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count)) alloc
                 (list* %a %c %di spare-regs))
-    (emit-mov cg (attr-ref attrs 'label) (mem alloc))
+    (emit-mov cg (first (attr-ref attrs 'labels)) (mem alloc))
     (init-closure-slots cg unspecified-representation (mem1+ alloc value-size)
                         slot-count value-scale)
     (emit-lea cg (mem1+ alloc closure-tag) result))
@@ -367,7 +367,7 @@
     (if attrs
         (begin
           (check-call-nargs attrs nargs)
-          (emit cg "~A ~A # ~S" insn (attr-ref attrs 'label) comment))
+          (emit cg "~A ~A # ~S" insn (first (attr-ref attrs 'labels)) comment))
         (emit cg "~A *~A # ~S" insn
               (value-sized (tagged-mem closure-tag %closure)) comment))))
 
