@@ -49,17 +49,17 @@
 ;;; codegen functions called from outside this file
 
 (define (trashy-codegen form cg out-frame-base)
-  (reg-use form)
   (codegen form cg out-frame-base general-registers (first general-registers)))
 
-(define (trashy-codegen-discarding form cg out-frame-base)
-  (reg-use-discarding form)
-  (codegen-discarding form cg out-frame-base general-registers))
-
 (define (trashy-codegen-into-reg form cg out-frame-base reg)
-  (reg-use form)
   (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
                   reg))
+
+(define (trashy-codegen-discarding form cg out-frame-base)
+  ;; This is called for codegen of program fragments, so we need to do
+  ;; the reg-use pass
+  (reg-use-discarding form)
+  (codegen-discarding form cg out-frame-base general-registers))
 
 (defmacro (define-trashy-codegen template . body)
   (quasiquote (definitions
@@ -463,11 +463,3 @@
 (define-reg-use-discarding ((tail-call varargs-tail-call) attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)
-
-(define (codegen-call-args cg func args)
-  (dolist (arg (reverse args))
-    (emit-frame-push cg (codegen arg cg false general-registers
-                                 (first general-registers))))
-  (when (func-needs-closure? func)
-    (emit-mov-maybe cg (codegen func cg false general-registers
-                                (first general-registers)) %closure)))

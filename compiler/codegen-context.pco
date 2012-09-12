@@ -189,12 +189,6 @@
 
 ;;; Misc
 
-(define (codegen-call-args cg func args)
-  (dolist (arg (reverse args))
-    (emit-frame-push cg (codegen arg cg false)))
-  (when (func-needs-closure? func)
-    (codegen-into-reg func cg false %closure)))
-
 (define-codegen (fill-closure attrs closure . refs)
   (labels ((fill-slots (refs index)
              (if (null? refs)

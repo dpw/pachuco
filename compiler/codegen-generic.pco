@@ -405,6 +405,12 @@
                (if varrec (car varrec) "anonymous function")
                at-least expected nargs)))))
 
+(define (codegen-call-args cg func args)
+  (dolist (arg (reverse args))
+    (emit-frame-push cg (trashy-codegen arg cg false)))
+  (when (func-needs-closure? func)
+    (trashy-codegen-into-reg func cg false %closure)))
+
 (define-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
   (simplify-recurse form))
