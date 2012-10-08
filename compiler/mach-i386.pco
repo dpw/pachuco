@@ -17,8 +17,7 @@
 
 (define c-callee-saved-regs (list %b %bp))
 
-(define (insn-size-suffix scale)
-  (elt '("b" "w" "l") scale))
+(define insn-size-suffixes "bwl")
 
 ;;; No special handling required for indirect operands on i386
 

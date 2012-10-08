@@ -2,7 +2,7 @@
 
 ;;; Assembly bits
 
-(defconstant value-insn-size-suffix (insn-size-suffix value-scale))
+(defconstant value-insn-size-suffix (string-ref insn-size-suffixes value-scale))
 
 (define (emit-align cg scale)
   (emit cg ".align ~D" (ash 1 scale)))
@@ -129,7 +129,7 @@
 
 (define (emit-insn-2 cg insn src dest scale)
   (set! scale (if (null? scale) value-scale (car scale)))
-  (emit cg "~A~A ~A, ~A" insn (insn-size-suffix scale)
+  (emit cg "~A~C ~A, ~A" insn (string-ref insn-size-suffixes scale)
         (insn-operand src scale) (insn-operand dest scale)))
 
 (define-insn-2 emit-lea "lea")
@@ -157,19 +157,22 @@
         (true
          (emit-insn-2 cg "mov" src dest scale))))
 
+(define movzx-suffixes
+    (make-vector-from-list (list (make-vector-from-list '("b"))
+                                 (make-vector-from-list '("zbw" "w"))
+                                 (make-vector-from-list '("zbl" "zwl" "l")))))
+
 (define (emit-movzx-32 cg src dest src-scale dest-scale)
   (emit cg "mov~A ~A,~A"
-        (elt (elt '(("b")
-                    ("zbw" "w")
-                    ("zbl" "zwl" "l")) dest-scale) src-scale)
+        (vector-ref (vector-ref movzx-suffixes dest-scale) src-scale)
         (insn-operand src src-scale)
         (insn-operand dest dest-scale)))
 
 (define (emit-push cg reg)
-  (emit cg "push~A ~A" value-insn-size-suffix (value-sized reg)))
+  (emit cg "push~C ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-pop cg reg)
-  (emit cg "pop~A ~A" value-insn-size-suffix (value-sized reg)))
+  (emit cg "pop~C ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-set cg cc reg)
   (emit cg "set~A ~A" cc (insn-operand reg 0)))
@@ -181,7 +184,8 @@
                    (if (null? scale) value-scale (car scale))))))
 
 (define (emit-insn-1 cg insn oper scale)
-  (emit cg "~A~A ~A" insn (insn-size-suffix scale) (insn-operand oper scale)))
+  (emit cg "~A~C ~A" insn (string-ref insn-size-suffixes scale)
+        (insn-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-not "not")
@@ -195,8 +199,9 @@
 (defmacro (define-insn-0 name insn)
   (quasiquote
     (define ((unquote name) cg . scale)
-      (emit cg "~A~A" (unquote insn)
-            (insn-size-suffix (if (null? scale) value-scale (car scale)))))))
+      (emit cg "~A~C" (unquote insn)
+            (if (null? scale) value-insn-size-suffix
+                (string-ref insn-size-suffixes (car scale)))))))
 
 (define-insn-0 emit-rep-movs "rep ; movs")
 (define-insn-0 emit-rep-stos "rep ; stos")

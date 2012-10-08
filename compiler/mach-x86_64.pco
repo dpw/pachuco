@@ -19,5 +19,4 @@
 (define c-callee-saved-regs (list %b %bp %r12 %r13 %r14 %r15))
 (define c-call-arg-regs (list %di %si %d %c %r8 %r9))
 
-(define (insn-size-suffix scale)
-  (elt '("b" "w" "l" "q") scale))
+(define insn-size-suffixes "bwlq")
