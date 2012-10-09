@@ -635,6 +635,31 @@
   (copy-list-to-vector l vec 0)
   vec)
 
+(define (vector . l)
+  (make-vector-from-list l))
+
+(defmacro (vector . l)
+  (define v (gensym))
+
+  (define (inits l pos)
+    (if (null? l) ()
+        (cons (list 'raw-vector-set! v pos (car l)) (inits (cdr l) (1+ pos)))))
+
+  (quasiquote (begin
+                (define (unquote v) (make-vector (unquote (length l)) false))
+                (unquote-splicing (inits l 0))
+                (unquote v))))
+
+(define (vector-equal? a b)
+  (define len (vector-length a))
+  (and (= (vector-length b) len)
+       (begin
+         (define (compare-elts pos)
+           (or (= pos len)
+               (and (equal? (vector-ref a pos) (vector-ref b pos))
+                    (compare-elts (1+ pos)))))
+         (compare-elts 0))))
+
 ;;; Lists
 
 (define (assoc key l)
@@ -713,6 +738,8 @@
          (and (pair? b) (equal? (car a) (car b)) (equal? (cdr a) (cdr b))))
         ((string? a)
          (and (string? b) (string-equal? a b)))
+        ((vector? a)
+         (and (vector? b) (vector-equal? a b)))
         (true (eq? a b))))
 
 ;;; Command line access

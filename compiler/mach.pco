@@ -7,8 +7,7 @@
 (define (register-definition name variants)
   (quasiquote
     (define (unquote name)
-      (make-vector-from-list
-        (quote ((unquote name) (unquote false) (unquote-splicing variants)))))))
+      (vector (quote (unquote name)) (unquote false) (unquote-splicing variants)))))
 
 (defmacro (define-register name . variants)
   (register-definition name variants))

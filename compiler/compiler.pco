@@ -353,13 +353,12 @@
 
 (define-trivial-walker classify-variables ())
 
-(define varrec-define-state-table (make-vector-from-list '(6 1 2 6 0 2 6)))
-(define varrec-define-lambda-state-table
-                                  (make-vector-from-list '(6 1 2 6 0 3 6)))
-(define varrec-ref-state-table    (make-vector-from-list '(0 1 2 3 5 5 6)))
-(define varrec-set!-state-table   (make-vector-from-list '(1 1 2 2 2 2 6)))
+(define varrec-define-state-table (vector 6 1 2 6 0 2 6))
+(define varrec-define-lambda-state-table (vector 6 1 2 6 0 3 6))
+(define varrec-ref-state-table (vector 0 1 2 3 5 5 6))
+(define varrec-set!-state-table (vector 1 1 2 2 2 2 6))
 (define varrec-access-table
-    (make-vector-from-list '(read-only written written early-function)))
+  (vector 'read-only 'written 'written 'early-function))
 
 (define (update-varrec-state varrec table)
   (varrec-attr-set! varrec 'state

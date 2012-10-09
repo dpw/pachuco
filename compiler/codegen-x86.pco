@@ -157,10 +157,9 @@
         (true
          (emit-insn-2 cg "mov" src dest scale))))
 
-(define movzx-suffixes
-    (make-vector-from-list (list (make-vector-from-list '("b"))
-                                 (make-vector-from-list '("zbw" "w"))
-                                 (make-vector-from-list '("zbl" "zwl" "l")))))
+(define movzx-suffixes (vector (vector "b")
+                               (vector "zbw" "w")
+                               (vector "zbl" "zwl" "l")))
 
 (define (emit-movzx-32 cg src dest src-scale dest-scale)
   (emit cg "mov~A ~A,~A"

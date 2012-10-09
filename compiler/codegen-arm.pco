@@ -9,8 +9,7 @@
 (defconstant cc-ge 4)
 (defconstant cc-lt 5)
 
-(define cc-insn-suffixes
-  (make-vector-from-list '("eq" "ne" "gt" "le" "ge" "lt")))
+(define cc-insn-suffixes (vector "eq" "ne" "gt" "le" "ge" "lt"))
 
 (define (cc-insn-suffix cc)
   (vector-ref cc-insn-suffixes cc))

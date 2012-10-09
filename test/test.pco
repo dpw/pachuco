@@ -158,6 +158,10 @@
   (assert-result (string-replace "banana" "an" "rane") "braneranea")
   (assert-result (not (character? #\x)) false)
 
+  (assert-result (vector-equal? (vector 1 2 3)
+                                (make-vector-from-list '(1 2 3)))
+                 true)
+
   (begin
     (define (assert-uniform-format a expect)
       (assert-result (format "~S" a) expect)
