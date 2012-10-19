@@ -19,9 +19,9 @@
 ;;; rip-relative addressing is shorter on x86-64, but is not the
 ;;; default in the assembly syntax:
 
-(define (indirect-operand addr)
+(define (absolute-asm-operand addr)
   (unless (string? addr)
-    (error "indirect operand ~S, which is surprising" addr))
+    (error "absolute operand ~S, which is surprising" addr))
   (format "~A(%rip)" addr))
 
 ;;; C calls

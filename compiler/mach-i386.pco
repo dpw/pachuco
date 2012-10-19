@@ -19,7 +19,6 @@
 
 (define insn-size-suffixes "bwl")
 
-;;; No special handling required for indirect operands on i386
-
-(defmacro (indirect-operand addr)
+;;; No special handling required for absolute operands on i386
+(defmacro (absolute-asm-operand addr)
   addr)

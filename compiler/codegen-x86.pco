@@ -21,9 +21,6 @@
 (define (register? x) (vector? x))
 (define (mem? x) (pair? x))
 
-(defmacro (register-operand reg scale)
-  (list 'register-variant reg scale))
-
 (define (mem1 x)
   (cond ((register? x) (list 0 x))
         ((immediate? x) (list x))
@@ -66,22 +63,25 @@
       (list* (car m) offset (cdr m))
       (cons (+ (car m) offset) (cdr m))))
 
-(define (insn-operand x scale)
+(defmacro (reg-asm-operand reg scale)
+  (list 'register-variant reg scale))
+
+(define (asm-operand x scale)
   (cond ((immediate? x) (format "$~A" x))
-        ((vector? x) (register-operand x scale))
+        ((vector? x) (reg-asm-operand x scale))
         ((pair? x)
-         (cond ((null? (cdr x)) (indirect-operand (car x)))
+         (cond ((null? (cdr x)) (absolute-asm-operand (car x)))
                ((null? (cddr x))
                 (format "~A(~A)" (if (eq? 0 (car x)) "" (car x))
-                         (register-operand (second x) value-scale)))
+                         (reg-asm-operand (second x) value-scale)))
                (true
                 (format "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
-                         (register-operand (second x) value-scale)
-                         (register-operand (third x) value-scale)))))
+                         (reg-asm-operand (second x) value-scale)
+                         (reg-asm-operand (third x) value-scale)))))
         (true (error "strange operand ~S" x))))
 
 (define (value-sized operand)
-  (insn-operand operand value-scale))
+  (asm-operand operand value-scale))
 
 (define (operand-using-reg? o r)
   (cond ((register? o) (eq? o r))
@@ -130,7 +130,7 @@
 (define (emit-insn-2 cg insn src dest scale)
   (set! scale (if (null? scale) value-scale (car scale)))
   (emit cg "~A~C ~A, ~A" insn (string-ref insn-size-suffixes scale)
-        (insn-operand src scale) (insn-operand dest scale)))
+        (asm-operand src scale) (asm-operand dest scale)))
 
 (define-insn-2 emit-lea "lea")
 (define-insn-2 emit-add "add")
@@ -164,8 +164,8 @@
 (define (emit-movzx-32 cg src dest src-scale dest-scale)
   (emit cg "mov~A ~A,~A"
         (vector-ref (vector-ref movzx-suffixes dest-scale) src-scale)
-        (insn-operand src src-scale)
-        (insn-operand dest dest-scale)))
+        (asm-operand src src-scale)
+        (asm-operand dest dest-scale)))
 
 (define (emit-push cg reg)
   (emit cg "push~C ~A" value-insn-size-suffix (value-sized reg)))
@@ -174,7 +174,7 @@
   (emit cg "pop~C ~A" value-insn-size-suffix (value-sized reg)))
 
 (define (emit-set cg cc reg)
-  (emit cg "set~A ~A" cc (insn-operand reg 0)))
+  (emit cg "set~A ~A" cc (asm-operand reg 0)))
 
 (defmacro (define-insn-1 name insn)
   (quasiquote
@@ -184,7 +184,7 @@
 
 (define (emit-insn-1 cg insn oper scale)
   (emit cg "~A~C ~A" insn (string-ref insn-size-suffixes scale)
-        (insn-operand oper scale)))
+        (asm-operand oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-not "not")
