@@ -140,7 +140,7 @@
   (let* ((buckets (hashtable-buckets ht))
          (index (logand (funcall (hashtable-hashf ht) key)
                         (1- (vector-length buckets))))
-         (hte (ht-entry-find key (vector-ref buckets index)
+         (hte (ht-entry-find key (raw-vector-ref buckets index)
                              (hashtable-equalf ht))))
     (and hte (ht-entry-value hte))))
 
@@ -151,14 +151,14 @@
   (let* ((keyhash (funcall (hashtable-hashf ht) key))
          (buckets (hashtable-buckets ht))
          (index (logand keyhash (1- (vector-length buckets))))
-         (bucket (vector-ref buckets index))
+         (bucket (raw-vector-ref buckets index))
          (hte (ht-entry-find key bucket (hashtable-equalf ht))))
     (if hte
         (ht-entry-set-value! hte value)
         (begin
           (hashtable-set-size! ht (1+ (hashtable-size ht)))
-          (vector-set! buckets index
-                       (make-ht-entry key value keyhash bucket))))))
+          (raw-vector-set! buckets index
+                           (make-ht-entry key value keyhash bucket))))))
 
 (define (hashtable-grow ht)
   (let* ((buckets (hashtable-buckets ht))
@@ -169,13 +169,13 @@
                  (let* ((index (logand (ht-entry-hash hte)
                                        (1- new-buckets-len)))
                         (next (ht-entry-next hte)))
-                   (ht-entry-set-next! hte (vector-ref new-buckets index))
-                   (vector-set! new-buckets index hte)
+                   (ht-entry-set-next! hte (raw-vector-ref new-buckets index))
+                   (raw-vector-set! new-buckets index hte)
                    (rehash-hte next))))
 
              (rehash-bucket (index)
                (when (< index (vector-length buckets))
-                 (rehash-hte (vector-ref buckets index))
+                 (rehash-hte (raw-vector-ref buckets index))
                  (rehash-bucket (1+ index)))))
       (rehash-bucket 0))
     (hashtable-set-buckets! ht new-buckets)))
@@ -187,7 +187,7 @@
                (for-entries (ht-entry-next entry))))
            (for-buckets (buckets n)
              (when (< n (vector-length buckets))
-               (for-entries (vector-ref buckets n))
+               (for-entries (raw-vector-ref buckets n))
                (for-buckets buckets (1+ n)))))
     (for-buckets (hashtable-buckets ht) 0)))
 
