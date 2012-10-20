@@ -7,34 +7,32 @@
 ;;; which defines how to handle forms that don't match one of the
 ;;; handlers
 
-(define (multi-acons keys val rest)
-  (if (pair? keys)
-      (append (mapfor (key keys) (cons key val)) rest)
-      (acons keys val rest)))
+(define (set-walker-symtab-entries symtab kws f)
+  (if (pair? kws)
+      (dolist (kw kws) (symboltable-set! symtab kw f))
+      (symboltable-set! symtab kws f)))
 
 (defmacro (define-walker name implicit-vars)
   (let* ((form-name name)
          (recurse-name (compound-symbol name "-recurse"))
          (define-name (compound-symbol "define-" name))
-         (alist-name (compound-symbol name "-alist")))
+         (symtab-name (compound-symbol name "-symtab")))
     (quasiquote (definitions
-      (define (unquote alist-name) ())
+      (define (unquote symtab-name) (make-symboltable))
 
       (define ((unquote form-name) form (unquote-splicing implicit-vars))
-        (let* ((kw (car form))
-               (a (assoc kw (unquote alist-name))))
-          (if a
-              (funcall (cdr a) form (unquote-splicing implicit-vars))
+        (let* ((f (symboltable-ref (unquote symtab-name) (car form))))
+          (if f
+              (funcall f form (unquote-splicing implicit-vars))
               ((unquote recurse-name) form (unquote-splicing implicit-vars)))))
 
       (defmacro ((unquote define-name) template . body)
         (quasiquote
-          (set! (unquote (unquote alist-name))
-                (multi-acons '(unquote (car template))
-                       (lambda (form (unquote-splicing (unquote implicit-vars)))
-                         (bind (unquote (cdr template)) (cdr form)
-                               (unquote-splicing body)))
-                       (unquote (unquote alist-name))))))))))
+          (set-walker-symtab-entries (unquote (unquote symtab-name))
+            '(unquote (car template))
+            (lambda (form (unquote-splicing (unquote implicit-vars)))
+              (bind (unquote (cdr template)) (cdr form)
+                (unquote-splicing body))))))))))
 
 ;;; define-trivial-walker is like define-walker, but it also provides
 ;;; a recusrion function that does a straightforward recursion into
