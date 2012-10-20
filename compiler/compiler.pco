@@ -78,13 +78,20 @@
 ;;; forms).  "definitions" forms are also spliced into their
 ;;; containing bodies at this point.
 
+(define keywords-symtab (make-symboltable))
+(dolist (kw keywords-1) (symboltable-set! keywords-symtab kw 1))
+(dolist (kw keywords-2) (symboltable-set! keywords-symtab kw 2))
+(symboltable-set! keywords-symtab 'definitions 'definitions)
+
 (define (normalize form)
   (cond ((pair? form)
-           (let* ((keyword (car form)))
-             (cond ((member? keyword keywords-2) (normalize-2 form))
-                   ((member? keyword keywords-1) (normalize-1 form))
-                   ((eq? keyword 'definitions) (normalize-forms (cdr form)))
-                   (true (list (list* 'call () (normalize-forms form)))))))
+         (let* ((keyword (car form))
+                (kwtype (and (symbol? keyword)
+                             (symboltable-ref keywords-symtab keyword))))
+             (cond ((not kwtype) (list (list* 'call () (normalize-forms form))))
+                   ((eq? kwtype 2) (normalize-2 form))
+                   ((eq? kwtype 1) (normalize-1 form))
+                   (true (normalize-forms (cdr form)))))) ; definitions
         ((symbol? form) (list (list 'ref form)))
         (true (list (list 'quote form)))))
 
