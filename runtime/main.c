@@ -37,6 +37,12 @@ void free_heap(unsigned long addr)
 
 int main(int argc, char **argv)
 {
+	int i;
+
+	/* How many iterations of the program to run, for better
+	 * profiling results. */
+	char *iterations = getenv("ITERATIONS");
+
         /* HEAP_SIZE specifies the size of the heap semi-spaces, in MB. */
         char *heap_size_env = getenv("HEAP_SIZE");
 
@@ -54,7 +60,8 @@ int main(int argc, char **argv)
 
         lisp_argv = argv;
 
-	lisp();
+	for (i = iterations ? atoi(iterations) : 1; i > 0; i--)
+		lisp();
 
         return 0;
 }
