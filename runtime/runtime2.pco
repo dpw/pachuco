@@ -73,16 +73,17 @@
 (define (struct-accessor-definitions struct fields n)
   (if (null? fields) ()
       (let* ((field (car fields))
-             (field-name (if (pair? field) (first field) field)))
+             (field-name (if (pair? field) (first field) field))
+             (ref-name (compound-symbol struct "-" field-name))
+             (set-name (compound-symbol struct "-set-" field-name "!")))
         (list*
           (quasiquote
-            (define ((unquote (compound-symbol struct "-" field-name)) s)
-              (raw-vector-ref s (unquote n))))
+             (defmacro ((unquote ref-name) s)
+               (list 'raw-vector-ref s (unquote n))))
 
           (quasiquote
-            (define ((unquote (compound-symbol struct "-set-" field-name "!"))
-                     s val)
-              (raw-vector-set! s (unquote n) val)))
+            (defmacro ((unquote set-name) s val)
+               (list 'raw-vector-set! s (unquote n) val)))
 
           (struct-accessor-definitions struct (cdr fields) (1+ n))))))
 

@@ -1,6 +1,5 @@
-;;; Machine definition bits for i386/x86-64.  The 32/64-bit specific
-;;; parts are in the relevant mach-*.pco files, but this stuff needs
-;;; to come first.
+;;; Misc codegen definitions that need to be introduced early on.
+;;; Most but not all of this is related to machine definitions.
 
 ;;; Registers
 
@@ -48,6 +47,17 @@
 
   (set! general-registers (nconc general-registers regs))
   (set! %nargs (last-elem general-registers)))
+
+;;; General codegen bits
+
+(define-struct codegen ()
+  (frame-base false)
+  (have-closure true)
+  (deferred-jump false)
+  (here-labels ())
+  (redirect-labels ())
+  (out-of-line ())
+  (arity-mismatch-varrec false))
 
 ;;; Assembler bits
 

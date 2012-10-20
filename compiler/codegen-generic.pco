@@ -1,15 +1,6 @@
 ;;; Code generation bits that aren't dependent on the target, the
 ;;; stack regime, the code generation strategy, or anything else
 
-(define-struct codegen ()
-  (frame-base false)
-  (have-closure true)
-  (deferred-jump false)
-  (here-labels ())
-  (redirect-labels ())
-  (out-of-line ())
-  (arity-mismatch-varrec false))
-
 (define (codegen-push-out-of-line cg f)
   ;; When we push an out-of-line function, we need to save the
   ;; relevant coedegen state.  Currently this amounts to the
