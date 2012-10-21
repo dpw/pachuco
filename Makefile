@@ -1,4 +1,4 @@
-ARCH=$(shell uname -m | sed -e 's/i.86/i386/;s/armv5.*/armv5/')
+ARCH=$(shell uname -m | sed -e 's/i.86/i386/;s/arm.*/arm/')
 TARGET=$(ARCH)
 
 CODEGEN=old
@@ -18,7 +18,7 @@ endif
 
 CODEGEN_SOURCES+=compiler/codegen-generic.pco
 
-ifeq ($(TARGET),armv5)
+ifeq ($(TARGET),arm)
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
 CODEGEN_SOURCES+=compiler/codegen-arm.pco
 else
