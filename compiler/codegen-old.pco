@@ -221,71 +221,82 @@
     ;; body.  The caller should take care of that.
     (min max-ru general-register-count)))
 
+(define (codegen-non-trashy-args form cg regs operand-constraints)
+  (let* ((args (cddr form))
+
+         (result-regs ())
+         (output-operands (copy-list regs))
+         (unused-operand-regs ()))
+    (labels ((for-nt-args (non-trashy-args available-regs)
+               (if (null? non-trashy-args)
+                   (nconc result-regs (delete false available-regs))
+                   (let* ((arg (car non-trashy-args)))
+                     ;; Move the regs that will take the results of
+                     ;; non-trashy-args to the start of available-regs
+                     ;; in the correct order (i.e. the first in
+                     ;; available-regs will take the result of the
+                     ;; first non-trashy-arg to be evaluated).  Note
+                     ;; that operator-args-reg-use left the
+                     ;; non-trashy-args list in reverse order of
+                     ;; evaluation,
+                     (let* ((c (nthcdr arg available-regs)))
+                       (push (car c) result-regs)
+                       (rplaca c false))
+
+                     (set! available-regs
+                           (for-nt-args (cdr non-trashy-args) available-regs))
+
+                     ;; Now generate code for non-trashy args.
+                     (let* ((c (nthcdr arg output-operands))
+                            (operand (funcall (elt operand-constraints arg) cg
+                                              (codegen (elt args arg) cg false
+                                                       available-regs (car c))
+                                              (car c))))
+                       ;; Results are not necessaily produced as
+                       ;; register operands (e.g. an arg can produce
+                       ;; memory or immediate operands).  If the
+                       ;; operand register didn't actually get used,
+                       ;; put it aside.
+                       (unless (operand-using-reg? operand (car c))
+                         (push (car c) unused-operand-regs))
+
+                       ;; Replace the corresponding entry in
+                       ;; output-operands with the actual operand.
+                       (rplaca c operand)
+
+                       (cdr available-regs))))))
+      (for-nt-args (form-attr form 'non-trashy-args) (copy-list regs)))
+
+    ;; Track unused-operand-regs properly.  Although they are not
+    ;; used, they still need to end up in spare regs during GC ops,
+    ;; so that their values are not seen by the GC.  So they need to
+    ;; be present in output-operands.
+    (if (null? unused-operand-regs)
+        output-operands
+        (nconc output-operands unused-operand-regs))))
+
 (define (operator-args-codegen form cg regs operand-constraints)
   ;; Generate the code to evaluate the arguments of an operator
-  (let* ((trashy-args (form-attr form 'trashy-args))
-         (non-trashy-args (form-attr form 'non-trashy-args))
-         (args (cddr form)))
+  (let* ((args (cddr form)))
     (when (> (length args) (length regs))
       (error "more operator arguments than available registers in ~S"
              (comment-form form)))
 
-    ;; First, evaluate the trashy args, saving their results on the
-    ;; stack.
-    (dolist (arg trashy-args)
-      (emit-frame-push cg (codegen (elt args arg) cg false regs (first regs))))
+    (labels ((for-trashy-args (trashy-args)
+               (if (null? trashy-args)
+                   (codegen-non-trashy-args form cg regs operand-constraints)
+                   (begin
+                     ;; Evaluate a trashy-arg, saving its result on the
+                     ;; stack.
+                     (emit-frame-push cg (codegen (elt args (car trashy-args))
+                                                  cg false regs (first regs)))
 
-    ;; Work out the register list for evaluating the non-trashy args,
-    ;; so that the result of each evaluation ends up in the correct
-    ;; register.  Note that operator-args-reg-use left the
-    ;; non-trashy-arg list in reverse order of evaluation,
-    (let* ((non-trashy-regs (copy-list regs))
-           (result-regs ())
-           (output-operands (copy-list regs))
-           (unused-operand-regs ()))
-      ;; Move the regs that will take the results of trashy-args to
-      ;; the start of non-trashy-regs
-      (dolist (arg non-trashy-args)
-        (let* ((c (nthcdr arg non-trashy-regs)))
-          (push (car c) result-regs)
-          (rplaca c false)))
-
-      (set! non-trashy-regs (nconc result-regs (delete false non-trashy-regs)))
-
-      ;; Now generate code for non-trashy args.  Non-trashy args don't
-      ;; always produce register operands.  For example, they can
-      ;; produce memory or immediate operands.  So we replace the
-      ;; corresponding entries in output-operands with the actual
-      ;; operands.
-      (dolist (arg (reverse non-trashy-args))
-        (let* ((c (nthcdr arg output-operands))
-               (operand (funcall (elt operand-constraints arg) cg
-                                 (codegen (elt args arg) cg false
-                                          non-trashy-regs (car c))
-                                 (car c))))
-          ;; if the operand register didn't actually get used
-          ;; (e.g. because the subform was an immediate), put it aside
-          (unless (operand-using-reg? operand (car c))
-            (push (car c) unused-operand-regs))
-
-          ;; record the actual operand to be used by the
-          ;; define-codegen body
-          (rplaca c operand)
-
-          ;; remove the no-longer-available register
-          (set! non-trashy-regs (cdr non-trashy-regs))))
-
-      ;; reload trashy arg results from stack
-      (dolist (arg (reverse trashy-args))
-        (emit-frame-pop cg (elt regs arg)))
-
-      ;; track unused-operand-regs properly.  these might not be used,
-      ;; but still need to go into spare regs, so that their values
-      ;; are not seen by the GC.
-      (unless (null? unused-operand-regs)
-        (set! output-operands (nconc output-operands unused-operand-regs)))
-
-      output-operands)))
+                     (let* ((output-operands
+                              (for-trashy-args (cdr trashy-args))))
+                       ;; And after we've done everything else, reload it
+                       (emit-frame-pop cg (elt regs (car trashy-args)))
+                       output-operands)))))
+      (for-trashy-args (form-attr form 'trashy-args)))))
 
 (define (reg-operand-constraint cg operand reg)
   (emit-mov-maybe cg operand reg)
