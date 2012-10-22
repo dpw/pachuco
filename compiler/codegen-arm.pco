@@ -403,16 +403,6 @@
     (emiti cg "ldr ~A, [sp, #~D]" (register-operand %closure)
           (stack-closure-offset cg))))
 
-(define-operator (quote) ()
-  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
-    ;;; If the quoted form resulted in a label, that means it emitted
-    ;;; code, and we need to switch back to the code section
-    (unless (number? val) (emit cg ".text"))
-    (if (and (number? val) (= 0 (logand val -128)))
-        (emiti cg "mov ~A, #~D" (register-operand result) val)
-        (emiti cg "ldr ~A, =~A" (register-operand result) val)))
-  result)
-
 ;;; Apply support
 
 (define-operator (raw-jump-with-arg-space before-arg-count after-arg-count

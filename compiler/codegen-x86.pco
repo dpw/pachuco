@@ -390,15 +390,6 @@
   (when (codegen-have-closure cg)
     (emit-mov cg (closure-address-slot cg) %closure)))
 
-;;; Quote
-
-(define-operator (quote) ()
-  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
-    ;;; If the quoted form resulted in a label, that means it emitted
-    ;;; code, and we need to switch back to the code section
-    (unless (number? val) (emit cg ".text"))
-    val))
-
 ;;; Variables
 
 (define (varrec-operand varrec cg)

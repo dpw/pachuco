@@ -16,6 +16,28 @@
       (codegen-set-out-of-line! cg (cdr ool))
       (codegen-do-out-of-line cg))))
 
+(define (fixnum-representation n) (ash n number-tag-bits))
+(define (low-bits-mask bits) (1- (ash 1 bits)))
+
+(define (emit-comment-form cg form)
+  (unless (eq? 'begin (car form))
+    (emit-comment cg "~S" (comment-form form))))
+
+(define (make-registers-from-template template regs)
+  (set! regs (copy-list regs))
+  (dolist (reg template) (when reg (set! regs (delete reg regs))))
+  (labels ((fill-template (template)
+             (cond ((null? template)
+                    regs)
+                   ((car template)
+                    (cons (car template) (fill-template (cdr template))))
+                   (true
+                    (let* ((r (car regs)))
+                      (set! regs (cdr regs))
+                      (cons r (fill-template (cdr template))))))))
+    (fill-template template)))
+
+;; Assembly utility functions
 
 (define label-counter 0)
 
@@ -267,6 +289,13 @@
 (define (quote-false? form)
   (and (eq? 'quote (car form)) (eq? (form-attr form 'quoted) 'false)))
 
+(define-operator (quote) ()
+  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
+    ;;; If the quoted form resulted in a label, that means it emitted
+    ;;; code, and we need to switch back to the code section
+    (unless (number? val) (emit cg ".text"))
+    val))
+
 (define (codegen-quoted quoted cg)
   (cond ((pair? quoted) (codegen-quoted-pair quoted cg))
         ((number? quoted) (fixnum-representation quoted))
@@ -426,27 +455,6 @@
 (define-propagate ((raw-jump-with-arg-space raw-apply-jump) . rest))
 
 ;;; Misc utility functions
-
-(define (fixnum-representation n) (ash n number-tag-bits))
-(define (low-bits-mask bits) (1- (ash 1 bits)))
-
-(define (emit-comment-form cg form)
-  (unless (eq? 'begin (car form))
-    (emit-comment cg "~S" (comment-form form))))
-
-(define (make-registers-from-template template regs)
-  (set! regs (copy-list regs))
-  (dolist (reg template) (when reg (set! regs (delete reg regs))))
-  (labels ((fill-template (template)
-             (cond ((null? template)
-                    regs)
-                   ((car template)
-                    (cons (car template) (fill-template (cdr template))))
-                   (true
-                    (let* ((r (car regs)))
-                      (set! regs (cdr regs))
-                      (cons r (fill-template (cdr template))))))))
-    (fill-template template)))
 
 (define (trashy-codegen-into-regs cg forms regs)
   (labels ((codegen-forms (forms regs)
