@@ -8,7 +8,7 @@
 ;;; param N
 ;;; ...
 ;;; param 1
-;;; param 0  <--- (mem %sp frame-base)
+;;; param 0  <--- (%sp + frame-base)
 ;;; Return address
 ;;; %closure
 ;;; Local var 0
@@ -22,7 +22,7 @@
 ;;; %nargs.  They return with the result in %funcres.
 
 (define (param-slot cg index)
-  (mem %sp (+ index (codegen-frame-base cg))))
+  (indexed-operand %sp (+ index (codegen-frame-base cg))))
 
 (define (return-address-slot cg)
   (param-slot cg -1))
@@ -31,7 +31,7 @@
   (param-slot cg -2))
 
 (define (local-slot cg index)
-  (mem %sp (- (codegen-frame-base cg) index)))
+  (indexed-operand %sp (- (codegen-frame-base cg) index)))
 
 ;;; Functions, calls, returns, etc.
 
@@ -52,8 +52,8 @@
   ;; to the top of the argument area, then return
   (emit-scale-number cg value-scale arg-count)
   (emit-mov cg (return-address-slot cg) retaddr)
-  (emit-lea cg (mem (return-address-slot cg) arg-count) %sp)
-  (emit-mov cg retaddr (mem %sp))
+  (emit-lea cg (reoffset-operand (return-address-slot cg) arg-count) %sp)
+  (emit-mov cg retaddr (mem-operand %sp))
   (emit cg "ret")
   (codegen-function-tail cg out-frame-base))
 
@@ -63,8 +63,8 @@
          (retaddr-reg (second regs)))
     (emit-mov cg retaddr retaddr-reg)
     (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
-    (emit-lea cg (mem out-retaddr) %sp)
-    (emit-mov cg retaddr-reg (mem %sp))
+    (emit-lea cg out-retaddr %sp)
+    (emit-mov cg retaddr-reg (mem-operand %sp))
     (emit-call-or-jump cg "jmp" func out-arg-count)))
 
 (define-codegen-discarding (tail-call attrs func . args)
@@ -72,7 +72,7 @@
   (let* ((in-arg-count (attr-ref attrs 'nparams))
          (out-arg-count (length args))
          (retaddr (return-address-slot cg))
-         (out-retaddr (mem retaddr (- in-arg-count out-arg-count))))
+         (out-retaddr (reindex-operand retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
         (begin
           (copy-tail-call-args cg out-arg-count out-retaddr
@@ -92,9 +92,10 @@
     ;; access %closure
     (trashy-codegen-into-reg arg-count cg false in-arg-count-reg)
     (emit-scale-number cg value-scale in-arg-count-reg)
-    (emit-lea cg (mem retaddr in-arg-count-reg (- out-arg-count))
+    (emit-lea cg (reoffset-2-operand retaddr in-arg-count-reg
+                                     (* value-size (- out-arg-count)))
               in-arg-count-reg)
-    (codegen-tail-call func retaddr out-arg-count in-arg-count-reg
+    (codegen-tail-call func retaddr out-arg-count (mem-operand in-arg-count-reg)
                        (cdr general-registers) cg)
     (codegen-function-tail cg out-frame-base)))
 
@@ -108,16 +109,16 @@
   (emit-mov cg bodyfunc %closure)
   (emit-scale-number cg value-scale before-arg-count)
   (emit-mov cg (return-address-slot cg) retaddr)
-  (emit-lea cg (mem (return-address-slot cg) before-arg-count) %sp)
-  (emit-mov cg retaddr (mem %sp))
+  (emit-lea cg (reoffset-operand (return-address-slot cg) before-arg-count) %sp)
+  (emit-mov cg retaddr (mem-operand %sp))
   (emit-clear cg %nargs)
-  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag bodyfunc)))
+  (emit cg "jmp *~A" (value-sized (tagged-operand closure-tag bodyfunc 0)))
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-reset-frame-base cg 1)
   (emit-mov cg func %closure)
-  (emit cg "jmp *~A" (value-sized (tagged-mem closure-tag %closure)))
+  (emit cg "jmp *~A" (value-sized (tagged-operand closure-tag %closure 0)))
   (codegen-function-tail cg out-frame-base))
 
 ;;; C-callable program wrapper

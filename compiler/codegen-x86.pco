@@ -21,47 +21,47 @@
 (define (register? x) (vector? x))
 (define (mem? x) (pair? x))
 
-(define (mem1 x)
-  (cond ((register? x) (list 0 x))
-        ((immediate? x) (list x))
-        ((mem? x) x)
-        (true (error "bad operand ~S" x))))
+(define (mem-operand reg-or-imm)
+  (cond ((immediate? reg-or-imm) (list reg-or-imm))
+        ((register? reg-or-imm) (list 0 reg-or-imm))
+        (true (error "can't make memory operand from ~A" reg-or-imm))))
 
-(define (mem-list args)
-  (let* ((n 0) (regs ()))
-    (dolist (arg args)
-      (cond ((number? arg)
-             (set! n (+ n (* value-size arg))))
-            ((string? arg)
-             (unless (eq? n 0) (error "adding label to number"))
-             (set! n arg))
-            ((register? arg)
-             (set! regs (nconc regs (list arg))))
-            ((pair? arg)
-             (set! n (+ n (car arg)))
-             (set! regs (append regs (copy-list (cdr arg)))))
-            (true
-             (error "bad operand ~S" arg))))
+(define (offset-operand reg offset)
+  (unless (register? reg) (error "~A not a register" reg))
+  (cond ((immediate? offset) (list offset reg))
+        ((register? offset) (list 0 offset reg))
+        (true (error "can't offset memory operand with ~A" offset))))
 
-    (when (> (length regs) 2) (error "too many registers"))
-    (cons n regs)))
+(define (offset-2-operand rega regb imm)
+  (unless (register? rega) (error "~A not a register" rega))
+  (unless (register? regb) (error "~A not a register" regb))
+  (unless (immediate? imm) (error "~A not an immediate" imm))
+  (list imm rega regb))
 
-(define (mem . args)
-  (mem-list args))
+(define (indexed-operand reg imm)
+  (unless (register? reg) (error "~A not a register" reg))
+  (unless (number? imm) (error "~A not an immediate" imm))
+  (list (* value-size imm) reg))
 
-(define (mem1+ m n)
-  (let* ((memm (mem m)))
-    (cons (+ (car memm) n) (cdr memm))))
+(define (tagged-operand tag reg imm)
+  (unless (register? reg) (error "~A not a register" reg))
+  (unless (number? imm) (error "~A not an immediate" imm))
+  (list (- (* value-size imm) tag) reg))
 
-(define (tagged-mem tag . args)
-  (let* ((m (mem-list args)))
-    (cons (- (car m) tag) (cdr m))))
+(define (reoffset-operand base offset)
+  (cond ((number? offset)
+         (cons (+ offset (car base)) (cdr base)))
+        ((register? offset)
+         (list* (car base) offset (cdr base)))
+        (true
+         (error "can't offset memory operand with ~A" offset))))
 
-(define (mem-offset m offset)
-  (set! m (mem1 m))
-  (if (register? offset)
-      (list* (car m) offset (cdr m))
-      (cons (+ (car m) offset) (cdr m))))
+(define (reoffset-2-operand base reg imm)
+  (list* (+ imm (car base)) reg (cdr base)))
+
+(define (reindex-operand base index)
+  (reoffset-operand base (* value-size index)))
+
 
 (defmacro (reg-asm-operand reg scale)
   (list 'register-variant reg scale))
@@ -76,8 +76,8 @@
                          (reg-asm-operand (second x) value-scale)))
                (true
                 (format "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
-                         (reg-asm-operand (second x) value-scale)
-                         (reg-asm-operand (third x) value-scale)))))
+                         (reg-asm-operand (third x) value-scale)
+                         (reg-asm-operand (second x) value-scale)))))
         (true (error "strange operand ~S" x))))
 
 (define (value-sized operand)
@@ -264,13 +264,13 @@
          (exhausted-label (gen-label)))
     (flush-labels-and-jumps cg)
     (emit-raw-label cg again-label)
-    (emit-mov cg (mem "heap_alloc") allocreg)
+    (emit-mov cg (mem-operand "heap_alloc") allocreg)
     (emit-sub cg size allocreg)
     (set! scale (if (null? scale) value-scale (car scale)))
     (unless (= tag-bits scale) (emit-and cg (- (ash 1 tag-bits)) allocreg))
-    (emit-cmp cg (mem "heap_threshold") allocreg)
+    (emit-cmp cg (mem-operand "heap_threshold") allocreg)
     (emit-branch cg "be" exhausted-label)
-    (emit-mov cg allocreg (mem "heap_alloc"))
+    (emit-mov cg allocreg (mem-operand "heap_alloc"))
 
     (codegen-push-out-of-line cg
       (lambda ()
@@ -332,10 +332,11 @@
   (let* ((slot-count (length (attr-ref attrs 'closure))))
     (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count)) alloc
                 (list* %a %c %di spare-regs))
-    (emit-mov cg (first (attr-ref attrs 'labels)) (mem alloc))
-    (init-closure-slots cg unspecified-representation (mem1+ alloc value-size)
+    (emit-mov cg (first (attr-ref attrs 'labels)) (mem-operand alloc))
+    (init-closure-slots cg unspecified-representation
+                        (offset-operand alloc value-size)
                         slot-count value-scale)
-    (emit-lea cg (mem1+ alloc closure-tag) result))
+    (emit-lea cg (offset-operand alloc closure-tag) result))
   result)
 
 (define (init-closure-slots cg val base count scale)
@@ -347,7 +348,9 @@
          (if (<= count 4)
              (labels ((fill-from (index)
                         (when (< index count)
-                          (emit-mov cg %a (mem1+ base (ash index scale)) scale)
+                          (emit-mov cg %a (reoffset-operand base
+                                                            (ash index scale))
+                                    scale)
                           (fill-from (1+ index)))))
                (fill-from 0))
              (begin
@@ -356,7 +359,7 @@
                (emit-rep-stos cg scale))))))
 
 (define (closure-slot closure index)
-  (tagged-mem closure-tag closure (1+ index)))
+  (tagged-operand closure-tag closure (1+ index)))
 
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
@@ -377,7 +380,8 @@
         (begin
           (emit-mov cg (fixnum-representation nargs) %nargs)
           (emit cg "~A *~A # ~S" insn
-                (value-sized (tagged-mem closure-tag %closure)) comment)))))
+                (value-sized (tagged-operand closure-tag %closure 0))
+                comment)))))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
@@ -395,7 +399,7 @@
 (define (varrec-operand varrec cg)
   (let* ((mode (varrec-attr varrec 'mode)))
     (cond ((eq? mode 'self) %closure)
-          ((eq? mode 'top-level) (mem (varrec-attr varrec 'label)))
+          ((eq? mode 'top-level) (mem-operand (varrec-attr varrec 'label)))
           (true
            (let* ((index (varrec-attr varrec 'index)))
              (cond ((eq? mode 'closure) (closure-slot %closure index))
@@ -449,49 +453,53 @@
 
 (define-operator (cons (a reg-imm) (d reg-imm)) ((temp-regs alloc))
   (emit-alloc cg pair-tag-bits (* 2 value-size) alloc spare-regs)
-  (emit-mov cg a (mem alloc))
-  (emit-mov cg d (mem alloc 1))
-  (emit-lea cg (mem1+ alloc pair-tag) result)
+  (emit-mov cg a (mem-operand alloc))
+  (emit-mov cg d (indexed-operand alloc 1))
+  (emit-lea cg (offset-operand alloc pair-tag) result)
   result)
 
-(define-operator (car a) () (tagged-mem pair-tag a))
-(define-operator (cdr a) () (tagged-mem pair-tag a 1))
+(define-operator (car a) () (tagged-operand pair-tag a 0))
+(define-operator (cdr a) () (tagged-operand pair-tag a 1))
 
 (define-operator (rplaca c (a reg-imm)) ()
-  (emit-mov cg a (tagged-mem pair-tag c))
+  (emit-mov cg a (tagged-operand pair-tag c 0))
   c)
 
 (define-operator (rplacd c (d reg-imm)) ()
-  (emit-mov cg d (tagged-mem pair-tag c 1))
+  (emit-mov cg d (tagged-operand pair-tag c 1))
   c)
 
 ;;; Boxes
 
 (define-operator (raw-make-box (val reg-imm)) ((temp-regs alloc))
   (emit-alloc cg box-tag-bits value-size alloc spare-regs)
-  (emit-mov cg val (mem alloc))
-  (emit-lea cg (mem1+ alloc box-tag) result)
+  (emit-mov cg val (mem-operand alloc))
+  (emit-lea cg (offset-operand alloc box-tag) result)
   result)
 
 (define-operator (raw-box-set! box (val reg-imm)) ()
-  (emit-mov cg val (tagged-mem box-tag box))
+  (emit-mov cg val (tagged-operand box-tag box 0))
   val)
 
-(define-operator (raw-box-ref box) () (tagged-mem box-tag box))
+(define-operator (raw-box-ref box) ()
+  (tagged-operand box-tag box 0))
 
 ;;; Symbols
 
 (define-tag-check symbol? symbol-tag symbol-tag-bits)
 
-(define-operator (symbol-name sym) () (tagged-mem symbol-tag sym))
-(define-operator (symbol-id sym) () (tagged-mem symbol-tag sym 1))
+(define-operator (symbol-name sym) ()
+  (tagged-operand symbol-tag sym 0))
+
+(define-operator (symbol-id sym) ()
+  (tagged-operand symbol-tag sym 1))
 
 (define-operator (raw-make-symbol (str reg-imm) (id reg-imm))
     ((temp-regs alloc))
   (emit-alloc cg symbol-tag-bits (* 2 value-size) alloc spare-regs)
-  (emit-mov cg str (mem alloc))
-  (emit-mov cg id (mem alloc 1))
-  (emit-lea cg (mem1+ alloc symbol-tag) result)
+  (emit-mov cg str (mem-operand alloc))
+  (emit-mov cg id (indexed-operand alloc 1))
+  (emit-lea cg (offset-operand alloc symbol-tag) result)
   result)
 
 ;;;  Numbers
@@ -557,28 +565,30 @@
     (emit-add cg value-size len)
     (emit-alloc cg tag-bits len alloc (list* %di spare-regs) scale)
     (emit-mov cg alloc %di)
-    (emit-mov cg %c (mem alloc))
+    (emit-mov cg %c (mem-operand alloc))
     (emit-add cg value-size %di)
     (emit-scale-number cg 0 %c)
     (emit-rep-stos cg scale)
-    (emit-lea cg (mem1+ alloc tag) result))
+    (emit-lea cg (offset-operand alloc tag) result))
   result)
 
-(define-operator (vec-length vec) () (tagged-mem (attr-ref attrs 'tag) vec))
+(define-operator (vec-length vec) ()
+  (tagged-operand (attr-ref attrs 'tag) vec 0))
 
-(define (vec-slot attrs vec index)
-  (mem-offset (mem-offset vec (- (attr-ref attrs 'header-size)
-                                 (attr-ref attrs 'tag)))
-              index))
+(define (vec-slot cg attrs vec index)
+  (let* ((offset (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag)))
+         (scaled-index  (emit-scale-number cg (attr-ref attrs 'scale) index)))
+    (if (number? scaled-index)
+        (offset-operand vec (+ offset scaled-index))
+        (offset-2-operand vec scaled-index offset))))
 
 (define-operator (vec-address vec (index reg-imm)) ()
-  (let* ((scaled-index (emit-scale-number cg (attr-ref attrs 'scale) index)))
-    (emit-lea cg (vec-slot attrs vec scaled-index) result))
+  (emit-lea cg (vec-slot cg attrs vec index) result)
   result)
 
 (define-operator (raw-vec-ref vec (index reg-imm)) ()
-  (let* ((scale (attr-ref attrs 'scale))
-         (slot (vec-slot attrs vec (emit-scale-number cg scale index))))
+  (let* ((slot (vec-slot cg attrs vec index))
+         (scale (attr-ref attrs 'scale)))
     (if (and (= scale value-scale) (immediate? index))
         ;; The slot is a suitable memory operand to return directly.
         ;; The 'immediate? index' condition is important, due to its
@@ -589,12 +599,11 @@
         ;; involves the 'index' register, and that might get trampled
         ;; on before the memory operand is used.
         slot
-        (begin (emit-movzx cg slot result scale) result))))
+        (begin (emit-movzx cg slot result scale)
+               result))))
 
 (define-operator (raw-vec-set! vec (index reg-imm) (val reg-imm)) ()
-  (let* ((scale (attr-ref attrs 'scale)))
-    (emit-mov cg val (vec-slot attrs vec (emit-scale-number cg scale index))
-              scale))
+  (emit-mov cg val (vec-slot cg attrs vec index) (attr-ref attrs 'scale))
   val)
 
 (define-simplify (copy-mem attrs src-addr dest-addr len)
@@ -630,8 +639,10 @@
       (emit cg "std")
       (emit-mov cg len scaled-len)
       (emit-scale-number cg scale scaled-len)
-      (emit-lea cg (tagged-mem (ash 1 scale) src-addr scaled-len) src-addr)
-      (emit-lea cg (tagged-mem (ash 1 scale) dest-addr scaled-len) dest-addr))
+      (emit-lea cg (offset-2-operand src-addr scaled-len (ash -1 scale))
+                src-addr)
+      (emit-lea cg (offset-2-operand dest-addr scaled-len (ash -1 scale))
+                dest-addr))
     (emit-sar cg number-tag-bits len)
     (emit-rep-movs cg scale)
     (unless forward (emit cg "cld")))
@@ -640,11 +651,11 @@
 ;;; Raw memory access
 
 (define-operator (raw-ref (addr reg-imm)) ()
-  (emit-movzx cg (mem addr) result (attr-ref attrs 'scale))
+  (emit-movzx cg (mem-operand addr) result (attr-ref attrs 'scale))
   result)
 
 (define-operator (raw-set! (addr reg-imm) (val reg-imm)) ()
-  (emit-mov cg val (mem addr) (attr-ref attrs 'scale))
+  (emit-mov cg val (mem-operand addr) (attr-ref attrs 'scale))
   val)
 
 ;;; Raw ops for the GC
@@ -674,20 +685,21 @@
 (define-operator (raw-label) () (attr-ref attrs 'name))
 
 (define-operator (raw-global-set! (val reg-imm)) ()
-  (emit-mov cg val (mem (subject-language-symbol-name (attr-ref attrs 'name))))
+  (emit-mov cg val (mem-operand (subject-language-symbol-name
+                                 (attr-ref attrs 'name))))
   val)
 
 (define-operator (raw-global-ref) ()
-  (mem (subject-language-symbol-name (attr-ref attrs 'name))))
+  (mem-operand (subject-language-symbol-name (attr-ref attrs 'name))))
 
 (define (emit-set-ac-flag cg enable)
   (emit-pushf cg)
   (if enable
-      (emit-or cg #x40000 (mem %sp) 2)
+      (emit-or cg #x40000 (mem-operand %sp) 2)
         ;; we can't use an immediate mask value, due to fixnum limitations
       (let* ((reg (first general-registers)))
         (emit-mov cg #x40000 reg 2)
         (emit-not cg reg 2)
-        (emit-and cg reg (mem %sp) 2)))
+        (emit-and cg reg (mem-operand %sp) 2)))
   (emit-popf cg))
 

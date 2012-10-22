@@ -5,8 +5,8 @@
 (define (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
   (when (> out-arg-count 0)
     (set! out-arg-count (1- out-arg-count))
-    (emit-mov cg (mem %sp out-arg-count) tmpreg)
-    (emit-mov cg tmpreg (mem out-retaddr 1 out-arg-count))
+    (emit-mov cg (indexed-operand %sp out-arg-count) tmpreg)
+    (emit-mov cg tmpreg (reindex-operand out-retaddr (1+ out-arg-count)))
     (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)))
 
 (define (emit-frame-push cg reg)
@@ -25,5 +25,6 @@
   (when out-frame-base
     (let* ((in-frame-base (codegen-frame-base cg)))
       (unless (= in-frame-base out-frame-base)
-        (emit-lea cg (mem %sp (- in-frame-base out-frame-base)) %sp)
+        ;; Use lea here to avoid trashing condition codes
+        (emit-lea cg (indexed-operand %sp (- in-frame-base out-frame-base)) %sp)
         (codegen-set-frame-base! cg out-frame-base)))))
