@@ -124,7 +124,8 @@
              (if (null? (cdr args))
                  (codegen-into-reg (car args) cg false (car regs))
                  (begin
-                   (emit-frame-push cg (codegen (car args) cg false))
+                   (emit-frame-spill cg (codegen (car args) cg false)
+                                     (car regs))
                    (codegen-next-arg (cdr args) (cdr regs))
                    (emit-frame-pop cg (car regs))))))
     (unless (null? args)
@@ -194,7 +195,7 @@
              (if (null? refs)
                  (codegen-into-reg closure cg false main-reg)
                  (begin
-                   (emit-frame-push cg (codegen (car refs) cg false))
+                   (emit-frame-spill cg (codegen (car refs) cg false) main-reg)
                    (fill-slots (cdr refs) (1+ index))
                    (emit-frame-pop cg (second general-registers))
                    (emit-store-into-closure cg main-reg index

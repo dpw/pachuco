@@ -78,10 +78,17 @@
   (emiti cg "ldr ~A, [sp], #4" (register-operand reg)))
 
 (define (emit-mov cg src dest)
-  (emiti cg "mov ~A, ~A" (register-operand dest) (insn-operand src)))
+  (emiti cg "mov ~A, ~A" (register-operand dest) (register-operand src)))
+
+;;; Used by codegen strategies
 
 (define (emit-mov-maybe cg src dest)
-  (unless (eq? src dest) (emit-mov cg src dest)))
+  (cond ((register? src)
+         (unless (eq? src dest) (emit-mov cg src dest)))
+        ((and (number? src) (= 0 (logand src -128)))
+         (emiti cg "mov ~A, #~D" (register-operand dest) src))
+        (true
+         (emiti cg "ldr ~A, =~A" (register-operand dest) src))))
 
 (define (emit-branch cg cc label)
   (emit-without-flushing "b~A ~A" (cc-insn-suffix cc) label))
@@ -266,6 +273,12 @@
   (emit-pop cg reg)
   (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
 
+(define (emit-frame-spill cg operand reg)
+  (unless (register? operand)
+    (emit-mov-maybe cg operand reg)
+    (set! operand reg))
+  (emit-frame-push cg operand))
+
 ;;; Function and closure bits
 
 (define-tag-check function? closure-tag closure-tag-bits)
@@ -405,7 +418,7 @@
 (define-operator (raw-jump-with-arg-space before-arg-count after-arg-count
                                           bodyfunc)
                  (tail-form (temp-regs retaddr))
-  (emit-mov-maybe cg bodyfunc %closure)
+  (unless (eq? bodyfunc %closure) (emit-mov cg bodyfunc %closure))
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "add sp, sp, ~A~A" (register-operand before-arg-count)
@@ -418,7 +431,7 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
-  (emit-mov-maybe cg func %closure)
+  (unless (eq? func %closure) (emit-mov cg func %closure))
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "ldr pc, [~A, #-~D]" (register-operand %closure) closure-tag)

@@ -398,7 +398,8 @@
 
 (define (codegen-call-args cg func args)
   (dolist (arg (reverse args))
-    (emit-frame-push cg (trashy-codegen arg cg false)))
+    (emit-frame-spill cg (trashy-codegen arg cg false)
+                      (first general-registers)))
   (when (func-needs-closure? func)
     (trashy-codegen-into-reg func cg false %closure)))
 
@@ -453,7 +454,8 @@
              (if (null? (cdr forms))
                  (trashy-codegen-into-reg (car forms) cg false (car regs))
                  (begin
-                   (emit-frame-push cg (trashy-codegen (car forms) cg false))
+                   (emit-frame-spill cg (trashy-codegen (car forms) cg false)
+                                     (car regs))
                    (codegen-forms (cdr forms) (cdr regs))
                    (emit-frame-pop cg (car regs))))))
     (unless (null? forms) (codegen-forms forms regs))))

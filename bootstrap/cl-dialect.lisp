@@ -25,7 +25,7 @@
 (defun number? (a) (numberp a))
 (defun character? (a) (characterp a))
 (defun string? (a) (stringp a))
-(defun vector? (a) (vectorp a))
+(defun vector? (a) (and (vectorp a) (not (stringp a))))
 (defun error-halt () (error "error-halt"))
 
 ;;; This provides the subject language semantics

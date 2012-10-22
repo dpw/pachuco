@@ -288,8 +288,9 @@
                    (begin
                      ;; Evaluate a trashy-arg, saving its result on the
                      ;; stack.
-                     (emit-frame-push cg (codegen (elt args (car trashy-args))
-                                                  cg false regs (first regs)))
+                     (emit-frame-spill cg (codegen (elt args (car trashy-args))
+                                                   cg false regs (first regs))
+                                       (first regs))
 
                      (let* ((output-operands
                               (for-trashy-args (cdr trashy-args))))
