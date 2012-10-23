@@ -17,9 +17,11 @@
 (define (negate-cc cc)
   (logxor cc 1))
 
-;;; Assembly bits
+;;; Operand types
 
 (define (register? x) (vector? x))
+(define (immediate? x) (or (number? x) (string? x)))
+(define (immediate8? x) (and (number? x) (= 0 (logand x -256))))
 
 (defmacro (register-operand reg)
   (list 'register-variant reg 0))
@@ -32,6 +34,15 @@
 
 (define (operand-using-reg? o r)
   (eq? o r))
+
+(define (reg-imm8-operand-constraint cg operand reg)
+  (if (immediate8? operand)
+      operand
+      (begin
+        (emit-mov-maybe cg operand reg)
+        reg)))
+
+;;; Assembly bits
 
 (define (multi-operand regs)
   (if (null? regs) "{}"
@@ -85,7 +96,7 @@
 (define (emit-mov-maybe cg src dest)
   (cond ((register? src)
          (unless (eq? src dest) (emit-mov cg src dest)))
-        ((and (number? src) (= 0 (logand src -128)))
+        ((immediate8? src)
          (emiti cg "mov ~A, #~D" (register-operand dest) src))
         (true
          (emiti cg "ldr ~A, =~A" (register-operand dest) src))))
@@ -471,8 +482,8 @@
 ;;; Comparisons
 
 (defmacro (define-cmp-operator name cc)
-  (quasiquote (define-cc-operator ((unquote name) a b) ()
-                (emiti cg "cmp ~A, ~A" (register-operand a) (register-operand b))
+  (quasiquote (define-cc-operator ((unquote name) a (b reg-imm8)) ()
+                (emiti cg "cmp ~A, ~A" (register-operand a) (insn-operand b))
                 (unquote cc))))
 
 (define-cmp-operator eq? cc-eq)
@@ -489,9 +500,9 @@
 
 (defmacro (define-simple-number-operator name insn)
   (quasiquote
-    (define-operator ((unquote name) a b) ()
+    (define-operator ((unquote name) a (b reg-imm8)) ()
       (emiti cg (unquote (string-concat insn " ~A, ~A, ~A"))
-            (register-operand result) (register-operand a) (register-operand b))
+            (register-operand result) (register-operand a) (insn-operand b))
       result)))
 
 (define-simple-number-operator + "add")
