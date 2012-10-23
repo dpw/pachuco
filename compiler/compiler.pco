@@ -775,6 +775,8 @@
   (let* ((val (attr-ref attrs 'quoted)))
     (list 'quote (if (string? val) (escape-string-literal val) val))))
 
+(define-comment-form (raw attrs)
+  (list 'raw (attr-ref attrs 'value)))
 
 ;;; Arch-independent code generation
 
@@ -854,8 +856,11 @@
     ;; type into generic vec operators
     (quasiquote (definitions
       (define (unquote type-attrs)
-        (list (cons 'tag (unquote tag)) (cons 'tag-bits (unquote tag-bits))
-              (cons 'scale (unquote scale)) (cons 'header-size value-size)))
+        (list (cons 'tag (unquote tag))
+              (cons 'tag-bits (unquote tag-bits))
+              (cons 'scale (unquote scale))
+              (cons 'index-shift (- number-tag-bits (unquote scale)))
+              (cons 'header-size value-size)))
 
       (define-simplify ((unquote (compound-symbol "make-" name)) attrs len init)
         (rplaca (cdddr form) ((unquote to-vec-rep) init))
@@ -901,7 +906,9 @@
     ;; into generic raw operators
     (quasiquote (definitions
       (define (unquote type-attrs)
-        (list* (cons 'scale (unquote scale)) raw-base-type-attrs))
+        (list* (cons 'scale (unquote scale))
+               (cons 'index-shift (- number-tag-bits (unquote scale)))
+               raw-base-type-attrs))
 
       (define-simplify ((unquote (compound-symbol name "-vec-ref"))
                         attrs addr index)

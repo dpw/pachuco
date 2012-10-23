@@ -283,6 +283,9 @@
 
 ;;; Literals
 
+(define-operator (raw) ()
+  (attr-ref attrs 'value))
+
 (define-codegen-sections (quote quoted)
   (rplaca (cdr form) (list (cons 'quoted quoted))))
 

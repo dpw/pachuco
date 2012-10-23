@@ -22,6 +22,7 @@
 (define (register? x) (vector? x))
 (define (immediate? x) (or (number? x) (string? x)))
 (define (immediate8? x) (and (number? x) (= 0 (logand x -256))))
+(define (immediate12? x) (and (number? x) (= 0 (logand (abs x) -4096))))
 
 (defmacro (register-operand reg)
   (list 'register-variant reg 0))
@@ -41,6 +42,21 @@
       (begin
         (emit-mov-maybe cg operand reg)
         reg)))
+
+(define (reg-imm12-operand-constraint cg operand reg)
+  (if (immediate12? operand)
+      operand
+      (begin
+        (emit-mov-maybe cg operand reg)
+        reg)))
+
+(define (shift-expr shift)
+  (cond ((= shift 0) "")
+        ((> shift 0) (format ", asr #~D" shift))
+        (true (error "unexpected shoft ~D" shift))))
+
+(define (scale-number-expr scale)
+  (shift-expr (- number-tag-bits scale)))
 
 ;;; Assembly bits
 
@@ -160,16 +176,15 @@
         (emiti cg "cmp ~A, #~D" valreg (unquote tag)))
       cc-eq)))
 
-(define (scale-load-store-suffix scale)
-  (cond ((= scale 0) "b")
-        ((= scale 2) "")
-        (true (error "unexpected vec scale ~D" scale))))
-
 ;;; Helper init-mem function
 ;;;
 ;;; Init-mem functions are used by make-vec and alloc-closure to clear
 ;;; the allocated memory.  The caller sets up %init-mem-count and
 ;;; %init-mem-val.
+
+(define init-mem-variants (vector "init_mem_bytes" false "init_mem"))
+(define str-variants (vector "strb" false "str"))
+(define ldr-variants (vector "ldrb" false "ldr"))
 
 (defconstant %init-mem-count (first general-registers))
 (defconstant %init-mem-val (second general-registers))
@@ -177,7 +192,7 @@
 
 (define (codegen-init-mem cg scale)
   (let* ((loop-label (gen-label))
-         (name (format "init_mem~A" (scale-load-store-suffix scale)))
+         (name (vector-ref init-mem-variants scale))
          (count (register-operand %init-mem-count))
          (ptr (register-operand %init-mem-ptr)))
     (emit cg ".text")
@@ -192,7 +207,7 @@
 
     (emit-raw-label cg loop-label)
     (emiti cg "subs ~A, ~A, #1" count count)
-    (emiti cg "str~A ~A, [~A], #~D" (scale-load-store-suffix scale)
+    (emiti cg "~A ~A, [~A], #~D" (vector-ref str-variants scale)
            (register-operand %init-mem-val) ptr (ash 1 scale))
     (emiti cg "bne ~A" loop-label)
 
@@ -615,12 +630,6 @@
 (define-tag-check string? string-tag string-tag-bits)
 (define-tag-check vector? vector-tag vector-tag-bits)
 
-(define (scale-number-expr scale)
-  (let* ((shift (- number-tag-bits scale)))
-    (cond ((= shift 0) "")
-          ((> shift 0) (format ", asr #~D" shift))
-          (true (error "unexpected vec scale ~D" scale)))))
-
 (define-operator (make-vec len (init fixed-reg %init-mem-val))
                  ((temp-fixed-regs %init-mem-count %init-mem-ptr))
   (let* ((tag (attr-ref attrs 'tag))
@@ -637,35 +646,75 @@
     ;; Call the helper routine to clear the vector
     (emiti cg "mov ~A, ~A, asr #~D" (register-operand %init-mem-count)
            (register-operand len) number-tag-bits)
-    (emiti cg "bl init_mem~A" (scale-load-store-suffix scale))
+    (emiti cg "bl ~A" (vector-ref init-mem-variants scale))
 
     (emiti cg "add ~A, ~A, #~D" (register-operand result)
           (register-operand %alloc) tag))
   result)
 
-(define (emit-vec-op cg attrs scale template suffix valreg vecreg index)
-  (let* ((offset (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag)))
-         (vec (register-operand vecreg)))
-    (unless (= offset 0)
-      (emiti cg "add ~A, ~A, #~D" vec vec offset))
-    (emiti cg template suffix (register-operand valreg) vec
-          (register-operand index) (scale-number-expr scale))))
+(define (emit-vec-op cg attrs insn valreg vecreg index)
+  (let* ((index-shift (attr-ref attrs 'index-shift))
+         (header-size (attr-ref attrs 'header-size))
+         (tag (attr-ref attrs 'tag))
+         (vec (register-operand vecreg))
+         (val (register-operand valreg)))
+    (if (number? index)
+        (begin
+          (unless (and (= 0 index-shift) (= 0 header-size) (= 0 tag))
+            (error "vector op with immediate index has strange attrs"))
+          (if insn
+              (emiti cg "~A ~A, [~A, #~D]"
+                     (vector-ref insn (attr-ref attrs 'scale))
+                     val vec index)
+              (emiti cg "add ~A, ~A, #~D" val vec index)))
+        (begin
+          (unless (= header-size tag)
+            (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))
+          (if insn
+              (emiti cg "~A ~A, [~A, ~A~A]"
+                     (vector-ref insn (attr-ref attrs 'scale)) val vec
+                     (register-operand index) (shift-expr index-shift))
+              (emiti cg "add ~A, ~A, ~A~A" val vec (register-operand index)
+                     (shift-expr index-shift)))))))
 
-(define-operator (raw-vec-set! vec index val) ()
-  (let* ((scale (attr-ref attrs 'scale)))
-    (emit-vec-op cg attrs scale "str~A ~A, [~A, ~A~A]"
-                 (scale-load-store-suffix scale) val vec index))
+(define (vec-offset attrs index)
+  (+ (ash index (attr-ref attrs 'scale))
+     (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag))))
+
+(define immediate-vec-op-attrs '((tag . 0)
+                                 (tag-bits . 0)
+                                 (index-shift . 0)
+                                 (header-size . 0)))
+
+(define (simplify-vec-op form index)
+  (when (eq? 'quote (car index))
+    (let* ((indexval (form-attr index 'quoted)))
+      (when (number? indexval)
+        (let* ((attrs (second form)))
+          (rplaca (cdr form)
+                  (acons 'scale (attr-ref attrs 'scale) immediate-vec-op-attrs))
+          (overwrite-form index (list 'raw (acons 'value
+                                                  (vec-offset attrs indexval)
+                                                  ()))))))))
+
+(define-codegen-sections (raw-vec-set! attrs vec index val)
+  (codegen-sections-recurse form cg)
+  (simplify-vec-op form index))
+
+(define-codegen-sections ((raw-vec-ref vec-address) attrs vec index)
+  (codegen-sections-recurse form cg)
+  (simplify-vec-op form index))
+
+(define-operator (raw-vec-set! vec (index reg-imm12) val) ()
+  (emit-vec-op cg attrs str-variants val vec index)
   val)
 
-(define-operator (raw-vec-ref vec index) ()
-  (let* ((scale (attr-ref attrs 'scale)))
-    (emit-vec-op cg attrs scale "ldr~A ~A, [~A, ~A~A]"
-                 (scale-load-store-suffix scale) result vec index))
+(define-operator (raw-vec-ref vec (index reg-imm12)) ()
+  (emit-vec-op cg attrs ldr-variants result vec index)
   result)
 
-(define-operator (vec-address vec index) ()
-  (emit-vec-op cg attrs (attr-ref attrs 'scale)
-               "add~A ~A, ~A, ~A~A" "" result vec index)
+(define-operator (vec-address vec (index reg-imm12)) ()
+  (emit-vec-op cg attrs false result vec index)
   result)
 
 (define-operator (vec-length vec) ()
@@ -721,12 +770,12 @@
   result)
 
 (define-operator (raw-ref addr) ()
-  (emiti cg "ldr~A ~A, [~A]" (scale-load-store-suffix (attr-ref attrs 'scale))
+  (emiti cg "~A ~A, [~A]" (vector-ref ldr-variants (attr-ref attrs 'scale))
         (register-operand result) (register-operand addr))
   result)
 
 (define-operator (raw-set! addr val) ()
-  (emiti cg "str~A ~A, [~A]" (scale-load-store-suffix (attr-ref attrs 'scale))
+  (emiti cg "~A ~A, [~A]" (vector-ref str-variants (attr-ref attrs 'scale))
         (register-operand val) (register-operand addr))
   val)
 

@@ -498,6 +498,9 @@
   (define r (rem n div))
   (if (>= r 0) r (+ r div)))
 
+(define (abs n)
+  (if (>= n 0) n (- n)))
+
 (defmacro (max init . nums)
   (reduce init nums (lambda (a b)
                       (define avar (gensym))
