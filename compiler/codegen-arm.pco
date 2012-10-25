@@ -653,29 +653,29 @@
   result)
 
 (define (emit-vec-op cg attrs insn valreg vecreg index)
-  (let* ((index-shift (attr-ref attrs 'index-shift))
+  (let* ((scale (attr-ref attrs 'scale))
          (header-size (attr-ref attrs 'header-size))
          (tag (attr-ref attrs 'tag))
          (vec (register-operand vecreg))
          (val (register-operand valreg)))
     (if (number? index)
         (begin
-          (unless (and (= 0 index-shift) (= 0 header-size) (= 0 tag))
+          (unless (and (= 0 header-size) (= 0 tag))
             (error "vector op with immediate index has strange attrs"))
           (if insn
-              (emiti cg "~A ~A, [~A, #~D]"
-                     (vector-ref insn (attr-ref attrs 'scale))
-                     val vec index)
+              (emiti cg "~A ~A, [~A, #~D]" (vector-ref insn scale) val vec
+                     index)
               (emiti cg "add ~A, ~A, #~D" val vec index)))
         (begin
           (unless (= header-size tag)
             (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))
           (if insn
               (emiti cg "~A ~A, [~A, ~A~A]"
-                     (vector-ref insn (attr-ref attrs 'scale)) val vec
-                     (register-operand index) (shift-expr index-shift))
+                     (vector-ref insn scale) val vec
+                     (register-operand index)
+                     (shift-expr (- number-tag-bits scale)))
               (emiti cg "add ~A, ~A, ~A~A" val vec (register-operand index)
-                     (shift-expr index-shift)))))))
+                     (shift-expr (- number-tag-bits scale))))))))
 
 (define (vec-offset attrs index)
   (+ (ash index (attr-ref attrs 'scale))
@@ -683,7 +683,6 @@
 
 (define immediate-vec-op-attrs '((tag . 0)
                                  (tag-bits . 0)
-                                 (index-shift . 0)
                                  (header-size . 0)))
 
 (define (simplify-vec-op form index)

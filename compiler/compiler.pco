@@ -859,7 +859,6 @@
         (list (cons 'tag (unquote tag))
               (cons 'tag-bits (unquote tag-bits))
               (cons 'scale (unquote scale))
-              (cons 'index-shift (- number-tag-bits (unquote scale)))
               (cons 'header-size value-size)))
 
       (define-simplify ((unquote (compound-symbol "make-" name)) attrs len init)
@@ -907,7 +906,6 @@
     (quasiquote (definitions
       (define (unquote type-attrs)
         (list* (cons 'scale (unquote scale))
-               (cons 'index-shift (- number-tag-bits (unquote scale)))
                raw-base-type-attrs))
 
       (define-simplify ((unquote (compound-symbol name "-vec-ref"))
