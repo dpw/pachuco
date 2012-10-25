@@ -580,7 +580,14 @@
   (let* ((scale (attr-ref attrs 'scale))
          (slot (vec-slot attrs vec (emit-scale-number cg scale index))))
     (if (and (= scale value-scale) (immediate? index))
-        ;; the slot is a suitable memory operand to return directly
+        ;; The slot is a suitable memory operand to return directly.
+        ;; The 'immediate? index' condition is important, due to its
+        ;; interaction with the code generation strategy: It ensures
+        ;; that we only return memory operands that involve the'vec'
+        ;; register that was reserved for our result anyway.  If that
+        ;; condition is omitted, we might produce an operand that
+        ;; involves the 'index' register, and that might get trampled
+        ;; on before the memory operand is used.
         slot
         (begin (emit-movzx cg slot result scale) result))))
 
