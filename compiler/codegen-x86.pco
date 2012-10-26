@@ -132,7 +132,6 @@
   (emit cg "~A~C ~A, ~A" insn (string-ref insn-size-suffixes scale)
         (asm-operand src scale) (asm-operand dest scale)))
 
-(define-insn-2 emit-lea "lea")
 (define-insn-2 emit-add "add")
 (define-insn-2 emit-sub "sub")
 (define-insn-2 emit-imul "imul")
@@ -144,6 +143,11 @@
 (define-insn-2 emit-shl "shl")
 (define-insn-2 emit-sar "sar")
 
+(define (emit-lea cg mem reg)
+  (if (and (= 0 (first mem)) (null? (cddr mem)))
+      (emit-mov cg (second mem) reg)
+      (emit-insn-2 cg "lea" mem reg (list value-scale))))
+
 (define (emit-clear cg reg . scale)
   (set! scale (if (null? scale) value-scale (car scale)))
   (emit-xor cg reg reg (min 2 scale)))
@@ -151,6 +155,9 @@
 (define (emit-mov cg src dest . scale)
   (cond ((and (eq? src 0) (register? dest))
          (emit-clear cg dest))
+        ((and (register? src) (eq? src dest))
+         ;; omit instruction
+         )
         ((and (number? src) (register? dest) (> src 0) (< src 1000000))
          (emit-movzx cg src dest
                      (min 2 (if (null? scale) value-scale (car scale)))))
