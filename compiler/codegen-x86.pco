@@ -215,20 +215,17 @@
 (define-insn-0 emit-popf "popf")
 
 (define (emit-scale-number cg scale oper)
-  (cond ((= scale number-tag-bits)
-         oper)
-        ((number? oper)
+  (cond ((number? oper)
          (ash oper (- scale number-tag-bits)))
-        ((< scale number-tag-bits)
-         (let* ((shift (- number-tag-bits scale)))
-           (if (register? oper)
-               (begin (emit-sar cg shift oper) oper)
-               (formout stdout "~A>>~A" oper shift))))
+        ((register? oper)
+         (cond ((< scale number-tag-bits)
+                (begin (emit-sar cg (- number-tag-bits scale) oper) oper))
+               ((> scale number-tag-bits)
+                (begin (emit-shl cg (- scale number-tag-bits) oper) oper))
+               (true
+                oper)))
         (true
-         (let* ((shift (- scale number-tag-bits)))
-           (if (register? oper)
-               (begin (emit-shl cg shift oper) oper)
-               (formout stdout "~A<<~A" oper shift))))))
+         (error "emit-scale-number on operand ~A" oper))))
 
 (define (emit-branch cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
@@ -518,7 +515,9 @@
   a)
 
 (define-operator (* a (b reg-mem-imm)) ()
-  (emit-sar cg number-tag-bits a)
+  (if (number? b)
+      (set! b (ash b (- number-tag-bits)))
+      (emit-sar cg number-tag-bits a))
   (emit-imul cg b a)
   a)
 

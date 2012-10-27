@@ -146,7 +146,7 @@
   (if (= num 0)
       (write-character ostr #\0)
       (begin
-        (unless (and (<= 2 radix)
+        (unless (and (> radix 2)
                      (<= radix (string-length print-number-digits)))
           (error "Bad radix ~D" radix))
 

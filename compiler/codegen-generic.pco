@@ -374,22 +374,27 @@
 
 ;;; Simplifications of arithmetic operators
 
-(defmacro (define-simplify-binary-op op identity unary-op)
-  (quasiquote
-    (define-simplify ((unquote op) attrs . args)
-      (simplify-recurse form)
-      (cond ((null? args)
-             (overwrite-form form (list 'quote (unquote identity))))
-            ((null? (cdr args))
-             (overwrite-form form (list* '(unquote unary-op) () args)))
-            ((not (null? (cddr args)))
-             (overwrite-form form
-                             (reduce (car args) (cdr args)
-                                     (lambda (a b)
-                                       (list '(unquote op) () a b)))))))))
+(define (simplify-binary-op form args identity)
+  (simplify-recurse form)
+  (cond ((null? args)
+         (overwrite-form form (list 'quote identity)))
+        ((null? (cdr args))
+         (overwrite-form form (car args)))
+        ((null? (cddr args))
+         (when (eq? 'quote (caar args))
+           (let* ((tmp (first args)))
+             (rplaca args (second args))
+             (rplaca (cdr args) tmp))))
+        (true
+         (overwrite-form form (reduce (car args) (cdr args)
+                                (lambda (a b)
+                                  (list* (car form) ()
+                                         (if (eq? 'quote (car a))
+                                             (list b a)
+                                             (list a b)))))))))
 
-(define-simplify-binary-op + 0 begin)
-(define-simplify-binary-op * 1 begin)
+(define-simplify (+ attrs . args) (simplify-binary-op form args 0))
+(define-simplify (* attrs . args) (simplify-binary-op form args 1))
 
 (define-simplify (- attrs a . args)
   (simplify-recurse form)
@@ -397,6 +402,11 @@
         ((not (null? (cdr args)))
          (overwrite-form form
                          (reduce a args (lambda (a b) (list '- () a b)))))))
+
+(define-simplify ((eq? = /=) attrs a b)
+  (simplify-recurse form)
+  (when (eq? 'quote (car a))
+    (overwrite-form form (list (car form) attrs b a))))
 
 ;;; Function calls
 
