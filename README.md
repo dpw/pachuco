@@ -1,4 +1,4 @@
-INTRODUCTION
+# Introduction
 
 Pachuco is a self-hosting compiler for a dialect of the Lisp
 programming language (and it also has a lot in common with Scheme).
@@ -31,52 +31,52 @@ error reporting is almost non-existent).  It is probably not yet
 suitable for other applications.
 
 
-GETTING STARTED
+# Getting Started
 
 Pachuco currently targets the i386 and x86-64 instruction set
 architectures, and builds and runs under Linux.  It requires basic
 development tools to be installed, such as gcc, binutils, and make.
 It also uses the sbcl implementation of Common Lisp to bootstrap
 itself.  This is available as the sbcl package on Debian, Ubuntu and
-Fedora, or see <www.sbcl.org>.
+Fedora, or see [sbcl.org](http://sbcl.org).
 
-Running "make all" bootstraps the compiler and runs some tests.  The
-resulting compiler executable is in "build/stage2", but it is normally
-invoked via the shell script "scripts/compile".  Among other things,
+Running `make all` bootstraps the compiler and runs some tests.  The
+resulting compiler executable is in `build/stage2`, but it is normally
+invoked via the shell script `scripts/compile`.  Among other things,
 this script includes the standard runtime files into the compilation,
 and invokes gcc to assemble the compiler output into a working
 executable.
 
 There is a simple example program to generate the Fibonacci sequence
-in "examples/fib.pco".  Compile it with:
+in `examples/fib.pco`.  Compile it with:
 
-  $ scripts/compile examples/fib.pco -o build/fib
+    $ scripts/compile examples/fib.pco -o build/fib
 
-(The "-o" option specifies the name of the destination executable.)
+(The `-o` option specifies the name of the destination executable.)
 
 The result is a stand-alone executable that you can run from the
 command line:
 
-  $ build/fib 10
-  89
+    $ build/fib 10
+    89
 
-To start the interpreter-based REPL, do "make repl":
+To start the interpreter-based REPL, do `make repl`:
 
-  $ make repl
-  build/repl runtime/runtime.pco runtime/runtime2.pco runtime/gc.pco
-  Reading runtime/runtime.pco
-  Reading runtime/runtime2.pco
-  Reading runtime/gc.pco
-  >>>
+    $ make repl
+    build/repl runtime/runtime.pco runtime/runtime2.pco runtime/gc.pco
+    Reading runtime/runtime.pco
+    Reading runtime/runtime2.pco
+    Reading runtime/gc.pco
+    >>>
 
-You can type Pachuco expressions and programs at the ">>>" prompt:
+You can type Pachuco expressions and programs at the `>>>` prompt:
 
-  >>> (define (fact n)
-        (if (= n 0)
-            1
-            (* n (fact (- n 1)))))
-  #<function>
-  >>> (fact 10)
-  3628800
+    >>> (define (fact n)
+          (if (= n 0)
+              1
+              (* n (fact (- n 1)))))
+    #<function>
+    >>> (fact 10)
+    3628800
 
 Type control-D to quit the REPL.
