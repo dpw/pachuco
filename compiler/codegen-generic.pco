@@ -127,7 +127,10 @@
 
 (define (codegen-program-end cg)
   (codegen-helpers cg)
-  (codegen-symbols cg))
+  (codegen-symbols cg)
+
+  ;; This indicates to the linker that we support a non-executable stack
+  (emit cg ".section .note.GNU-stack,\"\",%progbits"))
 
 ;;; "Smart" branching, jumping, and labels.
 ;;;
