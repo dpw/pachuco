@@ -158,6 +158,7 @@
 (define-interpreter-builtin-op *)
 (define-interpreter-builtin-op rem)
 (define-interpreter-builtin-op truncate)
+(define-interpreter-builtin-op ash)
 (define-interpreter-builtin-op logand)
 (define-interpreter-builtin-op logior)
 (define-interpreter-builtin-op logxor)

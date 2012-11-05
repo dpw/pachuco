@@ -9,6 +9,7 @@
 
 (defconstant value-scale 2)
 (defconstant value-size (ash 1 value-scale))
+(defconstant value-bits (ash 8 value-scale))
 
 ;;; Value representation
 

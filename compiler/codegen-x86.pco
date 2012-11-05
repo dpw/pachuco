@@ -544,6 +544,55 @@
   (emit-idiv cg divisor)
   %d)
 
+(define-operator (ash-imm n) ()
+  (let* ((shift (attr-ref attrs 'shift)))
+    (if (>= shift 0)
+        (emit-shl cg shift n)
+        (begin
+          (emit-sar cg (- shift) n)
+          (emit-and cg (ash -1 number-tag-bits) n))))
+  n)
+
+(define-operator (ash n (shift fixed-reg %c)) ()
+  (let* ((l1 (gen-label))
+         (l2 (gen-label))
+         (l3 (gen-label))
+         (l4 (gen-label))
+         (l5 (gen-label)))
+    (flush-labels-and-jumps cg)
+    (emit-sar cg number-tag-bits %c)
+    (emit-branch cg "s" l1)
+    ;; n >= 0
+    (emit-cmp cg value-bits %c)
+    (emit-branch cg "ae" l2)
+    ;; 0 <= n < value-bits
+    (emit cg "shl~C %cl, ~A" (string-ref insn-size-suffixes value-scale)
+          (value-sized n))
+    (emit-jump cg l5)
+
+    (emit-raw-label cg l2)
+    ;; n >= value-bits
+    (emit-clear cg n)
+    (emit-jump cg l5)
+
+    (emit-raw-label cg l1)
+    ;; n < 0
+    (emit-cmp cg (- value-bits) %c)
+    (emit-branch cg "be" l3)
+    (emit-neg cg %c)
+    (emit cg "sar~C %cl, ~A" (string-ref insn-size-suffixes value-scale)
+          (value-sized n))
+    (emit-jump cg l4)
+
+    (emit-raw-label cg l3)
+    ;; n <= -value-bits
+    (emit-sar cg (- value-bits 1) n)
+
+    (emit-raw-label cg l4)
+    (emit-and cg (ash -1 number-tag-bits) n)
+    (emit-raw-label cg l5))
+  n)
+
 (define-operator (logand a (b reg-mem-imm)) ()
   (emit-and cg b a)
   a)

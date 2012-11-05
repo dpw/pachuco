@@ -547,6 +547,42 @@
   (emit-c-call cg "__aeabi_idivmod")
   %r1)
 
+(define-operator (ash-imm n) ()
+  (let* ((shift (attr-ref attrs 'shift)))
+    (if (> shift 0)
+        (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
+               (reg-asm-operand n) shift)
+        (let* ((res (reg-asm-operand result)))
+          (emiti cg "mov ~A, ~A, asr #~D" res (reg-asm-operand n) (- shift))
+          (emiti cg "and ~A, ~A, #~D" res res (ash -1 number-tag-bits)))))
+  result)
+
+(define-operator (ash n shift) ()
+  (let* ((l1 (gen-label))
+         (l2 (gen-label))
+         (nreg (reg-asm-operand n))
+         (shiftreg (reg-asm-operand shift))
+         (resreg (reg-asm-operand result)))
+    (flush-labels-and-jumps cg)
+    (emiti cg "movs ~A, ~A, asr #~D" shiftreg shiftreg number-tag-bits)
+    (emiti cg "bmi ~A" l1)
+    ;; n >= 0
+    (emiti cg "cmp ~A, #31" shiftreg)
+    (emiti cg "mov ~A, ~A, asl ~A" resreg nreg shiftreg)
+    (emiti cg "movhi ~A, #0" resreg)
+    (emit-jump cg l2)
+
+    (emit-raw-label cg l1)
+    ;; n < 0
+    (emiti cg "rsb ~A, ~A, #0" shiftreg shiftreg)
+    (emiti cg "cmp ~A, #31" shiftreg)
+    (emiti cg "movhi ~A, #31" shiftreg)
+    (emiti cg "mov ~A, ~A, asr ~A" resreg nreg shiftreg)
+    (emiti cg "and ~A, ~A, #~D" resreg resreg (ash -1 number-tag-bits))
+
+    (emit-raw-label cg l2))
+  result)
+
 ;;; Conses
 
 (define-tag-check pair? pair-tag pair-tag-bits)

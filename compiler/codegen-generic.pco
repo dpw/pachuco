@@ -411,6 +411,25 @@
   (when (eq? 'quote (car a))
     (overwrite-form form (list (car form) attrs b a))))
 
+;; Distinguish the constant-bit-count for of ash from the
+;; variable-bit-count form, because they lead to significantly
+;; different code.
+(define-codegen-sections (ash attrs n shift)
+  (codegen-sections-recurse form cg)
+  (when (eq? 'quote (car shift))
+    (let* ((shiftval (form-attr shift 'quoted)))
+      (when (number? shiftval)
+        (overwrite-form form
+          (cond ((= shiftval 0) n)
+                ((<= shiftval (- value-bits))
+                 (list 'ash-imm (acons 'shift (- 1 value-bits) attrs) n))
+                ((< shiftval value-bits)
+                 (list 'ash-imm (acons 'shift shiftval attrs) n))
+                (true
+                 (quasiquote (begin ()
+                                    (unquote n)
+                                    (quote ((quoted . 0))))))))))))
+
 ;;; Function calls
 
 (define (func-lambda-attrs func)

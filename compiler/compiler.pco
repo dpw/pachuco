@@ -48,7 +48,7 @@
 
     pair? car cdr cons rplaca rplacd
 
-    number? < <= > >= = /= + * - rem truncate
+    number? < <= > >= = /= + * - rem truncate ash
     logand logior logxor
 
     character? character-code code-character
@@ -777,6 +777,9 @@
 
 (define-comment-form (raw attrs)
   (list 'raw (attr-ref attrs 'value)))
+
+(define-comment-form (ash-imm attrs n)
+  (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
 
 ;;; Arch-independent code generation
 
