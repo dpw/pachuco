@@ -189,6 +189,28 @@
   (assert-result (string-replace "banana" "an" "rane") "braneranea")
   (assert-result (not (character? #\x)) false)
 
+  ;; Test overlapping string and vector copies
+  (assert-result (begin
+                   (define s (format "foobar"))
+                   (string-copy s 1 s 2 3)
+                   s)
+                 "fooobr")
+  (assert-result (begin
+                   (define s (format "foobar"))
+                   (string-copy s 2 s 1 3)
+                   s)
+                 "fobaar")
+  (assert-result (begin
+                   (define v (vector 1 2 3 4 5 6))
+                   (vector-copy v 1 v 2 3)
+                   v)
+                 (vector 1 2 2 3 4 6))
+  (assert-result (begin
+                   (define v (vector 1 2 3 4 5 6))
+                   (vector-copy v 2 v 1 3)
+                   v)
+                 (vector 1 3 4 5 5 6))
+
   (assert-result (vector-equal? (vector 1 2 3)
                                 (make-vector-from-list '(1 2 3)))
                  true)
