@@ -559,7 +559,6 @@
          (l3 (gen-label))
          (l4 (gen-label))
          (l5 (gen-label)))
-    (flush-labels-and-jumps cg)
     (emit-sar cg number-tag-bits %c)
     (emit-branch cg "s" l1)
     ;; n >= 0

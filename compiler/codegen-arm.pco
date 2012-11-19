@@ -563,7 +563,6 @@
          (nreg (reg-asm-operand n))
          (shiftreg (reg-asm-operand shift))
          (resreg (reg-asm-operand result)))
-    (flush-labels-and-jumps cg)
     (emiti cg "movs ~A, ~A, asr #~D" shiftreg shiftreg number-tag-bits)
     (emiti cg "bmi ~A" l1)
     ;; n >= 0
