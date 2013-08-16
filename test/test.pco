@@ -88,13 +88,14 @@
          (assert-result (ashx 1 -1000) 0)
          (assert-result (ashx -1 -1000) -1)
 
-         (if (= (compiler-constant value-size) 4)
-           (begin
-             (assert-result (ashx 1 32) 0)
-             (assert-result (ashx -1 -32) -1))
-           (begin
-             (assert-result (ashx 1 64) 0)
-             (assert-result (ashx -1 -64) -1)))))
+         (when-compiling
+           (if (= (compiler-constant value-size) 4)
+               (begin
+                (assert-result (ashx 1 32) 0)
+                (assert-result (ashx -1 -32) -1))
+               (begin
+                (assert-result (ashx 1 64) 0)
+                (assert-result (ashx -1 -64) -1))))))
 
     ;; Test the immediate shift forms of ash
     (begin
