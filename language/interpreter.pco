@@ -43,10 +43,16 @@
   (eval-form-aux form env true))
 
 (define (eval-body forms env)
-  (let* ((result unspecified))
-    (dolist (form forms)
-      (set! result (eval-body-form form env)))
-    result))
+  (if (null? forms)
+      unspecified
+      (eval-body-aux forms env)))
+
+(define (eval-body-aux forms env)
+  (if (null? (cdr forms))
+      (eval-body-form (car forms) env)
+      (begin
+        (eval-body-form (car forms) env)
+        (eval-body-aux (cdr forms) env))))
 
 (define (add-lambda-vars vars formals actuals)
   (cond ((null? formals)
