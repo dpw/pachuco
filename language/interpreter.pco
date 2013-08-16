@@ -4,18 +4,18 @@
 
 (define interpreter-builtin-forms (make-symboltable))
 
+(define (register-interpreter-builtin keyword func)
+  (symboltable-set! interpreter-builtin-forms keyword func))
+
 (defmacro (define-interpreter-builtin-form keyword . body)
-  (quasiquote
-    (symboltable-set! interpreter-builtin-forms '(unquote keyword)
-                      (lambda (keyword args env in-body)
-                        (unquote-splicing body)))))
+  (quasiquote (register-interpreter-builtin '(unquote keyword)
+                                            (lambda (foo args env in-body)
+                                              (unquote-splicing body)))))
 
 (define interpreter-builtin-vars (make-symboltable))
 
-(defmacro (define-interpreter-builtin-var name val)
-  (quasiquote
-    (symboltable-set! interpreter-builtin-vars
-                      '(unquote name) (cons (unquote val) ()))))
+(define (register-interpreter-builtin-var name val)
+  (symboltable-set! interpreter-builtin-vars name (cons val ())))
 
 (define (make-initial-interpreter-env)
   (list (make-symboltable) interpreter-builtin-vars))
@@ -56,12 +56,13 @@
 
 (define (add-lambda-vars vars formals actuals)
   (cond ((null? formals)
-         (if (null? actuals) ()
-             (error "surplus arguments ~S" actuals)))
+         (unless (null? actuals)
+           (error "surplus arguments ~S" actuals)))
         ((symbol? formals)
          (symboltable-set! vars formals (cons actuals ())))
+        ((null? actuals)
+         (error "insufficient arguments"))
         (true
-         (when (null? actuals) (error "insufficient arguments"))
          (symboltable-set! vars (car formals) (cons (car actuals) ()))
          (add-lambda-vars vars (cdr formals) (cdr actuals)))))
 
@@ -114,89 +115,146 @@
 (define-interpreter-builtin-form quote
   (first args))
 
-(defmacro (define-interpreter-builtin-op op . body)
+(define (excess-args keyword)
+  (error "excess arguments to ~S" keyword))
+
+(define (insufficient-args keyword)
+  (insufficient-args keyword))
+
+(define (interpreter-builtin-op-0 keyword func)
+  (lambda (foo args env in-body)
+    (unless (null? args) (excess-args keyword))
+    (funcall func)))
+
+(define (interpreter-builtin-op-1 keyword func)
+  (lambda (foo args env in-body)
+    (cond ((null? args)
+           (insufficient-args keyword))
+          ((not (null? (cdr args)))
+           (excess-args keyword))
+          (true
+           (funcall func (eval-form-aux (car args) env false))))))
+
+(define (interpreter-builtin-op-2 keyword func)
+  (lambda (foo args env in-body)
+    (when (null? args)
+      (insufficient-args keyword))
+    (let* ((args1 (cdr args)))
+      (cond ((null? args1)
+             (insufficient-args keyword))
+            ((not (null? (cdr args1)))
+             (excess-args keyword))
+            (true
+             (funcall func (eval-form-aux (car args) env false)
+                      (eval-form-aux (car args1) env false)))))))
+
+(define (interpreter-builtin-op keyword func)
+  (lambda (foo args env in-body) (apply func (eval-forms args env))))
+
+(define (interpreter-builtin-for op)
+  (let* ((n (length (cdr op))))
+    (if (<= n 2)
+        (intern (string-symbolcase (format "interpreter-builtin-op-~D" n)))
+        'interpreter-builtin-op)))
+
+(defmacro (define-interpreter-builtin-op-x op . alias)
+  (set! alias (car (if (null? alias) op alias)))
   (quasiquote
-    (define-interpreter-builtin-form (unquote op)
-      (let* ((evaled-args (eval-forms args env)))
-        (unquote (cond ((null? body)
-                        (quasiquote
-                          (apply (function (unquote op)) evaled-args)))
-                       ((null? (cdr body))
-                        (quasiquote
-                          (apply (function (unquote (car body))) evaled-args)))
-                       (true
-                        (quasiquote
-                          (bind (unquote (car body)) evaled-args
-                                (unquote-splicing (cdr body)))))))))))
+    (register-interpreter-builtin '(unquote (car op))
+      ((unquote (interpreter-builtin-for op))
+       '(unquote (car op)) (function (unquote alias))))))
 
-(defmacro (define-interpreter-builtin-boolean-op op)
+(define (booleanize-interpreter-builtin func)
+  (if subject-language
+      func
+      (lambda (foo args env in-body)
+        (if (funcall func foo args env in-body) 'true 'false))))
+
+(defmacro (define-interpreter-builtin-boolean-op-x op)
   (quasiquote
-    (define-interpreter-builtin-form (unquote op)
-      (if (apply (function (unquote op)) (eval-forms args env))
-         'true 'false))))
+    (register-interpreter-builtin '(unquote (car op))
+      (booleanize-interpreter-builtin
+        ((unquote (interpreter-builtin-for op))
+         '(unquote (car op)) (function (unquote (car op))))))))
 
-(define-interpreter-builtin-op error-halt)
+(define-interpreter-builtin-op-x (error-halt))
 
-(define-interpreter-builtin-boolean-op eq?)
-(define-interpreter-builtin-boolean-op function?)
+(define-interpreter-builtin-boolean-op-x (eq? a b))
+(define-interpreter-builtin-boolean-op-x (function? a))
 
-(define-interpreter-builtin-boolean-op symbol?)
-(define-interpreter-builtin-op gensym)
-(define-interpreter-builtin-op symbol-name (sym)
-  (subject-language-symbol-name sym))
-(define-interpreter-builtin-op symbol-id)
-(define-interpreter-builtin-op intern (str)
-  (subject-language-intern str))
+(define-interpreter-builtin-boolean-op-x (symbol? a))
+(define-interpreter-builtin-op-x (gensym))
+(define-interpreter-builtin-op-x (symbol-name a) subject-language-symbol-name)
+(define-interpreter-builtin-op-x (symbol-id a))
+(define-interpreter-builtin-op-x (intern str) subject-language-intern)
 
-(define-interpreter-builtin-boolean-op pair?)
-(define-interpreter-builtin-op car)
-(define-interpreter-builtin-op cdr)
-(define-interpreter-builtin-op cons)
-(define-interpreter-builtin-op rplaca)
-(define-interpreter-builtin-op rplacd)
+(define-interpreter-builtin-boolean-op-x (pair? a))
+(define-interpreter-builtin-op-x (car a))
+(define-interpreter-builtin-op-x (cdr a))
+(define-interpreter-builtin-op-x (cons a b))
+(define-interpreter-builtin-op-x (rplaca a b))
+(define-interpreter-builtin-op-x (rplacd a b))
 
-(define-interpreter-builtin-boolean-op number?)
-(define-interpreter-builtin-boolean-op <)
-(define-interpreter-builtin-boolean-op <=)
-(define-interpreter-builtin-boolean-op >)
-(define-interpreter-builtin-boolean-op >=)
-(define-interpreter-builtin-boolean-op =)
-(define-interpreter-builtin-boolean-op /=)
-(define-interpreter-builtin-op +)
-(define-interpreter-builtin-op -)
-(define-interpreter-builtin-op *)
-(define-interpreter-builtin-op rem)
-(define-interpreter-builtin-op truncate)
-(define-interpreter-builtin-op ash)
-(define-interpreter-builtin-op logand)
-(define-interpreter-builtin-op logior)
-(define-interpreter-builtin-op logxor)
+(define-interpreter-builtin-boolean-op-x (number? a))
+(define-interpreter-builtin-boolean-op-x (< a b))
+(define-interpreter-builtin-boolean-op-x (<= a b))
+(define-interpreter-builtin-boolean-op-x (> a b))
+(define-interpreter-builtin-boolean-op-x (>= a b))
+(define-interpreter-builtin-boolean-op-x (= a b))
+(define-interpreter-builtin-boolean-op-x (/= a b))
+(define-interpreter-builtin-op-x (rem a b))
+(define-interpreter-builtin-op-x (truncate a b))
+(define-interpreter-builtin-op-x (ash a b))
+(define-interpreter-builtin-op-x (logand a b))
+(define-interpreter-builtin-op-x (logior a b))
+(define-interpreter-builtin-op-x (logxor a b))
 
-(define-interpreter-builtin-boolean-op character?)
-(define-interpreter-builtin-op character-code)
-(define-interpreter-builtin-op code-character)
+(define-interpreter-builtin-form +
+  (if (null? args)
+      0
+      (let* ((args1 (cdr args)))
+        (if (null? args1)
+            (eval-form-aux (car args) env false)
+            (let* ((args2 (cdr args1)))
+              (if (null? args2)
+                  (+ (eval-form-aux (car args) env false)
+                     (eval-form-aux (car args1) env false))
+                  (apply (function +) (eval-forms args env))))))))
 
-(define-interpreter-builtin-boolean-op string?)
-(define-interpreter-builtin-op make-string)
-(define-interpreter-builtin-op string-length)
-(define-interpreter-builtin-op raw-string-ref string-ref)
-(define-interpreter-builtin-op raw-string-set! string-set!)
-(define-interpreter-builtin-op raw-string-copy string-copy)
+;; * and - are much less common that +, so it's not a win to have a
+;; streamlined implementation.
+(define-interpreter-builtin-form *
+ (apply (function *) (eval-forms args env)))
 
-(define-interpreter-builtin-boolean-op vector?)
-(define-interpreter-builtin-op make-vector)
-(define-interpreter-builtin-op vector-length)
-(define-interpreter-builtin-op raw-vector-ref vector-ref)
-(define-interpreter-builtin-op raw-vector-set! vector-set!)
-(define-interpreter-builtin-op raw-vector-copy vector-copy)
+(define-interpreter-builtin-form -
+  (apply (function -) (eval-forms args env)))
 
-(define-interpreter-builtin-op raw-write-substring)
-(define-interpreter-builtin-var raw-stdout raw-stdout)
-(define-interpreter-builtin-var raw-stderr raw-stderr)
-(define-interpreter-builtin-op raw-read-substring)
-(define-interpreter-builtin-var raw-stdin raw-stdin)
-(define-interpreter-builtin-op open-file-for-reading)
-(define-interpreter-builtin-op close-file)
+(define-interpreter-builtin-boolean-op-x (character? a))
+(define-interpreter-builtin-op-x (character-code a))
+(define-interpreter-builtin-op-x (code-character a))
 
-(define-interpreter-builtin-op apply (func . args)
-  (funcall func (apply (function list*) args)))
+(define-interpreter-builtin-boolean-op-x (string? a))
+(define-interpreter-builtin-op-x (make-string a init))
+(define-interpreter-builtin-op-x (string-length a))
+(define-interpreter-builtin-op-x (raw-string-ref a b) string-ref)
+(define-interpreter-builtin-op-x (raw-string-set! a b c)  string-set!)
+(define-interpreter-builtin-op-x (raw-string-copy a b c d e) string-copy)
+
+(define-interpreter-builtin-boolean-op-x (vector? a))
+(define-interpreter-builtin-op-x (make-vector a init))
+(define-interpreter-builtin-op-x (vector-length a))
+(define-interpreter-builtin-op-x (raw-vector-ref a b) vector-ref)
+(define-interpreter-builtin-op-x (raw-vector-set! a b c) vector-set!)
+(define-interpreter-builtin-op-x (raw-vector-copy a b c d e) vector-copy)
+
+(define-interpreter-builtin-op-x (raw-write-substring a b c d))
+(define-interpreter-builtin-op-x (raw-read-substring a b c d))
+(define-interpreter-builtin-op-x (open-file-for-reading a))
+(define-interpreter-builtin-op-x (close-file a))
+(register-interpreter-builtin-var 'raw-stdout raw-stdout)
+(register-interpreter-builtin-var 'raw-stderr raw-stderr)
+(register-interpreter-builtin-var 'raw-stdin raw-stdin)
+
+(define-interpreter-builtin-form apply
+  (funcall (eval-form-aux (car args) env false)
+           (apply (function list*) (eval-forms (cdr args) env))))

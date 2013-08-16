@@ -46,6 +46,11 @@
   (define (close-file fd)
     (syscall-close fd)))
 
+(when-interpreting
+  (reify (raw-write-substring a b c d))
+  (reify (raw-read-substring a b c d))
+  (reify (open-file-for-reading a))
+  (reify (close-file a)))
 
 ;;; Output streams
 

@@ -21,9 +21,11 @@
 (defmacro (funcall . form) form)
 (defmacro (function f) f)
 
+(defmacro subject-language true)
+
 (defmacro (subject-language-boolean bool) bool)
-(defmacro (subject-language-symbol-name sym) (list 'symbol-name sym))
-(defmacro (subject-language-intern str) (list 'intern str))
+(define (subject-language-symbol-name sym) (symbol-name sym))
+(define (subject-language-intern str) (intern str))
 (defmacro (string-symbolcase str) str)
 
 ;; Dont have a pretty-printer, currently

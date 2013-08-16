@@ -9,6 +9,8 @@
 (define-symbol-macro false nil)
 (define-symbol-macro unspecified 'unspecified)
 
+(define-symbol-macro subject-language false)
+
 (defun subject-language-boolean (sym)
   (not (eq sym 'false)))
 
