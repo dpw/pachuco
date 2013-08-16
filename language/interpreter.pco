@@ -73,7 +73,7 @@
     (funcall (car evaled-subforms) (cdr evaled-subforms))))
 
 (define-interpreter-builtin-form begin
-  (eval-body args (cons (make-symboltable) env)))
+  (eval-body args (cons false env)))
 
 (define-interpreter-builtin-form definitions
   (unless in-body (error "definitions not in body"))
@@ -83,11 +83,12 @@
   (unless in-body (error "define not in body"))
   (let* ((var (first args))
          (val (if (null? (cdr args)) unspecified
-                  (eval-form (second args) env))))
+                  (eval-form (second args) env)))
+         (st (car env)))
     (unless (symbol? var) (error "bad variable name ~S" var))
-    (when (symboltable-ref (car env) var)
-      (error "variable ~S already bound" var))
-    (symboltable-set! (car env) var (cons val ()))
+    (unless st (rplaca env (set! st (make-symboltable))))
+    (when (symboltable-ref st var) (error "variable ~S already bound" var))
+    (symboltable-set! st var (cons val ()))
     val))
 
 (define-interpreter-builtin-form set!

@@ -47,5 +47,7 @@
 
 (define (symboltable-list-ref l sym)
   (and (not (null? l))
-       (let* ((res (symboltable-ref (car l) sym)))
-         (or res (symboltable-list-ref (cdr l) sym)))))
+       (let* ((st (car l)))
+         (or (and st (symboltable-ref st sym))
+             (symboltable-list-ref (cdr l) sym)))))
+
