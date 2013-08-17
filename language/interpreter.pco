@@ -9,7 +9,7 @@
 
 (defmacro (define-interpreter-builtin-form keyword . body)
   (quasiquote (register-interpreter-builtin '(unquote keyword)
-                                            (lambda (foo args env in-body)
+                                            (lambda (args env in-body)
                                               (unquote-splicing body)))))
 
 (define interpreter-builtin-vars (make-symboltable))
@@ -28,7 +28,7 @@
                               (symboltable-ref interpreter-builtin-forms
                                                keyword))))
            (if builtin
-               (funcall builtin keyword args env in-body)
+               (funcall builtin args env in-body)
                (eval-call form env))))
         ((symbol? form)
          (let* ((cell (symboltable-list-ref env form)))
@@ -122,12 +122,12 @@
   (insufficient-args keyword))
 
 (define (interpreter-builtin-op-0 keyword func)
-  (lambda (foo args env in-body)
+  (lambda (args env in-body)
     (unless (null? args) (excess-args keyword))
     (funcall func)))
 
 (define (interpreter-builtin-op-1 keyword func)
-  (lambda (foo args env in-body)
+  (lambda (args env in-body)
     (cond ((null? args)
            (insufficient-args keyword))
           ((not (null? (cdr args)))
@@ -136,7 +136,7 @@
            (funcall func (eval-form-aux (car args) env false))))))
 
 (define (interpreter-builtin-op-2 keyword func)
-  (lambda (foo args env in-body)
+  (lambda (args env in-body)
     (when (null? args)
       (insufficient-args keyword))
     (let* ((args1 (cdr args)))
@@ -149,7 +149,7 @@
                       (eval-form-aux (car args1) env false)))))))
 
 (define (interpreter-builtin-op keyword func)
-  (lambda (foo args env in-body) (apply func (eval-forms args env))))
+  (lambda (args env in-body) (apply func (eval-forms args env))))
 
 (define (interpreter-builtin-for op)
   (let* ((n (length (cdr op))))
@@ -167,8 +167,8 @@
 (define (booleanize-interpreter-builtin func)
   (if subject-language
       func
-      (lambda (foo args env in-body)
-        (if (funcall func foo args env in-body) 'true 'false))))
+      (lambda (args env in-body)
+        (if (funcall func args env in-body) 'true 'false))))
 
 (defmacro (define-interpreter-builtin-boolean-op-x op)
   (quasiquote
