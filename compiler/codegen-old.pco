@@ -316,92 +316,98 @@
         l2)))
 
 (defmacro (define-operator template options . body)
-  (options-bind ((temp-regs ())
-                 (tail-form false)
-                 (temp-fixed-regs ()))
-                options
-    ;; define how to generate code for an operator
-    (let* ((name (car template))
-           (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
-           (param-specs (mapfor (p (cdr template))
-                          (if (pair? p) p (list p 'reg))))
-           (param-names (mapfor (ps param-specs) (first ps)))
-           (have-fixed-regs (or (not (null? temp-fixed-regs))
-                                (findfor (ps param-specs)
-                                  (eq? 'fixed-reg (second ps)))))
-           (outpos (and (not tail-form)
-                        (let* ((out (last-elem body)))
-                          (and (symbol? out) (position out params)))))
-           (operand-constraints-name
-                                 (compound-symbol name "-operand-constraints"))
-           (registers-name (compound-symbol name "-registers"))
-           (define-reg-use-name (if tail-form
-                                    'define-reg-use-discarding
-                                    'define-reg-use))
-           (define-codegen-name (if tail-form
-                                    'define-codegen-discarding
-                                    'define-codegen)))
+  (if (and (null? (cdr template)) (null? options))
+      ;; A simple no-args operator.  We don't need the full codegen
+      ;; machinery for this.
       (quasiquote (definitions
-        ;; The operand-constraints for an operator is a list of
-        ;; functions, each of which converts a general machine operand
-        ;; (immediate, register or memory) into a form suitable for the
-        ;; corresponding operand of the operation.
-        (define (unquote operand-constraints-name)
-          (list (unquote-splicing
-            (mapfor (ps param-specs)
-              (list 'function (compound-symbol (second ps)
-                                               "-operand-constraint"))))))
+        (define-reg-use ((unquote (car template)) attrs) 1)
 
-        ;; For an operator with fixed-regs operands, we need a register
-        ;; list that makes sure the right operands end up in the right
-        ;; registers.
-        (unquote-splicing (if (not have-fixed-regs) () (quasiquote (
-          (define (unquote registers-name)
-            (make-registers-from-template
-              (list (unquote-splicing (mapfor (ps param-specs)
-                                        (if (eq? 'fixed-reg (second ps))
-                                            (third ps)
-                                            false)))
-                    (unquote-splicing temp-fixed-regs))
-              general-registers))))))
+        (define-codegen ((unquote (car template)) attrs)
+          (let* ((result reg))
+            . (unquote body)))))
+      (options-bind ((temp-regs ())
+                     (tail-form false)
+                     (temp-fixed-regs ()))
+                    options
+        ;; define how to generate code for an operator
+        (let* ((name (car template))
+               (params (mapfor (p (cdr template)) (if (pair? p) (first p) p)))
+               (param-specs (mapfor (p (cdr template))
+                                    (if (pair? p) p (list p 'reg))))
+               (param-names (mapfor (ps param-specs) (first ps)))
+               (have-fixed-regs (or (not (null? temp-fixed-regs))
+                                    (findfor (ps param-specs)
+                                             (eq? 'fixed-reg (second ps)))))
+               (outpos (and (not tail-form)
+                            (let* ((out (last-elem body)))
+                              (and (symbol? out) (position out params)))))
+               (operand-constraints-name
+                                 (compound-symbol name "-operand-constraints"))
+               (registers-name (compound-symbol name "-registers")))
+          (quasiquote (definitions
+            ;; The operand-constraints for an operator is a list of
+            ;; functions, each of which converts a general machine operand
+            ;; (immediate, register or memory) into a form suitable for the
+            ;; corresponding operand of the operation.
+            (define (unquote operand-constraints-name)
+              (list (unquote-splicing
+                     (mapfor (ps param-specs)
+                             (list 'function (compound-symbol (second ps)
+                                                     "-operand-constraint"))))))
 
-        ((unquote define-reg-use-name) ((unquote name) attrs
-                                        (unquote-splicing params))
-          (unquote (cond (have-fixed-regs
-                          '(begin (operator-args-reg-use form)
-                                  general-register-count))
-                         (tail-form
-                          '(begin (operator-args-reg-use form)
-                                  0))
-                         (true
-                           (quasiquote (max (operator-args-reg-use form)
-                                            (unquote (+ (length param-specs)
+            ;; For an operator with fixed-regs operands, we need a register
+            ;; list that makes sure the right operands end up in the right
+            ;; registers.
+            (unquote-splicing (if (not have-fixed-regs) () (quasiquote (
+              (define (unquote registers-name)
+                (make-registers-from-template
+                  (list (unquote-splicing (mapfor (ps param-specs)
+                                            (if (eq? 'fixed-reg (second ps))
+                                                (third ps)
+                                                false)))
+                        (unquote-splicing temp-fixed-regs))
+                  general-registers))))))
+
+            ((unquote (if tail-form
+                          'define-reg-use-discarding
+                          'define-reg-use))
+               ((unquote name) attrs (unquote-splicing params))
+             (unquote (cond (have-fixed-regs
+                             '(begin (operator-args-reg-use form)
+                               general-register-count))
+                            (tail-form
+                             '(begin (operator-args-reg-use form)
+                               0))
+                            (true
+                             (quasiquote (max (operator-args-reg-use form)
+                                              (unquote (+ (length param-specs)
                                                       (length temp-regs)))))))))
 
-        ((unquote define-codegen-name)
-           ((unquote name) attrs (unquote-splicing params))
-          ;; manipulate the register list as required
-          (unquote
-            (cond (have-fixed-regs
-                   ;; if we have fixed regs, we need to use the special
-                   ;; register list
-                   (quasiquote (set! regs (unquote registers-name))))
-                  (outpos
-                   ;; shuffle regs so that the result reg corresponds to
-                   ;; the output parameter
-                   (quasiquote
-                     (set! regs (move-to-position regs (unquote outpos) reg))))
-                  (true
-                   (begin))))
+            ((unquote (if tail-form 'define-codegen-discarding
+                          'define-codegen))
+             ((unquote name) attrs (unquote-splicing params))
+             ;; manipulate the register list as required
+             (unquote
+               (cond (have-fixed-regs
+                      ;; if we have fixed regs, we need to use the special
+                      ;; register list
+                      (quasiquote (set! regs (unquote registers-name))))
+                     (outpos
+                      ;; shuffle regs so that the result reg corresponds to
+                      ;; the output parameter
+                      (quasiquote (set! regs
+                                 (move-to-position regs (unquote outpos) reg))))
+                     (true
+                      (begin))))
 
-          (bind ((unquote-splicing param-names)
-                 (unquote-splicing (mapfor (r temp-fixed-regs) (gensym)))
-                 (unquote-splicing temp-regs)
-                 . spare-regs)
-                (operator-args-codegen form cg regs
-                                       (unquote operand-constraints-name))
-            (let* (unquote (if tail-form () '((result reg))))
-              (unquote-splicing body)))))))))
+             (bind ((unquote-splicing param-names)
+                    (unquote-splicing (mapfor (r temp-fixed-regs) (gensym)))
+                    (unquote-splicing temp-regs)
+                    . spare-regs)
+                   (operator-args-codegen form cg regs
+                                          (unquote operand-constraints-name))
+               (let* (unquote (if tail-form () '((result reg))))
+                 (unquote-splicing body))))))))))
 
 (defmacro (define-cc-operator template options . body)
   ;; define how to generate code for an operator that is free of
