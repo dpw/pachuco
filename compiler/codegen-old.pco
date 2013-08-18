@@ -378,7 +378,8 @@
                                             (unquote (+ (length param-specs)
                                                       (length temp-regs)))))))))
 
-        (define-codegen ((unquote name) attrs (unquote-splicing params))
+        ((unquote define-codegen-name)
+           ((unquote name) attrs (unquote-splicing params))
           ;; manipulate the register list as required
           (unquote
             (cond (have-fixed-regs
@@ -399,7 +400,7 @@
                  . spare-regs)
                 (operator-args-codegen form cg regs
                                        (unquote operand-constraints-name))
-            (let* ((result reg))
+            (let* (unquote (if tail-form () '((result reg))))
               (unquote-splicing body)))))))))
 
 (defmacro (define-cc-operator template options . body)
