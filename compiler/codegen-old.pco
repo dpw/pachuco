@@ -379,7 +379,10 @@
                              '(begin (operator-args-reg-use form)
                                0))
                             (true
-                             (quasiquote (max (operator-args-reg-use form)
+                             ;; We always need at least one register for
+                             ;; the result reg
+                             (quasiquote (max 1
+                                              (operator-args-reg-use form)
                                               (unquote (+ (length param-specs)
                                                       (length temp-regs)))))))))
 
