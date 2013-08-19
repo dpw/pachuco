@@ -20,19 +20,19 @@
     (quasiquote (definitions
       (define (unquote symtab-name) (make-symboltable))
 
-      (define ((unquote form-name) form (unquote-splicing implicit-vars))
+      (define ((unquote form-name) form . (unquote implicit-vars))
         (let* ((f (symboltable-ref (unquote symtab-name) (car form))))
           (if f
-              (funcall f form (unquote-splicing implicit-vars))
-              ((unquote recurse-name) form (unquote-splicing implicit-vars)))))
+              (funcall f form . (unquote implicit-vars))
+              ((unquote recurse-name) form . (unquote implicit-vars)))))
 
       (defmacro ((unquote define-name) template . body)
         (quasiquote
           (set-walker-symtab-entries (unquote (unquote symtab-name))
             '(unquote (car template))
-            (lambda (form (unquote-splicing (unquote implicit-vars)))
+            (lambda (form . (unquote (unquote implicit-vars)))
               (bind (unquote (cdr template)) (cdr form)
-                (unquote-splicing body))))))))))
+                . (unquote body))))))))))
 
 ;;; define-trivial-walker is like define-walker, but it also provides
 ;;; a recusrion function that does a straightforward recursion into
@@ -45,10 +45,10 @@
     (quasiquote (definitions
       (define-walker (unquote name) (unquote implicit-vars))
 
-      (define ((unquote forms-name) forms (unquote-splicing implicit-vars))
+      (define ((unquote forms-name) forms . (unquote implicit-vars))
         (dolist (form forms)
-          ((unquote form-name) form (unquote-splicing implicit-vars))))
+          ((unquote form-name) form . (unquote implicit-vars))))
 
-      (define ((unquote recurse-name) form (unquote-splicing implicit-vars))
-        ((unquote forms-name) (cddr form) (unquote-splicing implicit-vars)))))))
+      (define ((unquote recurse-name) form . (unquote implicit-vars))
+        ((unquote forms-name) (cddr form) . (unquote implicit-vars)))))))
 

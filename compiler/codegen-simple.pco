@@ -29,7 +29,7 @@
                                 (unquote out-frame-base) (unquote reg))))
 
 (defmacro (define-trashy-codegen template . body)
-  (quasiquote (define-codegen (unquote template) (unquote-splicing body))))
+  (quasiquote (define-codegen (unquote template) . (unquote body))))
 
 ;;; Begin
 
@@ -116,10 +116,10 @@
                                         (if (eq? 'fixed-reg (second ps))
                                             (third ps)
                                             false)))
-                    (unquote-splicing temp-fixed-regs))
+                    . (unquote temp-fixed-regs))
               general-registers))
 
-        (define-codegen ((unquote name) attrs (unquote-splicing param-names))
+        (define-codegen ((unquote name) attrs . (unquote param-names))
           (codegen-operator-args cg (cddr form) (unquote registers-name))
           (bind ((unquote-splicing param-names)
                  (unquote-splicing temp-fixed-regs)
@@ -127,13 +127,13 @@
                  . spare-regs)
                 (unquote registers-name)
             (let* ((result main-reg))
-              (unquote-splicing body)))))))))
+              . (unquote body)))))))))
 
 (defmacro (define-cc-operator template options . body)
   (quasiquote
     (define-operator (unquote template) ((temp-regs reg))
       (emit-prepare-convert-cc-value cg reg)
-      (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
+      (emit-convert-cc-value cg (begin . (unquote body)) reg)
       reg)))
 
 ;;; Misc

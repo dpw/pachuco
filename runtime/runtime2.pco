@@ -36,7 +36,7 @@
          (state (gensym)))              ; state of the current option
     (quasiquote
       (let* (((unquote opts-state)
-              (list (unquote-splicing
+              (list . (unquote
                       (mapfor (os option-specs)
                         (quasiquote (list* '(unquote (first os)) false
                                            (unquote (second os)))))))))
@@ -56,7 +56,7 @@
             (rplacd (cdr (unquote state)) (unquote val))))
         (bind (unquote (mapfor (os option-specs) (first os)))
               (nmapfor (x (unquote opts-state)) (cddr x))
-          (unquote-splicing body))))))
+          . (unquote body))))))
 
 ;;; Simple struct support - just vectors with accessor functions
 
@@ -103,7 +103,7 @@
                               (cdr constructor)
                               ())))
       (quasiquote (definitions
-        (define ((unquote constr-name) (unquote-splicing constr-params))
+        (define ((unquote constr-name) . (unquote constr-params))
             (let* ((s (make-vector (unquote num-fields) false)))
               (unquote-splicing (struct-field-initializers fields 0))
               (unquote-splicing
@@ -112,7 +112,7 @@
                         (struct-field-position cp fields 0) cp)))
               s))
 
-        (unquote-splicing (struct-accessor-definitions struct fields 0)))))))
+        . (unquote (struct-accessor-definitions struct fields 0)))))))
 
 ;;; hash tables
 
@@ -195,7 +195,7 @@
   (quasiquote
     (for-hashtable-call (unquote (third k-v-ht))
       (lambda ((unquote (first k-v-ht)) (unquote (second k-v-ht)))
-        (unquote-splicing body)))))
+        . (unquote body)))))
 
 (define (string-hash str)
   (string-range-hash str 0 (string-length str)))

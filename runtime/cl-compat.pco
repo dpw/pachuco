@@ -6,14 +6,14 @@
                                           (if (pair? binding)
                                               (cons 'define binding)
                                               (list 'define binding))))
-                (unquote-splicing body))))
+                . (unquote body))))
 
 (defmacro (labels funcs . body)
   (quasiquote (begin
                 (unquote-splicing
                   (mapfor (func funcs)
                     (list* 'define (cons (car func) (cadr func)) (cddr func))))
-                (unquote-splicing body))))
+                . (unquote body))))
 
 (defmacro (defconstant name val)
   (quasiquote (defmacro (unquote name) (unquote val))))

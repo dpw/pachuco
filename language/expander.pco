@@ -12,7 +12,7 @@
   (quasiquote
     (symboltable-set! builtin-expanders (unquote keyword)
                       (lambda (form keyword args dual-env)
-                        (unquote-splicing body)))))
+                        . (unquote body)))))
 
 (define (add-form-expander macro-env keyword expander)
   (unless (caar macro-env) (rplaca (car macro-env) (make-symboltable)))

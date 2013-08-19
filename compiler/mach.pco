@@ -6,7 +6,7 @@
 (define (register-definition name variants)
   (quasiquote
     (define (unquote name)
-      (vector (quote (unquote name)) (unquote false) (unquote-splicing variants)))))
+      (vector (quote (unquote name)) (unquote false) . (unquote variants)))))
 
 (defmacro (define-register name . variants)
   (register-definition name variants))
@@ -65,21 +65,21 @@
   (if (string? template)
       (quasiquote
         (formout stdout (unquote (string-concat template "~%"))
-                 (unquote-splicing args)))
+                 . (unquote args)))
       (quasiquote
         (begin
-          (formout stdout (unquote template) (unquote-splicing args))
+          (formout stdout (unquote template) . (unquote args))
           (formout stdout "~%")))))
 
 (defmacro (emit cg template . args)
   (quasiquote (begin
     (flush-labels-and-jumps (unquote cg))
-    (emit-without-flushing (unquote template) (unquote-splicing args)))))
+    (emit-without-flushing (unquote template) . (unquote args)))))
 
 (defmacro (emit-comment cg template . args)
   (quasiquote
     (formout stdout (unquote (string-concat "# " template "~%"))
-             (unquote-splicing args))))
+             . (unquote args))))
 
 (defmacro (with-saved-frame-base cg . body)
   (let* ((orig-frame-base (gensym)))

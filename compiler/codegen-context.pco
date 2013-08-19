@@ -40,7 +40,7 @@
                                 (unquote out-frame-base) (unquote reg))))
 
 (defmacro (define-trashy-codegen template . body)
-  (quasiquote (define-codegen (unquote template) (unquote-splicing body))))
+  (quasiquote (define-codegen (unquote template) . (unquote body))))
 
 ;;; Begin
 
@@ -152,10 +152,10 @@
                                         (if (eq? 'fixed-reg (second ps))
                                             (third ps)
                                             false)))
-                    (unquote-splicing temp-fixed-regs))
+                    . (unquote temp-fixed-regs))
               general-registers))
 
-        (define-codegen ((unquote name) attrs (unquote-splicing param-names))
+        (define-codegen ((unquote name) attrs . (unquote param-names))
           (codegen-operator-args cg (cddr form) (unquote registers-name))
           (bind ((unquote-splicing param-names)
                  (unquote-splicing temp-fixed-regs)
@@ -163,7 +163,7 @@
                  . spare-regs)
                 (unquote registers-name)
             (let* ((result main-reg))
-              (unquote-splicing body)))))))))
+              . (unquote body)))))))))
 
 (defmacro (define-cc-operator template options . body)
   (let* ((name (car template))
@@ -172,20 +172,20 @@
                               (if (pair? p) p (list p 'reg))))
          (param-names (mapfor (ps param-specs) (first ps))))
     (quasiquote (definitions
-      (define-codegen ((unquote name) attrs (unquote-splicing param-names))
+      (define-codegen ((unquote name) attrs . (unquote param-names))
         (codegen-operator-args cg (cddr form) general-registers)
         (bind ((unquote-splicing param-names) result-reg . spare-regs)
               general-registers
           (emit-prepare-convert-cc-value cg result-reg)
-          (emit-convert-cc-value cg (begin (unquote-splicing body)) result-reg)
+          (emit-convert-cc-value cg (begin . (unquote body)) result-reg)
           result-reg))
 
       (define-codegen-conditional ((unquote name) attrs
-                                   (unquote-splicing param-names))
+                                   . (unquote param-names))
         (codegen-operator-args cg (cddr form) general-registers)
         (bind ((unquote-splicing param-names) . spare-regs)
               general-registers
-          (let* ((cc (begin (unquote-splicing body))))
+          (let* ((cc (begin . (unquote body))))
             (emit-smart-branch cg cc out-frame-base tlabel flabel))))))))
 
 ;;; Misc

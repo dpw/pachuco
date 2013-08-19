@@ -68,7 +68,7 @@
       general-register-count)
 
     (define-codegen (unquote template)
-      (unquote-splicing body)))))
+      . (unquote body)))))
 
 ;;; Begin
 
@@ -350,7 +350,7 @@
             ;; (immediate, register or memory) into a form suitable for the
             ;; corresponding operand of the operation.
             (define (unquote operand-constraints-name)
-              (list (unquote-splicing
+              (list . (unquote
                      (mapfor (ps param-specs)
                              (list 'function (compound-symbol (second ps)
                                                      "-operand-constraint"))))))
@@ -358,20 +358,20 @@
             ;; For an operator with fixed-regs operands, we need a register
             ;; list that makes sure the right operands end up in the right
             ;; registers.
-            (unquote-splicing (if (not have-fixed-regs) () (quasiquote (
+            (unquote (if (not have-fixed-regs) '(definitions) (quasiquote
               (define (unquote registers-name)
                 (make-registers-from-template
                   (list (unquote-splicing (mapfor (ps param-specs)
                                             (if (eq? 'fixed-reg (second ps))
                                                 (third ps)
                                                 false)))
-                        (unquote-splicing temp-fixed-regs))
-                  general-registers))))))
+                        . (unquote temp-fixed-regs))
+                  general-registers)))))
 
             ((unquote (if tail-form
                           'define-reg-use-discarding
                           'define-reg-use))
-               ((unquote name) attrs (unquote-splicing params))
+               ((unquote name) attrs . (unquote params))
              (unquote (cond (have-fixed-regs
                              '(begin (operator-args-reg-use form)
                                general-register-count))
@@ -388,7 +388,7 @@
 
             ((unquote (if tail-form 'define-codegen-discarding
                           'define-codegen))
-             ((unquote name) attrs (unquote-splicing params))
+             ((unquote name) attrs . (unquote params))
              ;; manipulate the register list as required
              (unquote
                (cond (have-fixed-regs
@@ -410,7 +410,7 @@
                    (operator-args-codegen form cg regs
                                           (unquote operand-constraints-name))
                (let* (unquote (if tail-form () '((result reg))))
-                 (unquote-splicing body))))))))))
+                 . (unquote body))))))))))
 
 (defmacro (define-cc-operator template options . body)
   ;; define how to generate code for an operator that is free of
@@ -427,35 +427,35 @@
            (compound-symbol name "-operand-constraints")))
     (quasiquote (definitions
       (define (unquote operand-constraints-name)
-        (list (unquote-splicing
+        (list . (unquote
           (mapfor (ps param-specs)
             (list 'function (compound-symbol (second ps)
                                              "-operand-constraint"))))))
 
-      (define-reg-use ((unquote name) attrs (unquote-splicing params))
+      (define-reg-use ((unquote name) attrs . (unquote params))
         ;; converting from a CC to a reg value needs an extra register
         ;; over the body
         (max (unquote (1+ params-count)) (operator-args-reg-use form)))
 
-      (define-codegen ((unquote name) attrs (unquote-splicing param-names))
+      (define-codegen ((unquote name) attrs . (unquote param-names))
         (set! regs (move-to-position regs (unquote params-count) reg))
         (bind ((unquote-splicing param-names) result . spare-regs)
               (operator-args-codegen form cg regs
                                      (unquote operand-constraints-name))
           (emit-prepare-convert-cc-value cg reg)
-          (emit-convert-cc-value cg (begin (unquote-splicing body)) reg)
+          (emit-convert-cc-value cg (begin . (unquote body)) reg)
           reg))
 
       (define-reg-use-conditional ((unquote name) attrs
-                                   (unquote-splicing param-names))
+                                   . (unquote param-names))
         (max (unquote params-count) (operator-args-reg-use form)))
 
       (define-codegen-conditional ((unquote name) attrs
-                                   (unquote-splicing param-names))
+                                   . (unquote param-names))
         (bind ((unquote-splicing param-names) . spare-regs)
               (operator-args-codegen form cg regs
                                      (unquote operand-constraints-name))
-          (let* ((cc (begin (unquote-splicing body))))
+          (let* ((cc (begin . (unquote body))))
             (emit-smart-branch cg cc out-frame-base tlabel flabel))))))))
 
 

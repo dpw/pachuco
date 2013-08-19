@@ -10,7 +10,7 @@
 (defmacro (define-interpreter-builtin-form keyword . body)
   (quasiquote (register-interpreter-builtin '(unquote keyword)
                                             (lambda (args env in-body)
-                                              (unquote-splicing body)))))
+                                              . (unquote body)))))
 
 (define interpreter-builtin-vars (make-symboltable))
 

@@ -9,7 +9,7 @@
   (defmacro (checked-syscall name . args)
     (quasiquote
       (check-syscall-result (unquote name)
-        (raw->fixnum (c-call (unquote name) (unquote-splicing args))))))
+        (raw->fixnum (c-call (unquote name) . (unquote args))))))
 
   (defmacro (define-syscall-read-write name sysname)
     (quasiquote (define ((unquote name) fd str offset len)
@@ -313,7 +313,7 @@
         (set! args (cdr args))
         arg)
 
-      (unquote-splicing
+      . (unquote
         (generate-formout-parser 'control
           ;; to-write-substring
           (lambda (str pos len)
@@ -369,9 +369,9 @@
                (lambda (template)
                  (quasiquote
                    (push-stmt ((unquote template) os (consume-arg)))))))
-          stmts)
+           stmts)
           (quasiquote (formout-list (unquote os) (unquote control)
-                                    (list (unquote-splicing args))))))))
+                                    (list . (unquote args))))))))
 (generate-formout-macro)
 
 (define (formout ostr control . args)
@@ -390,7 +390,7 @@
   (quasiquote
     (begin
       (define (unquote buf) (make-buffer-ostream))
-      (formout (unquote buf) (unquote control) (unquote-splicing args))
+      (formout (unquote buf) (unquote control) . (unquote args))
       (buffer-ostream-to-string (unquote buf)))))
 
 (set! (error message . args)

@@ -188,10 +188,10 @@
                                            (unquote b)))))))))
 
 (defmacro (when test . rest)
-  (quasiquote (if (unquote test) (begin (unquote-splicing rest)))))
+  (quasiquote (if (unquote test) (begin . (unquote rest)))))
 
 (defmacro (unless test . rest)
-  (quasiquote (if (not (unquote test)) (begin (unquote-splicing rest)))))
+  (quasiquote (if (not (unquote test)) (begin . (unquote rest)))))
 
 ;;; Control structures
 
@@ -205,7 +205,7 @@
                ((unquote name)))))
 
 (defmacro (until test . rest)
-  (quasiquote (while (not (unquote test)) (unquote-splicing rest))))
+  (quasiquote (while (not (unquote test)) . (unquote rest))))
 
 (define (identity x) x)
 
@@ -351,7 +351,7 @@
       (until (null? (unquote l))
         (begin
           (define (unquote (first binding)) (car (unquote l)))
-          (unquote-splicing body))
+          . (unquote body))
         (set! (unquote l) (cdr (unquote l)))))))
 
 (defmacro (mapfor binding . body)
@@ -365,7 +365,7 @@
     (if (null? (unquote in)) ()
         (begin
           (define ((unquote bodyf) (unquote (first binding)))
-              (unquote-splicing body))
+              . (unquote body))
 
           (define (unquote out)
               (cons ((unquote bodyf) (car (unquote in))) ()))
@@ -388,14 +388,14 @@
     (define ((unquote loopf) (unquote l))
       (unless (null? (unquote l))
         (define (unquote (first binding)) (car (unquote l)))
-        (rplaca (unquote l) (begin (unquote-splicing body)))
+        (rplaca (unquote l) (begin . (unquote body)))
         ((unquote loopf) (cdr (unquote l)))))
     (define (unquote l) (unquote (second binding)))
     ((unquote loopf) (unquote l))
     (unquote l))))
 
 (defmacro (flatten*-mapfor binding . body)
-  (quasiquote (flatten* (mapfor (unquote binding) (unquote-splicing body)))))
+  (quasiquote (flatten* (mapfor (unquote binding) . (unquote body)))))
 
 (defmacro (findfor binding . body)
   (define loopf (gensym))
@@ -404,14 +404,14 @@
     (define ((unquote loopf) (unquote l))
       (if (null? (unquote l)) false
           (begin (define (unquote (first binding)) (car (unquote l)))
-                 (if (begin (unquote-splicing body)) (unquote (first binding))
+                 (if (begin . (unquote body)) (unquote (first binding))
                      ((unquote loopf) (cdr (unquote l)))))))
     ((unquote loopf) (unquote (second binding))))))
 
 (defmacro (filterfor binding . body)
   (quasiquote
     (flatten*-mapfor (unquote binding)
-      (if (begin (unquote-splicing body))
+      (if (begin . (unquote body))
           (list (unquote (first binding)))
           ()))))
 
@@ -426,7 +426,7 @@
        (if (not (null? (unquote in)))
          ((unquote loopf) (cdr (unquote in))
            (if (begin (define (unquote (first binding)) (car (unquote in)))
-                      (unquote-splicing body))
+                      . (unquote body))
                (begin (rplacd (unquote out-tail) (unquote in))
                       (unquote in))
                (unquote out-tail)))
@@ -782,5 +782,5 @@
 ;; Not a full destructuring-bind
 (defmacro (bind vars values . body)
   (quasiquote
-    (apply (lambda (unquote vars) (unquote-splicing body)) (unquote values))))
+    (apply (lambda (unquote vars) . (unquote body)) (unquote values))))
 

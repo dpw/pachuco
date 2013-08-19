@@ -116,7 +116,7 @@
         (quasiquote
           (list (unquote tag) (unquote bits)
                 ((unquote (second type-gc)) (unquote tag) (unquote bits)
-                                        (unquote-splicing (cddr type-gc)))))))
+                                        . (unquote (cddr type-gc)))))))
 
     (quasiquote
       (define (construct-gc-type-table)
@@ -124,7 +124,7 @@
           (list 0 0 (lambda (val)
                       (error "unknown type with tag ~D"
                              (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
-          (unquote-splicing tbf-form)))
+          . (unquote tbf-form)))
         (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
         (define table-size (ash 1 max-bits))
         (set! gc-type-table (make-vector table-size false))
@@ -167,7 +167,7 @@
               ;; the first word contains the forwarding reference
               (unquote to-val)
               ;; copy
-              (begin (unquote-splicing copier)))))))
+              (begin . (unquote copier)))))))
 
   (define-gc-types
     (number gc-identity-type)

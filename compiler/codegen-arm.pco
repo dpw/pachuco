@@ -96,7 +96,7 @@
   (quasiquote
     (begin
       (check-instructions-since-pool (unquote cg))
-      (emit (unquote cg) (unquote template) (unquote-splicing args)))))
+      (emit (unquote cg) (unquote template) . (unquote args)))))
 
 (define (emit-push cg reg)
   (emiti cg "str ~A, [sp, #-4]!" (reg-asm-operand reg)))
