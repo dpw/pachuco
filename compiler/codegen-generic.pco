@@ -354,8 +354,16 @@
 (define (codegen-symbols cg)
   (emit-data cg "symbols_start" value-scale)
   (emit cg ".globl symbols_start")
-  (for-hashtable (sym lit emitted-symbols)
-    (emit-literal cg lit))
+
+  (let* ((sym-lits ()))
+    (for-hashtable (sym lit emitted-symbols)
+      (set! sym-lits (acons sym lit sym-lits)))
+
+    (dolist (sym-lit (sort sym-lits (lambda (a b)
+                                      (string< (symbol-name (car a))
+                                               (symbol-name (car b))))))
+      (emit-literal cg (cdr sym-lit))))
+
   (emit cg "symbols_end:")
   (emit cg ".global symbols_end"))
 

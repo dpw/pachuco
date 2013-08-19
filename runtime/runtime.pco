@@ -688,6 +688,21 @@
                     (compare-chars (1+ pos)))))
          (compare-chars 0))))
 
+(define (string< a b)
+  (define min-len (min (string-length a) (string-length b)))
+
+  (define (compare-chars pos)
+    (if (= pos min-len)
+        (< min-len (string-length b))
+        (begin
+          (define achar (raw-string-ref a pos))
+          (define bchar (raw-string-ref b pos))
+          (cond ((< achar bchar) true)
+                ((> achar bchar) false)
+                (true (compare-chars (1+ pos)))))))
+
+  (compare-chars 0))
+
 (define (string-flatten strs)
   (define pos 0)
   (dolist (str strs)

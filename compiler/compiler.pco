@@ -666,13 +666,16 @@
   (decompose-lambdas (third lambda-form) begin-form)
   (let* ((varargs? (form-attr lambda-form 'vararg))
          (labels (if (and varrec (varrec-top-level? varrec))
-                     (cons (make-label-for (car varrec)
-                                           indirect-function-label-prefix)
-                           (if varargs?
+                     (let* ((indirect-label (make-label-for (car varrec)
+                                               indirect-function-label-prefix)))
+                       (cons indirect-label
+                             (if varargs?
                                ()
                                (list (make-label-for (car varrec)
-                                               direct-function-label-prefix))))
-                     (cons (gen-label) (if varargs? () (list (gen-label))))))
+                                               direct-function-label-prefix)))))
+                     (let* ((indirect-label (gen-label)))
+                       (cons indirect-label
+                             (if varargs? () (list (gen-label)))))))
          (lambda-attrs (list* (cons 'labels labels)
                               (cons 'body (third lambda-form))
                               (second lambda-form))))
