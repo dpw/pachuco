@@ -455,13 +455,57 @@
             (aux l (cdr l))
             l))))
 
+(define (sort-aux reverse l pred)
+  (cond ((null? l) l)
+        ((null? (cdr l)) l)
+        ((null? (cddr l))
+         (define l1 (first l))
+         (define l2 (second l))
+         (if (if (pred l1 l2) (not reverse) reverse) l (list l2 l1)))
+
+        (true
+         ;; partition the list into two halves
+         (define l1 ())
+         (define l2 ())
+
+         (define (split l)
+           (unless (null? l)
+             (set! l1 (cons (car l) l1))
+             (set! l (cdr l))
+
+             (unless (null? l)
+               (set! l2 (cons (car l) l2))
+               (split (cdr l)))))
+
+         (split l)
+
+         ;; sort and merge the halves
+         (define (merge l1 l2 res)
+           (define t)
+           (when (if (pred (car l1) (car l2)) (not reverse) reverse)
+             (set! t l1)
+             (set! l1 l2)
+             (set! l2 t))
+
+           (set! t (cdr l1))
+           (if (null? t)
+               (nreverse l2 l1 res)
+               (merge t l2 (rplacd l1 res))))
+
+         (define (nreverse l c res)
+           (rplacd c res)
+           (if (null? l)
+               c
+               (nreverse (cdr l) l c)))
+
+         ;; merge reverses l1 and l2, so we need to pre-sort them in
+         ;; the opposite sense.
+         (define not-reverse (not reverse))
+         (merge (sort-aux not-reverse l1 pred) (sort-aux not-reverse l2 pred)
+                ()))))
+
 (define (sort l pred)
-  (if (null? l) l
-      (begin
-        (define pivot (car l))
-        (nconc (sort (filterfor (x (cdr l)) (pred x pivot)) pred)
-               (list pivot)
-               (sort (filterfor (x (cdr l)) (not (pred x pivot))) pred)))))
+  (sort-aux false l pred))
 
 (define (reverse l)
   (define (aux acc l)
