@@ -50,6 +50,13 @@
         (emit-mov-maybe cg operand reg)
         reg)))
 
+(define (reg-imm-operand-constraint cg operand reg)
+  (if (immediate? operand)
+      operand
+      (begin
+        (emit-mov-maybe cg operand reg)
+        reg)))
+
 (define (shift-expr shift)
   (cond ((= shift 0) "")
         ((> shift 0) (format ", asr #~D" shift))
@@ -763,15 +770,21 @@
 
 ;;; Misc runtime support
 
-(define-operator (fixnum->raw val) ()
-  (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
-        (reg-asm-operand val) number-tag-bits)
-  result)
+(define-operator (fixnum->raw (val reg-imm)) ()
+  (if (immediate? val)
+      (set! val (ash val (- number-tag-bits)))
+      (begin
+        (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
+               (reg-asm-operand val) number-tag-bits)
+        result)))
 
-(define-operator (raw->fixnum val) ()
-  (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
-        (reg-asm-operand val) number-tag-bits)
-  result)
+(define-operator (raw->fixnum (val reg-imm)) ()
+  (if (immediate? val)
+      (set! val (fixnum-representation val))
+      (begin
+        (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
+               (reg-asm-operand val) number-tag-bits)
+        result)))
 
 (define-operator (raw-label) ()
   (emiti cg "ldr ~A, =~A" (reg-asm-operand result) (attr-ref attrs 'name))
