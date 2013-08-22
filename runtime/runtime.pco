@@ -250,25 +250,31 @@
 
   (define (apply func arg1 . args)
     (define (count-args args)
-      (if (null? (cdr args)) (length (car args))
+      (if (null? (cdr args))
+          (length (car args))
           (1+ (count-args (cdr args)))))
 
-    (define (copy-final-args args args-base index)
+    (define (copy-final-args args addr)
       (unless (null? args)
-        (raw-vec-set! args-base index (car args))
-        (copy-final-args (cdr args) args-base (1+ index))))
+        (raw-set! addr (car args))
+        (copy-final-args (cdr args)
+                   (raw-+ addr (fixnum->raw (compiler-constant value-size))))))
 
-    (define (copy-args args args-base index)
-      (if (null? (cdr args)) (copy-final-args (car args) args-base index)
+    (define (copy-args args addr)
+      (if (null? (cdr args))
+          (copy-final-args (car args) addr)
           (begin
-            (raw-vec-set! args-base index (car args))
-            (copy-args (cdr args) args-base (1+ index)))))
+            (raw-set! addr (car args))
+            (copy-args (cdr args)
+                   (raw-+ addr (fixnum->raw (compiler-constant value-size)))))))
 
     (set! args (cons arg1 args))
     (define arg-count (count-args args))
     (raw-jump-with-arg-space raw-arg-count arg-count
       (lambda ()
-        (copy-args args (raw-args-base) 0)
+        (copy-args args (raw-args-base))
+        (set! args false)
+        (set! arg1 false)
         (raw-apply-jump func arg-count)))))
 
 ;;; Lists
