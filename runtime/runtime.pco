@@ -223,17 +223,30 @@
   (define (arity-mismatch nparams nargs)
     (error "expected ~S arguments, got ~S" nparams nargs))
 
+  (define (make-varargs-list addr bottom l)
+    (if (> addr bottom)
+        (begin
+         (set! addr (raw-- addr (fixnum->raw (compiler-constant value-size))))
+         (set! l (cons (raw-ref addr) l))
+         (raw-set! addr false)
+         (make-varargs-list addr bottom l))
+        l))
+
   (define (handle-varargs nparams nargs args-base)
     (when (< nargs nparams)
         (error "expected at least ~S arguments, got ~S" nparams nargs))
 
-    (define (make-varargs-list nargs l)
-      (if (/= nargs nparams)
-          (make-varargs-list (1- nargs)
-                             (cons (raw-vec-ref args-base (1- nargs)) l))
-          l))
-
-    (make-varargs-list nargs ()))
+    ;; (fixnum->raw (ash ...) leads to a sequence of two shifts, but
+    ;; that is better than the variable shift we would get it this is
+    ;; turned into a subtraction (there is no constant folding on
+    ;; subtractions).
+    (make-varargs-list (raw-+ args-base
+                              (fixnum->raw (ash nargs
+                                              (compiler-constant value-scale))))
+                       (raw-+ args-base
+                              (fixnum->raw (ash nparams
+                                              (compiler-constant value-scale))))
+                       ()))
 
   (define (apply func arg1 . args)
     (define (count-args args)
