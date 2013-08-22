@@ -571,34 +571,17 @@
                 (raw-make-box () (ref (unquote temprec))))))
 
 (define-introduce-boxes (lambda attrs body)
-  ;; Where a parameter should be boxed, we need to substitute the
-  ;; original parameter variable with a temporary parameter variable
-  ;; with a gensymmed name, and then add code to the lambda body to
-  ;; copy the parameter value from the temporary to the original
-  ;; parameter variable.
-  ;;
-  ;; When we add this copying code, we put it at the start of the
-  ;; wrapped-begin form that was provided by wrap-lambda-body.  (We
-  ;; don't want to put it right at the start of the lambda body
-  ;; because that would interfere with the magic of arg-count.)
+  ;; Where a parameter should be boxed, add a set! form at the start
+  ;; of the begin to box up the parameter value and then store a
+  ;; reference to the box back into the parameter.
+  (introduce-boxes body)
   (let* ((wrapped-begin (attr-ref attrs 'wrapped-begin)))
-    (nmapfor (varrec (attr-ref attrs 'params))
-      (if (varrec-boxed? varrec)
-          (let* ((temprec (list* (gensym)
-                                 (cons 'origin false)
-                                 (cons 'boxed false)
-                                 '((mode . param)))))
-            (varrec-attr-set! varrec 'mode 'local)
-            (rplaca (cdr wrapped-begin) (cons varrec (cadr wrapped-begin)))
-            ;; we just add a simple define - the introduce-boxes on
-            ;; the body below will find it and elaborate it with the
-            ;; make-box form.
-            (rplacd (cdr wrapped-begin)
-                    (cons (list 'define varrec (list 'ref temprec))
-                          (cddr wrapped-begin)))
-            temprec)
-          varrec)))
-  (introduce-boxes body))
+    (dolist (varrec (attr-ref attrs 'params))
+      (when (varrec-boxed? varrec)
+        (rplacd (cdr wrapped-begin)
+                (cons (list 'set! varrec
+                            (list 'raw-make-box () (list 'ref varrec)))
+                      (cddr wrapped-begin)))))))
 
 ;;; Decompose lambdas into alloc-closure and fill-closure forms.
 ;;;
