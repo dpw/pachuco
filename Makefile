@@ -61,7 +61,7 @@ SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 
 # The phase to stop at when dumping the intermediate program
-DUMP_PHASE=decompose-lambdas
+DUMP_PHASE=fill-closures
 
 .PHONY: all clean print-compiler-sources compare-stage3
 

@@ -329,44 +329,25 @@
 
 ;;; Functions and closures
 
-(define-operator (alloc-closure)
-                 ((temp-regs alloc)
-                  (temp-fixed-regs %a %c %di)
-                  )
-  (let* ((slot-count (length (attr-ref attrs 'closure))))
-    (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count)) alloc
-                (list* %a %c %di spare-regs))
-    (emit-mov cg (first (attr-ref attrs 'labels)) (mem-operand alloc))
-    (init-closure-slots cg unspecified-representation
-                        (offset-operand alloc value-size)
-                        slot-count value-scale)
-    (emit-lea cg (offset-operand alloc closure-tag) result))
+;; alloc-closure simpy allocates space for the closure, it does not
+;; initialize its contents.  This is because is will always be
+;; enclosed by a lambda that does the initialization.
+(define-operator (alloc-closure) ()
+  (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'length)))
+              result spare-regs)
+  (emit-mov cg (attr-ref attrs 'label) (mem-operand result))
+  (emit-add cg closure-tag result)
   result)
-
-(define (init-closure-slots cg val base count scale)
-  (cond ((= count 0))
-        ((= count 1)
-         (emit-mov cg val base))
-        (true
-         (emit-mov cg val %a)
-         (if (<= count 4)
-             (labels ((fill-from (index)
-                        (when (< index count)
-                          (emit-mov cg %a (reoffset-operand base
-                                                            (ash index scale))
-                                    scale)
-                          (fill-from (1+ index)))))
-               (fill-from 0))
-             (begin
-               (emit-lea cg base %di)
-               (emit-mov cg count %c)
-               (emit-rep-stos cg scale))))))
 
 (define (closure-slot closure index)
   (tagged-operand closure-tag closure (1+ index)))
 
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
+
+(define-operator (set-closure! closure (val reg-imm)) ()
+  (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
+  val)
 
 (define (emit-call-or-jump cg insn func nargs)
   (let* ((comment (comment-form func))

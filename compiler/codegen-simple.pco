@@ -138,15 +138,15 @@
 
 ;;; Misc
 
-(define-codegen (fill-closure attrs closure . refs)
-  (labels ((fill-slots (refs index)
-             (if (null? refs)
+(define-codegen (lambda attrs closure . vals)
+  (labels ((fill-slots (vals index)
+             (if (null? vals)
                  (codegen-into-reg closure cg false main-reg)
                  (begin
-                   (emit-frame-spill cg (codegen (car refs) cg false) main-reg)
-                   (fill-slots (cdr refs) (1+ index))
+                   (emit-frame-spill cg (codegen (car vals) cg false) main-reg)
+                   (fill-slots (cdr vals) (1+ index))
                    (emit-frame-pop cg (second general-registers))
                    (emit-store-into-closure cg main-reg index
                                             (second general-registers))))))
-    (fill-slots refs 0)
+    (fill-slots vals 0)
     main-reg))

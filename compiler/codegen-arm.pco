@@ -315,39 +315,24 @@
 
 (define-operator (alloc-closure) ((temp-fixed-regs %init-mem-val %init-mem-ptr
                                                    %init-mem-count))
-  (let* ((slot-count (length (attr-ref attrs 'closure))))
-    (emit-alloc cg closure-tag-bits (* value-size (1+ slot-count))
-                value-scale
-                (list* %init-mem-val %init-mem-ptr %init-mem-count spare-regs))
-    (emiti cg "ldr ~A, =~A" (reg-asm-operand %init-mem-val)
-           (first (attr-ref attrs 'labels)))
-    (emiti cg "str ~A, [~A]" (reg-asm-operand %init-mem-val)
-           (reg-asm-operand %alloc))
-
-    ;; Initialize the closure slots.
-    (unless (= slot-count 0)
-      (emiti cg "mov ~A, #~D" (reg-asm-operand %init-mem-val)
-             unspecified-representation)
-      (if (<= slot-count 4)
-          (labels ((fill-from (index)
-                   (when (< index (1+ slot-count))
-                     (emiti cg "str ~A, [~A, #~D]"
-                            (reg-asm-operand %init-mem-val)
-                            (reg-asm-operand %alloc) (ash index value-scale))
-                     (fill-from (1+ index)))))
-            (fill-from 1))
-          (begin
-            (emiti cg "mov ~A, #~D" (reg-asm-operand %init-mem-count)
-                   slot-count)
-            (emiti cg "bl init_mem"))))
-
-    (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
-           (reg-asm-operand %alloc) closure-tag))
+  (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'length)))
+              value-scale
+              (list* %init-mem-val %init-mem-ptr %init-mem-count spare-regs))
+  (emiti cg "ldr ~A, =~A" (reg-asm-operand %init-mem-val)
+         (attr-ref attrs 'label))
+  (emiti cg "str ~A, [~A]" (reg-asm-operand %init-mem-val)
+         (reg-asm-operand %alloc))
+  (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
+         (reg-asm-operand %alloc) closure-tag)
   result)
 
 (define (emit-store-into-closure cg closure index val)
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand val)
         (reg-asm-operand closure) (closure-slot-offset index)))
+
+(define-operator (set-closure! closure val) ()
+  (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
+  val)
 
 (define-cc-operator (check-arg-count) ()
   cc-eq)

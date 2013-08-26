@@ -18,7 +18,7 @@
                           (mark-top-level-definitions program)
                           (collect-closures program)
                           (introduce-boxes program)
-                          (decompose-lambdas program false)))
+                          (fill-closures program)))
 
 (define (compile-program program)
   ;; Compile the program, printing the resulting assembly on standard
@@ -566,111 +566,184 @@
     (rplaca (cddr form) (list 'raw-make-box () val)))
   (introduce-boxes val))
 
-(define (init-boxed-param-form varrec temprec)
-  (quasiquote (define (unquote varrec)
-                (raw-make-box () (ref (unquote temprec))))))
-
 (define-introduce-boxes (lambda attrs body)
   ;; Where a parameter should be boxed, add a set! form at the start
   ;; of the begin to box up the parameter value and then store a
   ;; reference to the box back into the parameter.
   (introduce-boxes body)
-  (let* ((wrapped-begin (attr-ref attrs 'wrapped-begin)))
+
+  ;; to avoid problematic interactions with the fill-lambdas
+  ;; phase below, we enclose the existing body of wrapped-begin
+  ;; inside another begin, prepending the boxing statements.
+  (let* ((wrapped-begin (attr-ref attrs 'wrapped-begin))
+         (body false))
     (dolist (varrec (attr-ref attrs 'params))
       (when (varrec-boxed? varrec)
-        (rplacd (cdr wrapped-begin)
-                (cons (list 'set! varrec
-                            (list 'raw-make-box () (list 'ref varrec)))
-                      (cddr wrapped-begin)))))))
+        (unless body
+          (set! body (list (list* 'begin (second wrapped-begin)
+                                 (cddr wrapped-begin)))))
+        (set! body (cons (list 'set! varrec
+                               (list 'raw-make-box () (list 'ref varrec)))
+                         body))))
+    (when body
+      (rplaca (cdr wrapped-begin) ())
+      (rplacd (cdr wrapped-begin) body))))
 
-;;; Decompose lambdas into alloc-closure and fill-closure forms.
+;;; The fill-closures phase elaborates lambda fors to produce the code
+;;; to allocate and initialize closures.
 ;;;
-;;; alloc-closure allocate a closure representing a function, and sets
-;;; its code pointer.  fill-closure fills the variable reference slots
-;;; in a closure.
+;;; In particular, we need to handle mutual references, e.g. as in
+;;; mutual recursion between two functions.  We can handle this by
+;;; allocating multiple closures, and then assigning their slots to
+;;; correspond to represent the mutual references.  But there is a
+;;; problem with naive implementations of this idea: Stale values in a
+;;; newly allocated closure could cause problems for the GC.  So we
+;;; need to initialize all slots immediately after allocation (before
+;;; anything that could trigger a GC).
 ;;;
-;;; The point of this is to support recursive functions (including
-;;; mutually recursive functions), without introducing boxes.  If we
-;;; have two mutually recursive non-top-level functions, represented
-;;; by closures F and G, then F needs to contain a slot pointing to G,
-;;; and G needs to contain a slot pointing to F.  Thus we allocate F
-;;; and G first, and then fill in their slots.
+;;; One approach would be to initialise the slots with 'unspecified'
+;;; immediately after allocation, and then assign their true values
+;;; later on.  So for example, if closures A and B are to have mutual
+;;; references to each other, we allocate A, initialize its slots to
+;;; 'unspecified', allocate B, initialize it, then assign the
+;;; references into A and B.
 ;;;
-;;; The functions that need treating in this way were identified in
-;;; the classify-variables phase as early-access functions (with
-;;; predicate varrec-early-function?).
+;;; The problem with that approach is that it involves redundant
+;;; stores into closures: We initialize a slot, and then assign it.
+;;; Some double stores are necessary to resolve the circularities of
+;;; mutual references.  But in most cases, the value to store in a
+;;; closure slot is known at the time of the 'define' of the
+;;; associated lambda.  Even when there are circularities, we only
+;;; need double stores to break them: E.g. allocate A, initialize the
+;;; relevant slot to 'unspecified', allocate B, store the reference to
+;;; A into B, and store the reference to B into A.
 ;;;
-;;; This phase also assigns labels to functions.
-;;;
-;;; So, for example, the effect is similar to a transformation from:
-;;;
-;;; (begin
-;;;   (define g (lambda () (h)))
-;;;   (define h (lambda () (g))))
-;;;
-;;; to
-;;;
-;;; (begin
-;;;   (define g (alloc-closure ((body (h)) (label "g") (closure h))))
-;;;   (define h (alloc-closure ((body (g)) (label "h") (closure g))))
-;;;   (fill-closure g h)
-;;;   (fill-closure h g))
+;;; The fill-closures phase implements a pragmatic approach to
+;;; avoiding redundant stores.  So, when initializing a closure, for
+;;; each slot in then closure, we consider whether the variable value
+;;; is already known (i.e. is not due to a later define).  If so, we
+;;; arrange for it to be stored directly into the closure.  Otherwise,
+;;; we arrange store 'undefined', and mark the source varrec to update
+;;; the closure when the define is encountered.
 
-;;; We need a reference to the begin form in which eligible function
-;;; definitions occur, in order to hoist the define...alloc-closure to
-;;; the start
-(define-trivial-walker decompose-lambdas (begin-form))
+(define-trivial-walker fill-closures ())
 
-(define-decompose-lambdas (begin varrecs . body)
-  (decompose-lambdas-forms body form))
+(define-fill-closures (begin varrecs . body)
+  (dolist (varrec varrecs)
+    (varrec-attr-set! varrec 'fixups ()))
 
-(define-decompose-lambdas (lambda attrs body)
-  (decompose-lambda form false begin-form))
+  ;; Move the define-lambdas to the front of the begin body.  This is
+  ;; because the approach we use for handling mutual references
+  ;; between lambdas only works for named lambdas.  So we move all the
+  ;; named lambdas up-front, so that references from unnamed lambdas
+  ;; to them are straightforward.
+  (set! body (move-define-lambdas-to-front body))
+  (rplacd (cdr form) body)
+  (dolist (form body)
+    (if (eq? 'define (first form))
+        (fill-closures-define form)
+        (fill-closures form))))
 
-(define-decompose-lambdas (define varrec val)
-  (if (and (eq? 'lambda (car val)) (not (varrec-written? varrec)))
-    (if (varrec-early-function? varrec)
+(define (move-define-lambdas-to-front forms)
+  (let* ((dls ())
+         (others ()))
+    (labels ((partition (l)
+               ;; Partition l into define-lambda forms in `dls` and
+               ;; other form in `others`.  The order of the forms is
+               ;; reversed in the process.
+               (unless (null? l)
+                 (let* ((form (car l))
+                        (tail (cdr l)))
+                   (if (and (eq? 'define (first form))
+                            (eq? 'lambda (first (third form))))
+                       (set! dls (rplacd l dls))
+                       (set! others (rplacd l others)))
+                   (partition tail))))
+             (nrev (l onto)
+               ;; Reverse a list destructively, prepending the
+               ;; reversed list onto `onto`.
+               (if (not (null? l))
+                   (let* ((tail (cdr l)))
+                     (rplacd l onto)
+                     (nrev tail l))
+                   onto)))
+      (partition forms)
+      (nrev dls (nrev others ())))))
+
+(define (fill-closures-define form)
+  (let* ((varrec (second form))
+         (val (third form)))
+    (if (eq? 'lambda (car val))
+        (fill-closures-define-lambda varrec val)
+        (fill-closures val))
+    (let* ((fixups (varrec-attr-remove varrec 'fixups)))
+      (when (and fixups (not (null? fixups)))
+        (rplaca (cddr form) (fixup-closures fixups val))))))
+
+(define (fixup-closures fixups res)
+  (if (null? fixups)
+      res
+      (fixup-closures (cdr fixups)
+                   (quasiquote (set-closure! ((index . (unquote (cdar fixups))))
+                                             (ref (unquote (caar fixups)))
+                                             (unquote res))))))
+
+(define-fill-closures (lambda attrs body)
+  (let* ((indirect-label (lambda-assign-genlabel form))
+         (len 0)
+         (vals (mapfor (cvarrec (form-attr form 'closure))
+                 (set! len (1+ len))
+                 (list 'ref (varrec-attr cvarrec 'source)))))
+    (rplacd (cdr form)
+            (cons (make-alloc-closure len indirect-label) vals))
+    (form-attr-set! form 'body body)
+    (fill-closures body)))
+
+(define (fill-closures-define-lambda varrec form)
+  (let* ((indirect-label (if (varrec-top-level? varrec)
+                             (lambda-assign-label varrec form)
+                             (lambda-assign-genlabel form)))
+         (body (third form))
+         (index 0)
+         (vals (mapfor (cvarrec (form-attr form 'closure))
+                 (let* ((source (varrec-attr cvarrec 'source))
+                        (val (closure-slot-value varrec index source)))
+                   (set! index (1+ index))
+                   val))))
+    (rplacd (cdr form)
+            (cons (make-alloc-closure index indirect-label) vals))
+    (form-attr-set! form 'body body)
+    (fill-closures body)))
+
+(define (make-alloc-closure len indirect-label)
+    (list 'alloc-closure (list (cons 'length len)
+                               (cons 'label indirect-label))))
+
+(define (closure-slot-value varrec index source)
+  (let* ((fixups (varrec-attr-defaulting source 'fixups 'missing)))
+    (if (eq? fixups 'missing)
+        (list 'ref source)
         (begin
-          (rplacd (cdr begin-form)
-                  (cons (list 'define varrec
-                              (make-alloc-closure val varrec begin-form))
-                        (cddr begin-form)))
-          (overwrite-form form (make-fill-closure val (list 'ref varrec))))
-        (decompose-lambda val varrec begin-form))
-    (decompose-lambdas val begin-form)))
+         (varrec-attr-set! source 'fixups (acons varrec index fixups))
+         (quoted-unspecified)))))
 
-(define (decompose-lambda lambda-form varrec begin-form)
-  (overwrite-form lambda-form
-                  (make-fill-closure lambda-form
-                                     (make-alloc-closure lambda-form varrec
-                                                         begin-form))))
+(define (lambda-assign-genlabel form)
+  (let* ((indirect-label (gen-label)))
+    (form-attr-set! form 'labels
+                    (cons indirect-label (if (form-attr form 'vararg)
+                                             ()
+                                             (list (gen-label)))))
+    indirect-label))
 
-(define (make-alloc-closure lambda-form varrec begin-form)
-  (decompose-lambdas (third lambda-form) begin-form)
-  (let* ((varargs? (form-attr lambda-form 'vararg))
-         (labels (if (and varrec (varrec-top-level? varrec))
-                     (let* ((indirect-label (make-label-for (car varrec)
-                                               indirect-function-label-prefix)))
-                       (cons indirect-label
-                             (if varargs?
+(define (lambda-assign-label varrec form)
+  (let* ((indirect-label (make-label-for (car varrec)
+                                         indirect-function-label-prefix)))
+    (form-attr-set! form 'labels
+      (cons indirect-label (if (form-attr form 'vararg)
                                ()
                                (list (make-label-for (car varrec)
-                                               direct-function-label-prefix)))))
-                     (let* ((indirect-label (gen-label)))
-                       (cons indirect-label
-                             (if varargs? () (list (gen-label)))))))
-         (lambda-attrs (list* (cons 'labels labels)
-                              (cons 'body (third lambda-form))
-                              (second lambda-form))))
-    (rplaca (cdr lambda-form) lambda-attrs)
-    (list 'alloc-closure lambda-attrs)))
-
-(define (make-fill-closure lambda-form closure-form)
-  (let* ((closure (form-attr lambda-form 'closure)))
-    (if (null? closure) closure-form
-        (list* 'fill-closure () closure-form
-               (mapfor (varrec closure)
-                 (list 'ref (varrec-attr varrec 'source)))))))
+                                             direct-function-label-prefix)))))
+    indirect-label))
 
 ;;; Produce a debug form
 
@@ -725,8 +798,8 @@
                          (list (cons key 'etc)))
                         ((eq? key 'body)
                          (list (if show-body
-                                   (set! body-attr (cons key val)))
-                                   '(body . etc)))
+                                   (set! body-attr (cons key val))
+                                   '(body . etc))))
                         (true
                          (list attr)))))))
     (when body-attr
@@ -735,9 +808,6 @@
 
 (define-debug-form (lambda attrs . body)
   (list* 'lambda (debug-lambda-attrs attrs true) (debug-forms body)))
-
-(define-debug-form (alloc-closure attrs)
-  (list* 'alloc-closure (debug-lambda-attrs attrs true)))
 
 (define-debug-form ((define set!) varrec . val)
   (list* (car form) (debug-uniquify-varrec varrec) (debug-forms val)))
@@ -782,7 +852,10 @@
       (varrec-attr-set! varrec 'index index)
       (set! index (1+ index)))))
 
-(define-codegen-sections (alloc-closure attrs)
+(define-codegen-sections (lambda attrs closure . vals)
+  (codegen-sections closure cg)
+  (codegen-sections-forms vals cg)
+
   (let* ((self-varrec (attr-ref attrs 'self))
          (closure (attr-ref attrs 'closure))
          (body (attr-ref attrs 'body)))
