@@ -146,6 +146,7 @@
   (let* ((attrs (func-lambda-attrs func)))
     (if attrs
         (let* ((labels (attr-ref attrs 'labels)))
+          (check-call-nargs attrs nargs)
           (if (null? (cdr labels))
               (begin
                 (emiti cg "mov ~A, #~A" (reg-asm-operand %nargs)
