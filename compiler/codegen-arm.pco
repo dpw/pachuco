@@ -430,8 +430,7 @@
         (scale-number-expr value-scale))
   (emiti cg "sub sp, sp, ~A~A" (reg-asm-operand after-arg-count)
         (scale-number-expr value-scale))
-  (emiti cg "mov ~A, #0" (reg-asm-operand %nargs))
-  (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag)
+  (emit-function-jump cg (fifth form) 0)
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 

@@ -117,8 +117,7 @@
   (emit-lea cg (reoffset-operand (return-address-slot cg) before-arg-count) %sp)
   (emit-mov cg (mem-operand %bp) %bp)
   (emit-mov cg retaddr (mem-operand %sp))
-  (emit-clear cg %nargs)
-  (emit cg "jmp *~A" (value-sized (tagged-operand closure-tag bodyfunc 0)))
+  (emit-call-or-jump cg "jmp" (fifth form) 0)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)

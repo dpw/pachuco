@@ -441,10 +441,14 @@
 ;;; Function calls
 
 (define (func-lambda-attrs func)
-  (let* ((l (and (eq? 'ref (first func))
-                (varrec-attr-defaulting (varrec-origin (form-attr func 'varrec))
-                                        'lambda false))))
-    (and l (car l))))
+  (cond ((eq? 'ref (first func))
+         (let* ((l (varrec-attr-defaulting (varrec-origin (form-attr func 'varrec))
+                                           'lambda false)))
+           (and l (car l))))
+        ((eq? 'lambda (first func))
+         (second func))
+        (true
+         false)))
 
 (define (func-lambda-attr func attr if-not-resolved)
   (let* ((attrs (func-lambda-attrs func)))
