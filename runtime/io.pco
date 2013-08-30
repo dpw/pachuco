@@ -467,6 +467,19 @@
         (accept-eos false)
         (true (error "read-character off end of stream"))))
 
+(define (read-string is len)
+  (define pos (istream-pos is))
+  (define new-pos (+ pos len))
+  (define end (istream-end is))
+  (if (<= new-pos end)
+      (begin
+        (istream-set-pos! is new-pos)
+        (substring (istream-buf is) pos len))
+      (begin
+        (unless (istream-refill is len)
+          (error "read-string off end of stream"))
+        (read-string is len))))
+
 (define (istream-consume is n)
   (define new-pos (+ (istream-pos is) n))
   (define end (istream-end is))
@@ -592,19 +605,11 @@
         (if negative (- res) res))
       false))
 
-(define (read-token istr)
-  (define buf (make-buffer-ostream))
-  (write-character buf (read-character istr false))
-
-  (define (scan-token)
-    (define ch (peek-character istr 0))
-    (when (rt-constituent? (rt-character-type ch))
-      (write-character buf ch)
-      (istream-consume istr 1)
-      (scan-token)))
-
-  (scan-token)
-  (buffer-ostream-to-string buf))
+(define (read-token is)
+  (define pos 0)
+  (while (rt-constituent? (rt-character-type (peek-character is pos)))
+    (set! pos (1+ pos)))
+  (read-string is pos))
 
 (define (interpret-token token)
   (define istr (make-string-istream token))
