@@ -418,7 +418,7 @@
 (define (make-string-istream str)
   (make-istream 0 (string-length str) str false))
 
-(define (istream-refill is)
+(define (istream-refill is ahead)
   ;; Refill the buffer of an istream.  Returns false if there is no
   ;; more data available from the underlying reader function.
   (if (istream-fd is)
@@ -427,11 +427,24 @@
         (define pos (istream-pos is))
         (define len (- (istream-end is) pos))
         (define buf (istream-buf is))
-        (when (> pos 0)
-          (string-copy buf pos buf 0 len)
-          (istream-set-pos! is 0))
+        (define buf-len (string-length buf))
+
+        (cond ((> ahead buf-len)
+               ;; Need to grow the buffer to satisfy 'ahead'
+               (set! buf-len (ash buf-len 1))
+               (while (> ahead buf-len) (set! buf-len (ash buf-len 1)))
+               (define new-buf (make-string buf-len (code-character 0)))
+               (string-copy buf pos new-buf 0 len)
+               (istream-set-pos! is 0)
+               (istream-set-buf! is (set! buf new-buf)))
+
+              ((> pos 0)
+               ;; copy unconsumed data down within existing buffer
+               (string-copy buf pos buf 0 len)
+               (istream-set-pos! is 0)))
+
         (define readlen (raw-read-substring (istream-fd is) buf len
-                                            (- (string-length buf) len)))
+                                            (- buf-len len)))
         (istream-set-end! is (+ len readlen))
         (if (> readlen 0)
             true
@@ -442,14 +455,14 @@
 
 (define (istream-eos? is)
   (and (= (istream-pos is) (istream-end is))
-       (not (istream-refill is))))
+       (not (istream-refill is 0))))
 
 (define (read-character is accept-eos)
   (define pos (istream-pos is))
   (cond ((< pos (istream-end is))
          (istream-set-pos! is (1+ pos))
          (string-ref (istream-buf is) pos))
-        ((istream-refill is)
+        ((istream-refill is 1)
          (read-character is accept-eos))
         (accept-eos false)
         (true (error "read-character off end of stream"))))
@@ -460,16 +473,17 @@
   (if (<= new-pos end)
       (istream-set-pos! is new-pos)
       (begin
+        (set! n (- new-pos end))
         (istream-set-pos! is end)
-        (unless (istream-refill is)
+        (unless (istream-refill is n)
           (error "istream-consume off end of stream"))
-        (istream-consume is (- new-pos end)))))
+        (istream-consume is n))))
 
 (define (peek-character is offset)
   (define pos (+ offset (istream-pos is)))
   (cond ((< pos (istream-end is))
          (string-ref (istream-buf is) pos))
-        ((istream-refill is)
+        ((istream-refill is offset)
          (peek-character is offset))
         (true false)))
 
