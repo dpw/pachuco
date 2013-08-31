@@ -502,8 +502,8 @@
 
 ;;; Reader
 
-;;; Reader syntax is currently intended to be consistent with the CL
-;;; spec.
+;;; Reader syntax is currently intended to be roughly consistent with
+;;; some subset of the CL spec.
 
 (defmacro rt-illegal -1)
 
@@ -571,20 +571,12 @@
          (define ct (vector-ref readtable ch))
          (not (and (/= ct rt-alpha-uc) (/= ct rt-alpha-lc) (/= ct rt-digit))))))
 
-(define (read-integer istr radix)
-  ;; Reads an integer from the istream.  Returns false if an integer
-  ;; could not be parsed, others returns the value, stopping after the
-  ;; last character forming part of the number.
-  (define first-digit (peek-character istr 0))
-  (define negative (if (eq? #\- first-digit)
-                       (begin
-                         (istream-consume istr 1)
-                         (set! first-digit (peek-character istr 0))
-                         true)
-                       false))
+(define (read-integer istr radix strict)
+  ;; Reads an integer from the istream, up to the last character
+  ;; forming part of the number.  Signals an error if the number ends
+  ;; in a constituent character.
 
-  (define (digit-value ch)
-    (define ct (rt-character-type ch))
+  (define (digit-value ch ct)
     (define base (vector-ref digit-bases ct))
     (if base
         (begin
@@ -592,35 +584,53 @@
           (if (< val radix) val false))
         false))
 
-  (define res (digit-value first-digit))
-  (if res
-      (begin
-        (define (scan-integer)
-          (istream-consume istr 1)
-          (define val (digit-value (peek-character istr 0)))
-          (when val
-            (set! res (+ (* radix res) val))
-            (scan-integer)))
-        (scan-integer)
-        (if negative (- res) res))
-      false))
+  (define (scan-integer pos val)
+    (define ch (peek-character istr pos))
+    (define ct (rt-character-type ch))
+    (define digit (digit-value ch ct))
+    (cond (digit
+           (scan-integer (1+ pos) (+ digit (* radix val))))
+          ((rt-constituent? ct)
+           (if strict
+               (error "bad digit \"~C\"" ch)
+               false))
+          (true
+           (istream-consume istr pos)
+           (if (not negative) val (- val)))))
 
-(define (read-token is)
   (define pos 0)
-  (while (rt-constituent? (rt-character-type (peek-character is pos)))
-    (set! pos (1+ pos)))
-  (read-string is pos))
+  (define first-ch (peek-character istr 0))
+  (define negative (and (eq? #\- first-ch)
+                        (begin
+                          (set! pos (1+ pos))
+                          (set! first-ch (peek-character istr 1))
+                          true)))
 
-(define (interpret-token token)
-  (define istr (make-string-istream token))
-  (define num (read-integer istr 10))
-  (if (and num (istream-eos? istr))
-      num
-      (begin
-        (define special (rassoc-equal token special-printed-forms))
-        (if special
-            (car special)
-            (intern token)))))
+  (define digit (digit-value first-ch (rt-character-type first-ch)))
+  (if digit
+      (scan-integer (1+ pos) digit)
+      (if strict
+          (error "expected number, but got \"C\"" first-ch)
+          false)))
+
+(define (read-token is first-ct)
+  (define ch (peek-character is 0))
+  (when (eq? #\- ch)
+    ;; could be a negative number, need to look at the second char
+    (set! ch (peek-character is 1)))
+
+  (define ct (rt-character-type ch))
+  (define number (and (= ct rt-digit) (read-integer is 10 false)))
+  (or number
+    (begin
+     (define pos 0)
+     (while (rt-constituent? (rt-character-type (peek-character is pos)))
+       (set! pos (1+ pos)))
+     (define token (read-string is pos))
+     (define special (rassoc-equal token special-printed-forms))
+     (if special
+         (car special)
+         (intern token)))))
 
 (define (consume-whitespace istr)
   (define ch (peek-character istr 0))
@@ -687,11 +697,17 @@
         ((equal? key (cdar l)) (car l))
         (true (rassoc-equal key (cdr l)))))
 
+(define (read-constituents is)
+  (define pos 0)
+  (while (rt-constituent? (rt-character-type (peek-character is pos)))
+    (set! pos (1+ pos)))
+  (read-string is pos))
+
 (define (read-character-literal istr)
   (if (rt-constituent? (rt-character-type (peek-character istr 1)))
       (begin
         ;; a character name token
-        (define name (read-token istr))
+        (define name (read-constituents istr))
         (define named-character (rassoc-equal name character-names))
         (unless named-character (error "unknown character name ~A" name))
         (car named-character))
@@ -701,7 +717,7 @@
   (define ch (read-character istr false))
 
   (define (read-radixed-integer istr radix)
-    (define val (read-integer istr radix))
+    (define val (read-integer istr radix true))
     (unless (and val
                  (not (rt-constituent? (rt-character-type (peek-character istr
                                                                           0)))))
@@ -724,7 +740,7 @@
          (istream-consume istr 1)
          false)
         ((rt-constituent? ct)
-         (rplaca c (interpret-token (read-token istr))))
+         (rplaca c (read-token istr ct)))
         ((= ct rt-lparen)
          (istream-consume istr 1)
          (rplaca c (read-list istr c)))
