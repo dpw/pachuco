@@ -38,6 +38,7 @@ void free_heap(unsigned long addr)
 int main(int argc, char **argv)
 {
 	int i;
+	unsigned long heap_a, heap_b;
 
 	/* How many iterations of the program to run, for better
 	 * profiling results. */
@@ -52,16 +53,20 @@ int main(int argc, char **argv)
         if (heap_size_env)
                 heap_size = (unsigned long)atoi(heap_size_env) * 1024 * 1024;
 
-        heap_threshold = heap_start = alloc_heap(heap_size);
-        heap_alloc = heap_end = heap_start + heap_size;
+	heap_a = alloc_heap(heap_size);
+	heap_b = alloc_heap(heap_size);
 
-        heap2_start = alloc_heap(heap_size);
-        heap2_end = heap2_start + heap_size;
+	for (i = iterations ? atoi(iterations) : 1; i > 0; i--) {
+		heap_threshold = heap_start = heap_a;
+		heap_alloc = heap_end = heap_start + heap_size;
 
-        lisp_argv = argv;
+		heap2_start = heap_b;
+		heap2_end = heap2_start + heap_size;
 
-	for (i = iterations ? atoi(iterations) : 1; i > 0; i--)
+		lisp_argv = argv;
+
 		lisp();
+	}
 
         return 0;
 }
