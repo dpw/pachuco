@@ -297,9 +297,13 @@
     (assert-read "#\\Space" #\Space)
     (assert-read "#\\Newline" #\Newline)
 
-    (assert-read "true" true)
-    (assert-read "false" false)
-    (assert-read "unspecified" unspecified)
+    (assert-read "#t" true)
+    (assert-read "#f" false)
+    (assert-read "#u" unspecified)
+
+    (assert-read "true" 'true)
+    (assert-read "false" 'false)
+    (assert-read "unspecified" 'unspecified)
 
     (assert-read "(x;comment
 y)" '(x y))

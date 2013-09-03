@@ -5,6 +5,10 @@
 (defmacro (when-interpreting . rest)
   (if compiling '(definitions) (cons 'definitions rest)))
 
+(defmacro true #t)
+(defmacro false #f)
+(defmacro unspecified #u)
+
 ;;; Basics needed by quasiquote
 
 (define (list . l) l)

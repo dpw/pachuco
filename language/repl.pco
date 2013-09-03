@@ -6,7 +6,7 @@
   ;; create environment
   (define dual-env (cons (make-initial-macro-env)
                          (make-initial-interpreter-env)))
-  (eval-body-form '(define compiling false) (cdr dual-env))
+  (eval-body-form '(define compiling #f) (cdr dual-env))
 
   (define (eval form)
    (eval-body-form (expand-body-form form dual-env) (cdr dual-env)))

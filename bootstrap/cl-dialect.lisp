@@ -5,14 +5,46 @@
 (declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
 (declaim (sb-ext:muffle-conditions style-warning))
 
+;;; The handling of special values (true, false, unspecified) is
+;;; subtle.
+;;;
+;;; 'true' and 'false' are used throughout the code that can be read
+;;; as CL or pachuco, and are symbol macros that resolve to the
+;;; appropriate values for the language being executed (i.e. t and nil
+;;; in CL, #t and #f in pachuco).
 (define-symbol-macro true t)
 (define-symbol-macro false nil)
-(define-symbol-macro unspecified 'unspecified)
+
+;;; We also need values to represent true, false and unspecified in
+;;; the subject language (whether being parsed, compiled or
+;;; interpreted).  CL conflates false and nil, so these have to be
+;;; distinct from 'true', 'false', etc.  We always denote these
+;;; subject-language values by #f, #t and #u in the
+;;; compiler/interpreter codebase, because those correspond to the
+;;; values produced by the reader (both in CL, via the reader macro
+;;; chars below, and in the native pachuco reader).
+
+;;; In CL, we use some distinguished symbols to represent these
+;;; subject language values (sl-true, sl-false and sl-unspecified).
+;;; Pachuco already has the semantics we want, so we can use its real
+;;; true, false and unspecified values (i.e. its #t, #f and #u).
+
+;;; From CL, we want #t, #f, and #u to be self-evaluating, so that the
+;;; value returned by the reader when parsing subject language code
+;;; match those when used directly.
+(define-symbol-macro sl-true 'sl-true)
+(define-symbol-macro sl-false 'sl-false)
+(define-symbol-macro sl-unspecified 'sl-unspecified)
+
+;; The reader macros, to support #f, #t, #u from CL
+(set-dispatch-macro-character #\# #\t #'(lambda (s c n) 'sl-true))
+(set-dispatch-macro-character #\# #\f #'(lambda (s c n) 'sl-false))
+(set-dispatch-macro-character #\# #\u #'(lambda (s c n) 'sl-unspecified))
 
 (define-symbol-macro subject-language false)
 
 (defun subject-language-boolean (sym)
-  (not (eq sym 'false)))
+  (not (eq sym #f)))
 
 (defun subject-language-symbol-name (sym)
   (string-downcase (symbol-name sym)))
@@ -32,8 +64,7 @@
 
 ;;; This provides the subject language semantics
 (defun symbol? (a)
-  (if (member a '(false true () unspecified)) false
-      (symbolp a)))
+  (and (not (member a '(#t #f #u ()))) (symbolp a)))
 
 (defvar symbol-id-counter 0)
 

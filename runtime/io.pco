@@ -204,9 +204,9 @@
   (write-substring ostr str 0 (string-length str)))
 
 (define special-printed-forms
-  '((false . "false")
-    (true . "true")
-    (unspecified . "unspecified")
+  '((#f . "#f")
+    (#t . "#t")
+    (#u . "#u")
     (() . "()")))
 
 (define (print-list ostr l readably)
@@ -626,11 +626,7 @@
      (define pos 0)
      (while (rt-constituent? (rt-character-type (peek-character is pos)))
        (set! pos (1+ pos)))
-     (define token (read-string is pos))
-     (define special (rassoc-equal token special-printed-forms))
-     (if special
-         (car special)
-         (intern token)))))
+     (intern (read-string is pos)))))
 
 (define (consume-whitespace istr)
   (define ch (peek-character istr 0))
@@ -716,7 +712,7 @@
 (define (read-sharp-signed istr)
   (define ch (read-character istr false))
 
-  (define (read-radixed-integer istr radix)
+  (define (read-radixed-integer radix)
     (define val (read-integer istr radix true))
     (unless (and val
                  (not (rt-constituent? (rt-character-type (peek-character istr
@@ -724,9 +720,23 @@
       (error "bad digit ~C" (peek-character istr 0)))
     val)
 
-  (cond ((eq? ch #\\) (read-character-literal istr))
-        ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer istr 16))
-        ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer istr 2))
+  (define (check-for-single-char)
+    (define ch (peek-character istr 0))
+     (when (rt-constituent? (rt-character-type ch))
+       (error "unknown character ~C after sharp sign" ch)))
+
+  (cond ((eq? ch #\t)
+         (check-for-single-char)
+         true)
+        ((eq? ch #\f)
+         (check-for-single-char)
+         false)
+        ((eq? ch #\u)
+         (check-for-single-char)
+         unspecified)
+        ((eq? ch #\\) (read-character-literal istr))
+        ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer 16))
+        ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer 2))
         (true (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)

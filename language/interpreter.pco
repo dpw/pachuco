@@ -44,7 +44,7 @@
 
 (define (eval-body forms env)
   (if (null? forms)
-      unspecified
+      #u
       (eval-body-aux forms env)))
 
 (define (eval-body-aux forms env)
@@ -89,7 +89,7 @@
 (define-interpreter-builtin-form define
   (unless in-body (error "define not in body"))
   (let* ((var (first args))
-         (val (if (null? (cdr args)) unspecified
+         (val (if (null? (cdr args)) #u
                   (eval-form-aux (second args) env false)))
          (st (car env)))
     (unless (symbol? var) (error "bad variable name ~S" var))
@@ -109,7 +109,7 @@
   (if (subject-language-boolean (eval-form-aux (first args) env false))
       (eval-form-aux (second args) env false)
       (if (null? (cddr args))
-          'unspecified
+          #u
           (eval-form-aux (third args) env false))))
 
 (define-interpreter-builtin-form quote
@@ -168,7 +168,7 @@
   (if subject-language
       func
       (lambda (args env in-body)
-        (if (funcall func args env in-body) 'true 'false))))
+        (if (funcall func args env in-body) #t #f))))
 
 (defmacro (define-interpreter-builtin-boolean-op-x op)
   (quasiquote

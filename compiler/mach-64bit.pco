@@ -36,8 +36,7 @@
 (defconstant unspecified-representation #b101000)
 
 (defconstant simple-representations
-  ;; The quotes here are significant for CL compatibility
-  (list (cons 'false false-representation)
-        (cons 'true #b11000)
-        (cons 'unspecified unspecified-representation)
+  (list (cons #f false-representation)
+        (cons #t #b11000)
+        (cons #u unspecified-representation)
         (cons () #b111000)))

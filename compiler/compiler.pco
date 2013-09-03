@@ -160,7 +160,7 @@
 
 
 (define (quoted-unspecified)
-  (list 'quote unspecified))
+  (list 'quote #u))
 
 ;;; Convert lambda forms to attributed forms, and convert parameter
 ;;; names to trivial varrecs

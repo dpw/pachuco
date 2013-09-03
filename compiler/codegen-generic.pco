@@ -293,7 +293,7 @@
   (rplaca (cdr form) (list (cons 'quoted quoted))))
 
 (define (quote-false? form)
-  (and (eq? 'quote (car form)) (eq? (form-attr form 'quoted) 'false)))
+  (and (eq? 'quote (car form)) (eq? (form-attr form 'quoted) #f)))
 
 (define-operator (quote) ()
   (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
