@@ -68,7 +68,7 @@
   (make-ostream 0 (make-string size (code-character 0)) fd))
 
 (define (make-buffer-ostream)
-  (make-ostream 0 (make-string 100 (code-character 0)) false))
+  (make-ostream 0 (make-string 100 (code-character 0)) #f))
 
 (define (buffer-ostream-to-string os)
   (substring (ostream-buf os) 0 (ostream-pos os)))
@@ -155,9 +155,9 @@
                      (<= radix (string-length print-number-digits)))
           (error "Bad radix ~D" radix))
 
-        (define negated false)
+        (define negated #f)
         (when (< num 0)
-          (set! negated true)
+          (set! negated #t)
           (set! num (- num)))
 
         (defmacro buf-size 21)
@@ -236,7 +236,7 @@
          (print-list ostr obj readably))
         ((function? obj)
          (write-string ostr "#<function>"))
-        (true
+        (#t
          (define special (assoc obj special-printed-forms))
          (if special
              (write-string ostr (cdr special))
@@ -275,12 +275,12 @@
                         ((or (eq? ch #\A) (eq? ch #\a))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (print (unquote os) (unquote arg) false))))))
+                             (print (unquote os) (unquote arg) #f))))))
 
                         ((or (eq? ch #\S) (eq? ch #\s))
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
-                             (print (unquote os) (unquote arg) true))))))
+                             (print (unquote os) (unquote arg) #t))))))
 
                         ((or (eq? ch #\D) (eq? ch #\d))
                          (unquote (to-use-arg (lambda (os arg)
@@ -296,9 +296,9 @@
                          (unquote (to-use-arg (lambda (os arg)
                            (quasiquote
                              (print-character (unquote os) (unquote arg)
-                                              false))))))
+                                              #f))))))
 
-                        (true
+                        (#t
                          (error "Unknown format character ~C" ch))))))))
 
     (unless (= pos write-from)
@@ -416,7 +416,7 @@
 (define stdin (make-fd-istream raw-stdin))
 
 (define (make-string-istream str)
-  (make-istream 0 (string-length str) str false))
+  (make-istream 0 (string-length str) str #f))
 
 (define (istream-refill is ahead)
   ;; Refill the buffer of an istream.  Returns false if there is no
@@ -447,11 +447,11 @@
                                             (- buf-len len)))
         (istream-set-end! is (+ len readlen))
         (if (> readlen 0)
-            true
+            #t
             (begin
-              (istream-set-fd! is false)
-              false)))
-      false))
+              (istream-set-fd! is #f)
+              #f)))
+      #f))
 
 (define (istream-eos? is)
   (and (= (istream-pos is) (istream-end is))
@@ -464,8 +464,8 @@
          (string-ref (istream-buf is) pos))
         ((istream-refill is 1)
          (read-character is accept-eos))
-        (accept-eos false)
-        (true (error "read-character off end of stream"))))
+        (accept-eos #f)
+        (#t (error "read-character off end of stream"))))
 
 (define (read-string is len)
   (define pos (istream-pos is))
@@ -498,7 +498,7 @@
          (string-ref (istream-buf is) pos))
         ((istream-refill is offset)
          (peek-character is offset))
-        (true false)))
+        (#t #f)))
 
 ;;; Reader
 
@@ -528,7 +528,7 @@
 
 ;;; For each readtable type that can be interpreted as a digit, the
 ;;; value to subtract from a character byte to get its digit value.
-(define digit-bases (make-vector (1+ rt-max) false))
+(define digit-bases (make-vector (1+ rt-max) #f))
 
 (begin
   (dolist (n '(9 10 13 32))
@@ -581,8 +581,8 @@
     (if base
         (begin
           (define val (- (character-code ch) base))
-          (if (< val radix) val false))
-        false))
+          (if (< val radix) val #f))
+        #f))
 
   (define (scan-integer pos val)
     (define ch (peek-character istr pos))
@@ -593,8 +593,8 @@
           ((rt-constituent? ct)
            (if strict
                (error "bad digit \"~C\"" ch)
-               false))
-          (true
+               #f))
+          (#t
            (istream-consume istr pos)
            (if (not negative) val (- val)))))
 
@@ -604,14 +604,14 @@
                         (begin
                           (set! pos (1+ pos))
                           (set! first-ch (peek-character istr 1))
-                          true)))
+                          #t)))
 
   (define digit (digit-value first-ch (rt-character-type first-ch)))
   (if digit
       (scan-integer (1+ pos) digit)
       (if strict
           (error "expected number, but got \"C\"" first-ch)
-          false)))
+          #f)))
 
 (define (read-token is first-ct)
   (define ch (peek-character is 0))
@@ -620,7 +620,7 @@
     (set! ch (peek-character is 1)))
 
   (define ct (rt-character-type ch))
-  (define number (and (= ct rt-digit) (read-integer is 10 false)))
+  (define number (and (= ct rt-digit) (read-integer is 10 #f)))
   (or number
     (begin
      (define pos 0)
@@ -661,7 +661,7 @@
          (find-rparen)
 
          result)
-        (true
+        (#t
          (if (read-maybe istr c)
              (begin
                (define h (car c))
@@ -670,7 +670,7 @@
              (read-list istr c)))))
 
 (define (consume-line-comment istr)
-  (define ch (read-character istr true))
+  (define ch (read-character istr #t))
   (when (and ch (not (eq? ch #\Newline)))
     (consume-line-comment istr)))
 
@@ -678,10 +678,10 @@
   (define buf (make-buffer-ostream))
 
   (define (scan-string)
-    (define ch (read-character istr false))
+    (define ch (read-character istr #f))
     (unless (eq? ch #\")
       (when (eq? ch #\\)
-        (set! ch (read-character istr false)))
+        (set! ch (read-character istr #f)))
       (write-character buf ch)
       (scan-string)))
 
@@ -689,9 +689,9 @@
   (buffer-ostream-to-string buf))
 
 (define (rassoc-equal key l)
-  (cond ((null? l) false)
+  (cond ((null? l) #f)
         ((equal? key (cdar l)) (car l))
-        (true (rassoc-equal key (cdr l)))))
+        (#t (rassoc-equal key (cdr l)))))
 
 (define (read-constituents is)
   (define pos 0)
@@ -707,13 +707,13 @@
         (define named-character (rassoc-equal name character-names))
         (unless named-character (error "unknown character name ~A" name))
         (car named-character))
-      (read-character istr false)))
+      (read-character istr #f)))
 
 (define (read-sharp-signed istr)
-  (define ch (read-character istr false))
+  (define ch (read-character istr #f))
 
   (define (read-radixed-integer radix)
-    (define val (read-integer istr radix true))
+    (define val (read-integer istr radix #t))
     (unless (and val
                  (not (rt-constituent? (rt-character-type (peek-character istr
                                                                           0)))))
@@ -727,17 +727,17 @@
 
   (cond ((eq? ch #\t)
          (check-for-single-char)
-         true)
+         #t)
         ((eq? ch #\f)
          (check-for-single-char)
-         false)
+         #f)
         ((eq? ch #\u)
          (check-for-single-char)
-         unspecified)
+         #u)
         ((eq? ch #\\) (read-character-literal istr))
         ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer 16))
         ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer 2))
-        (true (error "unknown sharp sign sequence #~C" ch))))
+        (#t (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)
   ;; like read, but might not return a value (in cases such as
@@ -748,7 +748,7 @@
   (define ct (rt-character-type ch))
   (cond ((= ct rt-whitespace)
          (istream-consume istr 1)
-         false)
+         #f)
         ((rt-constituent? ct)
          (rplaca c (read-token istr ct)))
         ((= ct rt-lparen)
@@ -765,10 +765,10 @@
          (rplaca c (read-sharp-signed istr)))
         ((= ct rt-line-comment)
          (consume-line-comment istr)
-         false)
+         #f)
         ((= ct rt-eos)
          (error "unexpected end of stream while reading"))
-        (true
+        (#t
          (error "don't know how to handle character ~C (~D -> ~D)"
                 ch (character-code ch) ct))))
 

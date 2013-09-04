@@ -19,21 +19,21 @@
       (define x 0)
       (begin
         (define x x)
-        (assert-result x unspecified))))
+        (assert-result x #u))))
 
-  (assert-result (function? ()) false)
-  (assert-result (function? (lambda ())) true)
+  (assert-result (function? ()) #f)
+  (assert-result (function? (lambda ())) #t)
 
-  (assert-result (and) true)
-  (assert-result (and true) true)
-  (assert-result (and false) false)
-  (assert-result (and true false) false)
-  (assert-result (and false true) false)
-  (assert-result (and true true true) true)
+  (assert-result (and) #t)
+  (assert-result (and #t) #t)
+  (assert-result (and #f) #f)
+  (assert-result (and #t #f) #f)
+  (assert-result (and #f #t) #f)
+  (assert-result (and #t #t #t) #t)
 
-  (assert-result (or) false)
-  (assert-result (or true) true)
-  (assert-result (or false) false)
+  (assert-result (or) #f)
+  (assert-result (or #t) #t)
+  (assert-result (or #f) #f)
 
   (assert-result (length '(1 2 3)) 3)
 
@@ -57,7 +57,7 @@
 
   (begin
     (define ht (make-hashtable string-hash string-equal?))
-    (assert-result (hashtable-ref ht "foo") false)
+    (assert-result (hashtable-ref ht "foo") #f)
     (hashtable-set! ht "foo" "bar")
     (assert-result (hashtable-ref ht "foo") "bar")
     (hashtable-set! ht "foo" "baz")
@@ -68,8 +68,8 @@
       (set! l (acons k v l)))
     (assert-result l '(("foo" . "baz"))))
 
-  (assert-result (string-equal? (symbol-name 'foo) "foo") true)
-  (assert-result (eq? (intern "foo") 'foo) true)
+  (assert-result (string-equal? (symbol-name 'foo) "foo") #t)
+  (assert-result (eq? (intern "foo") 'foo) #t)
   (assert-result (symbol-name (intern "bar")) "bar")
 
   (assert-result (1+ 1) 2)
@@ -129,8 +129,8 @@
   (assert-result (nmapfor (x (list 1 2 3)) (1+ x)) '(2 3 4))
 
   (assert-result (findfor (x '(1 2 3)) (> x 1)) 2)
-  (assert-result (findfor (x ()) (error "Whoa!")) false)
-  (assert-result (findfor (x '(1)) (> x 1)) false)
+  (assert-result (findfor (x ()) (error "Whoa!")) #f)
+  (assert-result (findfor (x '(1)) (> x 1)) #f)
 
   (assert-result (filterfor (x '(0 1 2 3 4 5)) (= 0 (rem x 2)))
                  '(0 2 4))
@@ -182,20 +182,20 @@
     (assert-result (fac 6) 720))
 
   ;; Test string ref, string copy
-  (assert-result (string-equal? "foo" "foo") true)
-  (assert-result (string-equal? "foo" "bar") false)
+  (assert-result (string-equal? "foo" "foo") #t)
+  (assert-result (string-equal? "foo" "bar") #f)
 
-  (assert-result (string< "aaa" "aab") true)
-  (assert-result (string< "aab" "aaa") false)
-  (assert-result (string< "aaa" "aaa") false)
-  (assert-result (string< "aaa" "aaaa") true)
-  (assert-result (string< "aaaa" "aaa") false)
+  (assert-result (string< "aaa" "aab") #t)
+  (assert-result (string< "aab" "aaa") #f)
+  (assert-result (string< "aaa" "aaa") #f)
+  (assert-result (string< "aaa" "aaaa") #t)
+  (assert-result (string< "aaaa" "aaa") #f)
 
   (assert-result (substring "Hello" 1 3) "ell")
   (assert-result (string-search "banana" "an" 0) 1)
   (assert-result (string-search "banana" "an" 2) 3)
   (assert-result (string-replace "banana" "an" "rane") "braneranea")
-  (assert-result (not (character? #\x)) false)
+  (assert-result (not (character? #\x)) #f)
 
   ;; Test overlapping string and vector copies
   (assert-result (begin
@@ -221,7 +221,7 @@
 
   (assert-result (vector-equal? (vector 1 2 3)
                                 (make-vector-from-list '(1 2 3)))
-                 true)
+                 #t)
 
   (begin
     (define (assert-uniform-format a expect)
@@ -255,11 +255,11 @@
     (define istr (make-string-istream "ab"))
     (assert-result (peek-character istr 0) #\a)
     (assert-result (peek-character istr 1) #\b)
-    (assert-result (read-character istr false) #\a)
+    (assert-result (read-character istr #f) #\a)
     (assert-result (peek-character istr 0) #\b)
-    (assert-result (peek-character istr 1) false)
+    (assert-result (peek-character istr 1) #f)
     (istream-consume istr 1)
-    (assert-result (read-character istr true) false))
+    (assert-result (read-character istr #t) #f))
 
   (begin
     (define istr (make-string-istream "hello world (etc (etc)  )etc(etc)"))
@@ -269,7 +269,7 @@
     (assert-result (read istr) 'etc)
     (assert-result (read istr) '(etc))
 
-    (assert-result (read (make-string-istream " ") true) true)
+    (assert-result (read (make-string-istream " ") #t) #t)
 
     (define (assert-read str expect)
       (assert-result (read (make-string-istream str)) expect))
@@ -297,9 +297,9 @@
     (assert-read "#\\Space" #\Space)
     (assert-read "#\\Newline" #\Newline)
 
-    (assert-read "#t" true)
-    (assert-read "#f" false)
-    (assert-read "#u" unspecified)
+    (assert-read "#t" #t)
+    (assert-read "#f" #f)
+    (assert-read "#u" #u)
 
     (assert-read "true" 'true)
     (assert-read "false" 'false)
@@ -312,18 +312,18 @@ y)" '(x y))
 
   (with-open-file-for-reading (f "test/testfile")
     (assert-result (read f) '("hello" world))
-    (assert-result (read f false) false))
+    (assert-result (read f #f) #f))
 
   ;; check that body forms at the end of bodies are evaluated correctly
-  (assert-result (begin (define x true) (define y x)) true)
+  (assert-result (begin (define x #t) (define y x)) #t)
   (assert-result (begin
-                   (define x true)
-                   (definitions (set! x false) (define y x)))
-                 false)
+                   (define x #t)
+                   (definitions (set! x #f) (define y x)))
+                 #f)
   (assert-result (begin
-                   (define (f) (set! f false) (define x f))
+                   (define (f) (set! f #f) (define x f))
                    (f))
-                 false))
+                 #f))
 
 (define (main)
   (tests)

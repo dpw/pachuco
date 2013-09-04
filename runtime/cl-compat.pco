@@ -31,3 +31,7 @@
 ;; Dont have a pretty-printer, currently
 (defmacro (formout-pretty . args)
   (cons 'formout args))
+
+(defmacro true #t)
+(defmacro false #f)
+(defmacro unspecified #u)

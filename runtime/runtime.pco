@@ -5,10 +5,6 @@
 (defmacro (when-interpreting . rest)
   (if compiling '(definitions) (cons 'definitions rest)))
 
-(defmacro true #t)
-(defmacro false #f)
-(defmacro unspecified #u)
-
 ;;; Basics needed by quasiquote
 
 (define (list . l) l)
@@ -40,9 +36,9 @@
       (reduce (op initial (car l)) (cdr l) op)))
 
 (defmacro (and . args)
-  (if (null? args) true
+  (if (null? args) #t
       (if (null? (cdr args)) (car args)
-          (reduce (car args) (cdr args) (lambda (a b) (list 'if a b false))))))
+          (reduce (car args) (cdr args) (lambda (a b) (list 'if a b #f))))))
 
 (defmacro (cond . clauses)
   (if (null? clauses) '(begin)
@@ -58,20 +54,20 @@
                 (if innermost (cadr form)
                     (list 'list '(quote quote) (cadr form))))
                ((eq? 'quasiquote keyword)
-                (quasiquote-transform false
+                (quasiquote-transform #f
                                   (quasiquote-transform innermost (cadr form))))
                ((and (pair? keyword) (eq? 'unquote-splicing (car keyword)))
                 (list 'append (cadr keyword)
                       (quasiquote-transform innermost (cdr form))))
-               (true
+               (#t
                 (list 'cons (quasiquote-transform innermost keyword)
                             (quasiquote-transform innermost (cdr form))))))
         ((symbol? form)
          (list 'quote form))
-        (true form)))
+        (#t form)))
 
 (defmacro (quasiquote form)
-  (quasiquote-transform true form))
+  (quasiquote-transform #t form))
 
 (define (append-2 c l1 rest)
   ;; Attach elements from the list l1 and list of lists rest onto the cons c
@@ -180,10 +176,10 @@
 
 ;;; Booleans
 
-(defmacro (not a) (quasiquote (if (unquote a) false true)))
+(defmacro (not a) (quasiquote (if (unquote a) #f #t)))
 
 (defmacro (or . args)
-  (if (null? args) false
+  (if (null? args) #f
       (if (null? (cdr args)) (car args)
           (reduce (car args) (cdr args)
                   (lambda (a b)
@@ -233,7 +229,7 @@
         (begin
          (set! addr (raw-- addr (fixnum->raw (compiler-constant value-size))))
          (set! l (cons (raw-ref addr) l))
-         (raw-set! addr false)
+         (raw-set! addr #f)
          (make-varargs-list addr bottom l))
         l))
 
@@ -278,8 +274,8 @@
     (raw-jump-with-arg-space raw-arg-count arg-count
       (lambda ()
         (copy-args args (raw-args-base))
-        (set! args false)
-        (set! arg1 false)
+        (set! args #f)
+        (set! arg1 #f)
         (raw-apply-jump func arg-count)))))
 
 ;;; Lists
@@ -291,9 +287,9 @@
   (length-aux l 0))
 
 (define (member? item l)
-  (cond ((null? l) false)
-        ((eq? item (car l)) true)
-        (true (member? item (cdr l)))))
+  (cond ((null? l) #f)
+        ((eq? item (car l)) #t)
+        (#t (member? item (cdr l)))))
 
 (define (adjoin item l)
   (if (member? item l) l (cons item l)))
@@ -426,7 +422,7 @@
   (define l (gensym))
   (quasiquote (begin
     (define ((unquote loopf) (unquote l))
-      (if (null? (unquote l)) false
+      (if (null? (unquote l)) #f
           (begin (define (unquote (first binding)) (car (unquote l)))
                  (if (begin . (unquote body)) (unquote (first binding))
                      ((unquote loopf) (cdr (unquote l)))))))
@@ -461,7 +457,7 @@
 (define (remove item l)
   (cond ((null? l) l)
         ((eq? item (car l)) (remove item (cdr l)))
-        (true (cons (car l) (remove item (cdr l))))))
+        (#t (cons (car l) (remove item (cdr l))))))
 
 (define (delete item l)
   (define (aux c l)
@@ -487,7 +483,7 @@
          (define l2 (second l))
          (if (if (pred l1 l2) (not reverse) reverse) l (list l2 l1)))
 
-        (true
+        (#t
          ;; partition the list into two halves
          (define l1 ())
          (define l2 ())
@@ -529,7 +525,7 @@
                 ()))))
 
 (define (sort l pred)
-  (sort-aux false l pred))
+  (sort-aux #f l pred))
 
 (define (reverse l)
   (define (aux acc l)
@@ -544,15 +540,15 @@
           (cond ((= 0 len) ())
                 ((not (null? l))
                  (cons (car l) (copy-partial-list (cdr l) (1- len))))
-                (true
+                (#t
                  (error "sublist fell off the end of the list"))))
         (copy-partial-list (nthcdr start l) (- (first end) start)))))
 
 (define (position x l)
   (define (aux n l)
-    (cond ((null? l) false)
+    (cond ((null? l) #f)
           ((eq? x (car l)) n)
-          (true (aux (1+ n) (cdr l)))))
+          (#t (aux (1+ n) (cdr l)))))
   (aux 0 l))
 
 ;;; Numbers again
@@ -603,7 +599,7 @@
 ;;; Symbols
 
 (when-compiling
-  (define symbol-table false)
+  (define symbol-table #f)
   (define symbol-id-counter 0)
 
   (define (intern str)
@@ -697,7 +693,7 @@
       (vector-set! vec pos (car l))
       (copy-list-to-vector (cdr l) vec (1+ pos))))
 
-  (define vec (make-vector (length l) false))
+  (define vec (make-vector (length l) #f))
   (copy-list-to-vector l vec 0)
   vec)
 
@@ -712,7 +708,7 @@
         (cons (list 'raw-vector-set! v pos (car l)) (inits (cdr l) (1+ pos)))))
 
   (quasiquote (begin
-                (define (unquote v) (make-vector (unquote (length l)) false))
+                (define (unquote v) (make-vector (unquote (length l)) #f))
                 (unquote-splicing (inits l 0))
                 (unquote v))))
 
@@ -729,9 +725,9 @@
 ;;; Lists
 
 (define (assoc key l)
-  (cond ((null? l) false)
+  (cond ((null? l) #f)
         ((eq? key (caar l)) (car l))
-        (true (assoc key (cdr l)))))
+        (#t (assoc key (cdr l)))))
 
 (defmacro (push el place)
   (quasiquote (set! (unquote place) (cons (unquote el) (unquote place)))))
@@ -765,9 +761,9 @@
         (begin
           (define achar (raw-string-ref a pos))
           (define bchar (raw-string-ref b pos))
-          (cond ((< achar bchar) true)
-                ((> achar bchar) false)
-                (true (compare-chars (1+ pos)))))))
+          (cond ((< achar bchar) #t)
+                ((> achar bchar) #f)
+                (#t (compare-chars (1+ pos)))))))
 
   (compare-chars 0))
 
@@ -786,19 +782,19 @@
   (string-flatten strs))
 
 (define (string-range-equal? a astart b bstart len)
-  (cond ((= 0 len) true)
+  (cond ((= 0 len) #t)
         ((or (>= astart (string-length a))
              (>= bstart (string-length b))
              (not (eq? (string-ref a astart) (string-ref b bstart))))
-         false)
-        (true
+         #f)
+        (#t
          (string-range-equal? a (1+ astart) b (1+ bstart) (1- len)))))
 
 (define (string-search haystack needle start)
   (define len (string-length needle))
-  (cond ((> (+ start len) (string-length haystack)) false)
+  (cond ((> (+ start len) (string-length haystack)) #f)
         ((string-range-equal? haystack start needle 0 len) start)
-        (true (string-search haystack needle (1+ start)))))
+        (#t (string-search haystack needle (1+ start)))))
 
 (define (string-replace str old new)
   (define (string-replace-from str start)
@@ -821,7 +817,7 @@
          (and (string? b) (string-equal? a b)))
         ((vector? a)
          (and (vector? b) (vector-equal? a b)))
-        (true (eq? a b))))
+        (#t (eq? a b))))
 
 ;;; Command line access
 
@@ -855,7 +851,7 @@
 
 (define runtime-main-args-base)
 
-(when-interpreting (define (raw-args-base) false))
+(when-interpreting (define (raw-args-base) #f))
 
 (define (runtime-main)
   (set! runtime-main-args-base (raw-args-base))

@@ -49,13 +49,9 @@ types present in other Lisps:
 
   - `()`: the empty list
 
-  - `true`, `false`: Boolean values.
+  - `#t`, `#f`: Boolean values.
 
-  - `unspecified`: nasal demons ahoy!
-
-  Note that some of the special values are syntactically conflated
-  with symbols (in contrast to the `#t`, `#f` of Scheme).  But they
-  are not symbols: `(symbol? true)` yields `false`.
+  - '#u`: nasal demons ahoy!
 
 Pairs, vectors, and strings are all mutable.
 
