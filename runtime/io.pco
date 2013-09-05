@@ -561,8 +561,8 @@
         ct)
       rt-eos))
 
-(define (rt-constituent? ct)
-  (<= ct rt-constituent-max))
+(defmacro (rt-constituent? ct)
+  (list '<= ct 'rt-constituent-max))
 
 (define (character-alphanumeric? ch)
   (set! ch (character-code ch))
