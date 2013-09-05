@@ -445,7 +445,7 @@
          (let* ((l (varrec-attr-defaulting (varrec-origin (form-attr func 'varrec))
                                            'lambda false)))
            (and l (car l))))
-        ((eq? 'lambda (first func))
+        ((member? (first func) '(lambda static-lambda))
          (second func))
         (true
          false)))
@@ -478,6 +478,13 @@
                       (first general-registers)))
   (when (func-needs-closure? func)
     (trashy-codegen-into-reg func cg false %closure)))
+
+(define-operator (static-lambda) ()
+  (let* ((label (gen-label)))
+    (emit-data cg label closure-tag-bits)
+    (emit-literal cg (car (attr-ref attrs 'labels)))
+    (emit cg ".text")
+    (format "~A+~D" label closure-tag)))
 
 (define-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
