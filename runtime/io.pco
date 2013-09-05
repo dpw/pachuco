@@ -461,7 +461,7 @@
   (define pos (istream-pos is))
   (cond ((< pos (istream-end is))
          (istream-set-pos! is (1+ pos))
-         (string-ref (istream-buf is) pos))
+         (raw-string-ref (istream-buf is) pos))
         ((istream-refill is 1)
          (read-character is accept-eos))
         (accept-eos #f)
@@ -495,7 +495,7 @@
 (define (peek-character is offset)
   (define pos (+ offset (istream-pos is)))
   (cond ((< pos (istream-end is))
-         (string-ref (istream-buf is) pos))
+         (raw-string-ref (istream-buf is) pos))
         ((istream-refill is offset)
          (peek-character is offset))
         (#t #f)))
@@ -555,7 +555,7 @@
   (if ch
       (begin
         (set! ch (character-code ch))
-        (define ct (if (>= ch 128) rt-illegal (vector-ref readtable ch)))
+        (define ct (if (>= ch 128) rt-illegal (raw-vector-ref readtable ch)))
         (when (= ct rt-illegal)
           (error "bad character ~C (~D)" ch (character-code ch)))
         ct)
