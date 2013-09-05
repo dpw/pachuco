@@ -621,12 +621,13 @@
 
   (define ct (rt-character-type ch))
   (define number (and (= ct rt-digit) (read-integer is 10 #f)))
-  (or number
-    (begin
-     (define pos 0)
-     (while (rt-constituent? (rt-character-type (peek-character is pos)))
-       (set! pos (1+ pos)))
-     (intern (read-string is pos)))))
+  (if number number
+      (begin
+        (define (scan-token is pos)
+          (if (rt-constituent? (rt-character-type (peek-character is pos)))
+              (scan-token is (1+ pos))
+              pos))
+        (intern (read-string is (scan-token is 0))))))
 
 (define (consume-whitespace istr)
   (define ch (peek-character istr 0))
