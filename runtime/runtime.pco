@@ -759,8 +759,8 @@
     (if (= pos min-len)
         (< min-len (string-length b))
         (begin
-          (define achar (raw-string-ref a pos))
-          (define bchar (raw-string-ref b pos))
+          (define achar (character-code (raw-string-ref a pos)))
+          (define bchar (character-code (raw-string-ref b pos)))
           (cond ((< achar bchar) #t)
                 ((> achar bchar) #f)
                 (#t (compare-chars (1+ pos)))))))

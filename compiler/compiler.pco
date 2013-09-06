@@ -288,7 +288,7 @@
 
 (define-simplify ((character-code code-character) attrs ch)
   (overwrite-form form ch)
-  (simplify-recurse form))
+  (simplify form))
 
 (define-simplify (character? attrs ch)
   (rplaca form 'number?)
