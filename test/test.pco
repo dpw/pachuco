@@ -24,6 +24,12 @@
   (assert-result (function? ()) #f)
   (assert-result (function? (lambda ())) #t)
 
+  (assert-result (begin (define x 42)) 42)
+  (assert-result (function? (begin
+                              (define x 42)
+                              (define f (lambda ()))))
+                 #t)
+
   (assert-result (and) #t)
   (assert-result (and #t) #t)
   (assert-result (and #f) #f)

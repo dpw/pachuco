@@ -651,14 +651,27 @@
                ;; Partition l into define-lambda forms in `dls` and
                ;; other form in `others`.  The order of the forms is
                ;; reversed in the process.
-               (unless (null? l)
-                 (let* ((form (car l))
-                        (tail (cdr l)))
-                   (if (and (eq? 'define (first form))
-                            (eq? 'lambda (first (third form))))
+               (let* ((form (car l))
+                      (tail (cdr l)))
+                 (if (and (eq? 'define (first form))
+                          (eq? 'lambda (first (third form))))
+                     (begin
                        (set! dls (rplacd l dls))
-                       (set! others (rplacd l others)))
-                   (partition tail))))
+                       (if (not (null? tail))
+                           (partition tail)
+                           ;; the last form in the body was a define
+                           ;; lambda that we put into dls. So unless
+                           ;; others is empty, we need to retrieve the
+                           ;; lambda value as the last form in others
+                           ;; in order for the begin to yield the
+                           ;; correct value.
+                           (unless (null? others)
+                             (set! others (cons (list 'ref (second form))
+                                                others)))))
+                     (begin
+                       (set! others (rplacd l others))
+                       (unless (null? tail)
+                         (partition tail))))))
              (nrev (l onto)
                ;; Reverse a list destructively, prepending the
                ;; reversed list onto `onto`.
@@ -667,6 +680,7 @@
                      (rplacd l onto)
                      (nrev tail l))
                    onto)))
+      ;; we know the body of a begin is non-empty
       (partition forms)
       (nrev dls (nrev others ())))))
 
