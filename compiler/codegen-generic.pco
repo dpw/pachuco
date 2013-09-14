@@ -63,35 +63,29 @@
   (emit-align cg scale)
   (emit cg "~A:" label))
 
-(define (emit-bss-label cg label)
-  (emit cg ".section .bss")
-  (emit cg ".globl ~A" label)
-  (emit cg "~A:" label))
-
-(define (codegen-top-level-variable cg name label)
-  (emit-comment cg "top-level ~S" name)
-  (emit-bss-label cg label)
-  (emit-literal cg 0))
-
 (define (codegen-program-sections program cg)
-  (emit cg ".section .bss")
-  (emit-align cg value-scale)
+  (labels ((emit-label (label)
+             (emit cg ".globl ~A" label)
+             (emit cg "~A:" label)))
+    (emit cg ".section .bss")
+    (emit-align cg value-scale)
+    (emit-label "top_level_start")
 
-  (emit-bss-label cg "top_level_start")
+    (dolist (varrec (second program))
+      (when (eq? 'arity-mismatch (car varrec))
+        (codegen-set-arity-mismatch-varrec! cg varrec))
 
-  (dolist (varrec (second program))
-    (when (eq? 'arity-mismatch (car varrec))
-      (codegen-set-arity-mismatch-varrec! cg varrec))
+      (let* ((label (make-label-for (car varrec) variable-label-prefix)))
+        (varrec-attr-set! varrec 'label label)
+        (emit-comment cg "top-level ~S" (car varrec))
+        (emit-label label)
+        (emit-literal cg unspecified-representation)))
 
-    (let* ((label (make-label-for (car varrec) variable-label-prefix)))
-      (varrec-attr-set! varrec 'label label)
-      (codegen-top-level-variable cg (car varrec) label)))
+    (emit-label "top_level_end"))
 
   (dolist (form (cddr program))
     (codegen-sections form cg)
-    (emit-comment cg "BREAK"))
-
-  (emit-bss-label cg "top_level_end"))
+    (emit-comment cg "BREAK")))
 
 (define (codegen-function attrs cg)
   (let* ((labels (attr-ref attrs 'labels)))
