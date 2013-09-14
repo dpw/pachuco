@@ -226,7 +226,7 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen))
          (saved-regs (multi-operand (append c-callee-saved-regs (list %lr)))))
-    (codegen-program-sections program cg)
+    (codegen-program-start cg program)
 
     (emit cg ".text")
     (emit cg ".globl lisp")
@@ -240,8 +240,7 @@
         (access-global cg "ldr" (cdr rglob) (car rglob) temp)))
 
     (codegen-set-frame-base! cg 0)
-    (codegen-set-have-closure! cg false)
-    (trashy-codegen-discarding program cg false)
+    (codegen-body cg program 0)
 
     (emiti cg "ldmfd sp!, ~A" saved-regs)
     (emiti cg "mov pc, lr")
@@ -398,6 +397,7 @@
                        (asm-operand (stack-param-offset cg (- in-arg-count
                                                                out-arg-count)))
                        general-registers)
+    (emit-ltorg cg)
     (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
@@ -412,6 +412,7 @@
           (stack-param-offset cg (- out-arg-count)))
     (codegen-tail-call cg func args out-arg-count out-param-offset
                        (cdr general-registers))
+    (emit-ltorg cg)
     (codegen-function-tail cg out-frame-base)))
 
 (define (emit-restore-%closure cg)
@@ -720,12 +721,12 @@
                                                   (vec-offset attrs indexval)
                                                   ()))))))))
 
-(define-codegen-sections (raw-vec-set! attrs vec index val)
-  (codegen-sections-recurse form cg)
+(define-codegen-simplify (raw-vec-set! attrs vec index val)
+  (codegen-simplify-recurse form)
   (simplify-vec-op form index))
 
-(define-codegen-sections ((raw-vec-ref vec-address) attrs vec index)
-  (codegen-sections-recurse form cg)
+(define-codegen-simplify ((raw-vec-ref vec-address) attrs vec index)
+  (codegen-simplify-recurse form)
   (simplify-vec-op form index))
 
 (define-operator (raw-vec-set! vec (index reg-imm12) val) ()

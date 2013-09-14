@@ -57,6 +57,7 @@
   (here-labels ())
   (redirect-labels ())
   (out-of-line ())
+  (todo ())
   (arity-mismatch-varrec false))
 
 ;;; Assembler bits

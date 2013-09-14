@@ -217,6 +217,33 @@
   (wrap-lambda-body form body)
   (simplify-recurse form))
 
+(define (wrap-lambda-body lambda-form body)
+  ;; wrap a lambda body with code required to check that the number of
+  ;; arguments matches the number of parameters, or to handle varargs
+  (let* ((nparams (length (form-attr lambda-form 'params)))
+         (vararg (form-attr lambda-form 'vararg))
+         (wrapped-begin (list* 'begin () (if (null? body)
+                                             (list (quoted-unspecified))
+                                             body))))
+    ;; wrapped-begin is the begin form that surrounds the original
+    ;; lambda body.  We stash it in an attribute, because the
+    ;; introduce-boxes phase needs to get access to it later.
+    (form-attr-set! lambda-form 'wrapped-begin wrapped-begin)
+    (rplacd (cdr lambda-form)
+      (if vararg
+          (quasiquote
+            ((begin ()
+                    (define raw-arg-count (arg-count ()))
+                    (define (unquote vararg) (call () (ref handle-varargs)
+                                                   (quote (unquote nparams))
+                                                   (ref raw-arg-count)
+                                                   (raw-args-base ())))
+                    (varargs-return () (ref raw-arg-count)
+                                    (unquote wrapped-begin)))))
+          (quasiquote
+            ((return ((nparams . (unquote nparams)))
+               (unquote wrapped-begin))))))))
+
 (define-simplify (define varrec . val)
   ;; Normalize defines to always include a value
   (if (null? val)
@@ -528,13 +555,13 @@
 ;;;
 ;;; We need storage boxes for variables that get written to *and* get
 ;;; stashed into closures (read-only variables can be stored directly
-;;; in closures; written variables that don't put in closures can just
-;;; live on the stack).  So we rewrite all set!s and refs for such
-;;; variables to go via the storage boxes.
+;;; in closures; written variables that don't get put in closures can
+;;; just live on the stack).  So we rewrite all set!s and refs for
+;;; such variables to go via the storage boxes.
 ;;;
 ;;; For variables introduced by begin, we also need to allocate the
 ;;; storage boxes, but classify-variables ensured that a define always
-;;; precedes any other other of a variable, so we simply patch the
+;;; precedes any other use of a variable, so we simply patch the
 ;;; define to do the raw-make-box.
 ;;;
 ;;; Variables introduced by lambdas are more complicated, since we need
@@ -589,8 +616,8 @@
       (rplaca (cdr wrapped-begin) ())
       (rplacd (cdr wrapped-begin) body))))
 
-;;; The fill-closures phase elaborates lambda fors to produce the code
-;;; to allocate and initialize closures.
+;;; The fill-closures phase elaborates lambda forms to produce the
+;;; code to allocate and initialize closures.
 ;;;
 ;;; In particular, we need to handle mutual references, e.g. as in
 ;;; mutual recursion between two functions.  We can handle this by
@@ -856,65 +883,6 @@
 
 (define-comment-form (ash-imm attrs n)
   (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
-
-;;; Arch-independent code generation
-
-;;; Top-level sections:  Lambdas and quoted forms
-
-(define-trivial-walker codegen-sections (cg))
-
-(define (assign-varrec-indices varrecs)
-  ;; assign slot indices to varrecs
-  (let* ((index 0))
-    (dolist (varrec varrecs)
-      (varrec-attr-set! varrec 'index index)
-      (set! index (1+ index)))))
-
-(define-codegen-sections ((lambda static-lambda) attrs . args)
-  (codegen-sections-forms args cg)
-
-  (let* ((self-varrec (attr-ref attrs 'self))
-         (closure (attr-ref attrs 'closure))
-         (body (attr-ref attrs 'body)))
-    ;; generate code for nested lambdas
-    (codegen-sections body cg)
-
-    (assign-varrec-indices closure)
-    (assign-varrec-indices (attr-ref attrs 'params))
-
-    (when self-varrec
-      (emit-comment cg "~S" (car self-varrec)))
-
-    (emit-comment-form cg body)
-    (codegen-set-have-closure! cg (not (null? closure)))
-    (codegen-function attrs cg)))
-
-(define (wrap-lambda-body lambda-form body)
-  ;; wrap a lambda body with code required to check that the number of
-  ;; arguments matches the number of parameters, or to handle varargs
-  (let* ((nparams (length (form-attr lambda-form 'params)))
-         (vararg (form-attr lambda-form 'vararg))
-         (wrapped-begin (list* 'begin () (if (null? body)
-                                             (list (quoted-unspecified))
-                                             body))))
-    ;; wrapped-begin is the begin form that surrounds the original
-    ;; lambda body.  We stash it in an attribute, because the
-    ;; introduce-boxes phase needs to get access to it later.
-    (form-attr-set! lambda-form 'wrapped-begin wrapped-begin)
-    (rplacd (cdr lambda-form)
-      (if vararg
-          (quasiquote
-            ((begin ()
-                    (define raw-arg-count (arg-count ()))
-                    (define (unquote vararg) (call () (ref handle-varargs)
-                                                   (quote (unquote nparams))
-                                                   (ref raw-arg-count)
-                                                   (raw-args-base ())))
-                    (varargs-return () (ref raw-arg-count)
-                                    (unquote wrapped-begin)))))
-          (quasiquote
-            ((return ((nparams . (unquote nparams)))
-               (unquote wrapped-begin))))))))
 
 ;;; Strings and vectors
 

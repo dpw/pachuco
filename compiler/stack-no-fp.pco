@@ -124,7 +124,7 @@
 
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
-    (codegen-program-sections program cg)
+    (codegen-program-start cg program)
 
     (emit cg ".text")
     (emit cg ".globl lisp")
@@ -133,8 +133,7 @@
     (emit-set-ac-flag cg true)
 
     (codegen-set-frame-base! cg 0)
-    (codegen-set-have-closure! cg false)
-    (trashy-codegen-discarding program cg false)
+    (codegen-body cg program 0)
 
     (emit-set-ac-flag cg false)
     (dolist (reg (reverse c-callee-saved-regs)) (emit-pop cg reg))

@@ -11,10 +11,23 @@
 (define (codegen-do-out-of-line cg)
   (let* ((ool (codegen-out-of-line cg)))
     (unless (null? ool)
+      (codegen-set-out-of-line! cg (cdr ool))
       (codegen-set-frame-base! cg (cdar ool))
       (funcall (caar ool))
-      (codegen-set-out-of-line! cg (cdr ool))
       (codegen-do-out-of-line cg))))
+
+(define (codegen-lambda-todo cg form)
+  (codegen-set-todo! cg (cons form (codegen-todo cg))))
+
+(define (codegen-do-todos cg)
+  (let* ((todo (codegen-todo cg)))
+    (unless (null? todo)
+      (codegen-set-todo! cg (cdr todo))
+      (emit-comment cg "BREAK")
+      (codegen-function cg (car todo))
+      (codegen-do-todos cg))))
+
+(define-trivial-walker codegen-simplify ())
 
 (define (fixnum-representation n) (ash n number-tag-bits))
 (define (low-bits-mask bits) (1- (ash 1 bits)))
@@ -63,7 +76,8 @@
   (emit-align cg scale)
   (emit cg "~A:" label))
 
-(define (codegen-program-sections program cg)
+;;; Generate the prologue to the assembly output
+(define (codegen-program-start cg program)
   (labels ((emit-label (label)
              (emit cg ".globl ~A" label)
              (emit cg "~A:" label)))
@@ -83,18 +97,39 @@
 
     (emit-label "top_level_end"))
 
-  (dolist (form (cddr program))
-    (codegen-sections form cg)
-    (emit-comment cg "BREAK")))
+  (codegen-set-have-closure! cg false))
 
-(define (codegen-function attrs cg)
-  (let* ((labels (attr-ref attrs 'labels)))
+;;; Finish off the assembly output
+(define (codegen-program-end cg)
+  (codegen-do-todos cg)
+  (codegen-helpers cg)
+  (codegen-symbols cg)
+
+  ;; This indicates to the linker that we support a non-executable stack
+  (emit cg ".section .note.GNU-stack,\"\",%progbits"))
+
+(define (codegen-function cg form)
+  (let* ((attrs (second form))
+         (labels (attr-ref attrs 'labels))
+         (closure (attr-ref attrs 'closure)))
+    (labels ((assign-varrec-indices (varrecs)
+               ;; assign slot indices to varrecs
+               (let* ((index 0))
+                 (dolist (varrec varrecs)
+                   (varrec-attr-set! varrec 'index index)
+                   (set! index (1+ index))))))
+      (assign-varrec-indices closure)
+      (assign-varrec-indices (attr-ref attrs 'params)))
+
     (emit cg ".text")
     (emit-align cg value-scale)
-    (emit-literal cg (fixnum-representation
-                       (1+ (length (attr-ref attrs 'closure)))))
+    (emit-literal cg (fixnum-representation (1+ (length closure))))
     (emit cg ".globl ~A" (first labels))
     (emit-smart-label cg (first labels))
+
+    (let* ((self-varrec (attr-ref attrs 'self)))
+      (when self-varrec
+        (emit-comment cg "function ~S" (car self-varrec))))
 
     (unless (null? (cdr labels))
       (let* ((nparams (length (attr-ref attrs 'params)))
@@ -114,17 +149,20 @@
         (emit-smart-label cg (second labels))))
 
     (emit-function-prologue cg)
-    (when (codegen-have-closure cg) (emit-frame-push cg %closure))
-    (trashy-codegen-discarding (attr-ref attrs 'body) cg false)
+    (codegen-set-have-closure! cg (if (null? closure)
+                                      false
+                                      (begin
+                                        (emit-frame-push cg %closure)
+                                        true)))
+    (codegen-body cg (attr-ref attrs 'body) false)
     (codegen-do-out-of-line cg)
     (emit cg ".size ~A, .-~A" (first labels) (first labels))))
 
-(define (codegen-program-end cg)
-  (codegen-helpers cg)
-  (codegen-symbols cg)
-
-  ;; This indicates to the linker that we support a non-executable stack
-  (emit cg ".section .note.GNU-stack,\"\",%progbits"))
+;;; Generate code for the body of a function or main program body
+(define (codegen-body cg body out-frame-base)
+  (codegen-simplify body)
+  (emit-comment-form cg body)
+  (trashy-codegen-discarding body cg out-frame-base))
 
 ;;; "Smart" branching, jumping, and labels.
 ;;;
@@ -283,7 +321,7 @@
 (define-operator (raw) ()
   (attr-ref attrs 'value))
 
-(define-codegen-sections (quote quoted)
+(define-codegen-simplify (quote quoted)
   (rplaca (cdr form) (list (cons 'quoted quoted))))
 
 (define (quote-false? form)
@@ -363,19 +401,19 @@
 
 ;;; Variables
 
-(define-codegen-sections (define varrec val)
+(define-codegen-simplify (define varrec val)
   ;; convert define for top-level variables to set!
   (when (varrec-top-level? varrec) (rplaca form 'set!))
   ;; make the varrec into a normal attribute, in order to use
   ;; define-operator
   (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-sections val cg))
+  (codegen-simplify val))
 
-(define-codegen-sections ((set! ref) varrec . rest)
+(define-codegen-simplify ((set! ref) varrec . rest)
   ;; make the varrec into a normal attribute, in order to use
   ;; define-operator
   (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-sections-forms rest cg))
+  (codegen-simplify-forms rest))
 
 ;;; Simplifications of arithmetic operators
 
@@ -416,8 +454,8 @@
 ;; Distinguish the constant-bit-count for of ash from the
 ;; variable-bit-count form, because they lead to significantly
 ;; different code.
-(define-codegen-sections (ash attrs n shift)
-  (codegen-sections-recurse form cg)
+(define-codegen-simplify (ash attrs n shift)
+  (codegen-simplify-recurse form)
   (when (eq? 'quote (car shift))
     (let* ((shiftval (form-attr shift 'quoted)))
       (when (number? shiftval)
@@ -470,10 +508,12 @@
   (dolist (arg (reverse args))
     (emit-frame-spill cg (trashy-codegen arg cg false)
                       (first general-registers)))
-  (when (func-needs-closure? func)
-    (trashy-codegen-into-reg func cg false %closure)))
+  (if (func-needs-closure? func)
+      (trashy-codegen-into-reg func cg false %closure)
+      (trashy-codegen-discarding func cg false)))
 
 (define-operator (static-lambda) ()
+  (codegen-lambda-todo cg form)
   (let* ((label (gen-label)))
     (emit-data cg label closure-tag-bits)
     (emit-literal cg (car (attr-ref attrs 'labels)))
