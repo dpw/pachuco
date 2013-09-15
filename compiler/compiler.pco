@@ -344,7 +344,7 @@
     (dolist (subform body)
       (when (eq? 'define (car subform))
         (let* ((var (second subform))
-               (varrec (list var)))
+               (varrec (make-varrec var)))
           (unless frame (set! frame (make-symboltable)))
           (when (symboltable-ref frame var)
             (error "multiple definitions for ~S" var))
@@ -358,7 +358,7 @@
 (define-resolve-variables (lambda attrs body)
   (let* ((frame (make-symboltable)))
     (dolist (varrec (attr-ref attrs 'params))
-      (symboltable-set! frame (car varrec) varrec))
+      (symboltable-set! frame (varrec-name varrec) varrec))
     (resolve-variables body (cons frame frames))))
 
 (define (resolve-variable var frames)
@@ -812,14 +812,15 @@
 (define-walker debug-form ())
 
 (define (debug-uniquify-varrec varrec)
-  (cond ((not (pair? varrec))
+  (cond ((not (vector? varrec))
+         (unless (symbol? varrec) (error "strange varrec ~S" varrec))
          varrec)
-        ((pair? (car varrec))
-         (car varrec))
+        ((pair? (varrec-name varrec))
+         (varrec-name varrec))
         (true
-         (rplaca varrec (cons (car varrec) (gensym)))
-         (rplacd varrec
-            (flatten*-mapfor (attr (cdr varrec))
+         (varrec-set-name! varrec (cons (varrec-name varrec) (gensym)))
+         (varrec-set-attrs! varrec
+            (flatten*-mapfor (attr (varrec-attrs varrec))
               (let* ((key (car attr))
                      (val (cdr attr)))
                 (cond ((not val)
@@ -830,7 +831,8 @@
                        (list (list key (debug-lambda-attrs (first val) false)
                                    'etc)))
                       (true
-                       (list attr)))))))))
+                       (list attr))))))
+         varrec)))
 
 (define (debug-uniquify-varrecs varrecs)
   (mapfor (varrec varrecs) (debug-uniquify-varrec varrec)))
