@@ -131,16 +131,22 @@
   val)
 
 
-(define-struct varrec ((constructor make-varrec name))
+(define-struct varrec ((constructor make-varrec-aux name))
   name ; name as a symbol
   mode ; access mode: self, top-level, closure, param or local
   misc ; available for per-phase use
   access ; access class: read-only, written or early-function
+  origin ; origin varrec for closure variables
   (attrs ()) ; legacy attributes
   )
 
+(define (make-varrec name)
+  (let* ((varrec (make-varrec-aux name)))
+    (varrec-set-origin! varrec varrec)
+    varrec))
+
 (define (check-varrec-attr attr)
-  (when (member? attr '(mode state access))
+  (when (member? attr '(mode state access origin))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -505,7 +511,7 @@
 
 (define (make-local-varrec origin mode)
   (let* ((varrec (make-varrec (varrec-name origin))))
-    (varrec-attr-set! varrec 'origin origin)
+    (varrec-set-origin! varrec origin)
     (varrec-set-access! varrec (varrec-access origin))
     (varrec-set-mode! varrec mode)
     varrec))
@@ -536,7 +542,6 @@
 (define (collect-closures-body form varrecs depth closure-cell)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'boxed false)
-    (varrec-attr-set! varrec 'origin false)
     (varrec-attr-set! varrec 'closure-stack
                       (if (varrec-top-level? varrec) false
                           (acons depth varrec ()))))
@@ -566,7 +571,7 @@
     (form-attr-set! form 'closure (car local-closure-cell))
     (dolist (local-varrec (append (car self-closure-cell)
                                   (car local-closure-cell)))
-      (let* ((origin-varrec (varrec-attr local-varrec 'origin)))
+      (let* ((origin-varrec (varrec-origin local-varrec)))
         (varrec-attr-set! origin-varrec 'closure-stack
                           (cdr (varrec-attr origin-varrec 'closure-stack)))
         (varrec-attr-set! local-varrec 'source
@@ -592,9 +597,6 @@
 ;;; to copy the original parameter value into the storage box.  So we
 ;;; have to rename the original parameter.  This involves wrapping the
 ;;; lambda body with a begin form.
-
-(define (varrec-origin varrec)
-  (or (varrec-attr varrec 'origin) varrec))
 
 (define (varrec-boxed? varrec)
   (varrec-attr (varrec-origin varrec) 'boxed))
@@ -832,13 +834,15 @@
          (varrec-name varrec))
         (true
          (varrec-set-name! varrec (cons (varrec-name varrec) (gensym)))
+         (varrec-set-origin! varrec
+                             (debug-uniquify-varrec (varrec-origin varrec)))
          (varrec-set-attrs! varrec
             (flatten*-mapfor (attr (varrec-attrs varrec))
               (let* ((key (car attr))
                      (val (cdr attr)))
                 (cond ((not val)
                        ())
-                      ((or (eq? key 'source) (eq? key 'origin))
+                      ((eq? key 'source)
                        (list (cons key (debug-uniquify-varrec val))))
                       ((eq? key 'lambda)
                        (list (list key (debug-lambda-attrs (first val) false)
