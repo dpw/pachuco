@@ -382,7 +382,7 @@
 ;;; Variables
 
 (define (varrec-operand varrec cg)
-  (let* ((mode (varrec-attr varrec 'mode)))
+  (let* ((mode (varrec-mode varrec)))
     (cond ((eq? mode 'self) %closure)
           ((eq? mode 'top-level) (mem-operand (varrec-attr varrec 'label)))
           (true

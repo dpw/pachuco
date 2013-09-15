@@ -448,7 +448,7 @@
 
 (define (access-varrec cg varrec insn addr reg)
   (set! reg (reg-asm-operand reg))
-  (let* ((mode (varrec-attr varrec 'mode)))
+  (let* ((mode (varrec-mode varrec)))
     (cond ((eq? mode 'self)
            ;; we only need to read such variables
            (emiti cg "mov ~A, ~A" reg (reg-asm-operand %closure)))
