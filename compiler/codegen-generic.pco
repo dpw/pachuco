@@ -86,12 +86,13 @@
     (emit-label "top_level_start")
 
     (dolist (varrec (second program))
-      (when (eq? 'arity-mismatch (car varrec))
+      (when (eq? 'arity-mismatch (varrec-name varrec))
         (codegen-set-arity-mismatch-varrec! cg varrec))
 
-      (let* ((label (make-label-for (car varrec) variable-label-prefix)))
+      (let* ((label (make-label-for (varrec-name varrec)
+                                    variable-label-prefix)))
         (varrec-attr-set! varrec 'label label)
-        (emit-comment cg "top-level ~S" (car varrec))
+        (emit-comment cg "top-level ~S" (varrec-name varrec))
         (emit-label label)
         (emit-literal cg unspecified-representation)))
 
@@ -129,7 +130,7 @@
 
     (let* ((self-varrec (attr-ref attrs 'self)))
       (when self-varrec
-        (emit-comment cg "function ~S" (car self-varrec))))
+        (emit-comment cg "function ~S" (varrec-name self-varrec))))
 
     (unless (null? (cdr labels))
       (let* ((nparams (length (attr-ref attrs 'params)))
