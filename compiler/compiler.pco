@@ -493,6 +493,13 @@
 ;;; varrec.  The closure stack is an alist from the binding form depth
 ;;; to the appropriate varrec for uses within that binding form.
 
+(define (make-local-varrec origin mode)
+  (let* ((varrec (make-varrec (varrec-name origin))))
+    (varrec-attr-set! varrec 'origin origin)
+    (varrec-attr-set! varrec 'access (varrec-attr origin 'access))
+    (varrec-attr-set! varrec 'mode mode)
+    varrec))
+
 (define (resolve-closure-var varrec mode depth closure-cell)
   (let* ((closure-stack (varrec-attr varrec 'closure-stack)))
     (cond ((not closure-stack)
@@ -500,11 +507,7 @@
           ((= depth (caar closure-stack))
            (cdar closure-stack))
           (true
-           (let* ((local-varrec
-                    (list (car varrec)
-                          (cons 'origin varrec)
-                          (cons 'access (varrec-attr varrec 'access))
-                          (cons 'mode mode))))
+           (let* ((local-varrec (make-local-varrec varrec mode)))
              (varrec-attr-set! varrec 'closure-stack
                                (acons depth local-varrec closure-stack))
              (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
