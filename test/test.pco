@@ -234,10 +234,6 @@
       (assert-result (format "~S" a) expect)
       (assert-result (format "~A" a) expect))
 
-    (define (assert-non-uniform-format a sexpect aexpect)
-      (assert-result (format "~S" a) sexpect)
-      (assert-result (format "~A" a) aexpect))
-
     (assert-uniform-format 0 "0")
     (assert-uniform-format 242143 "242143")
     (assert-uniform-format -1 "-1")
@@ -247,9 +243,15 @@
     (assert-uniform-format '(a . b) "(a . b)")
     (assert-uniform-format (lambda ()) "#<function>")
 
+    (define (assert-non-uniform-format a sexpect aexpect)
+      (assert-result (format "~S" a) sexpect)
+      (assert-result (format "~A" a) aexpect))
+
     (assert-non-uniform-format "Hello" "\"Hello\"" "Hello")
     (assert-non-uniform-format '("Hello" "there") "(\"Hello\" \"there\")"
                                "(Hello there)")
+    (assert-non-uniform-format (vector 42 "Hello") "#(42 \"Hello\")"
+                               "#(42 Hello)")
 
     (assert-result (format "~%") "
 "))

@@ -225,6 +225,22 @@
 
   (write-character ostr #\)))
 
+(define (print-vector ostr vec readably)
+  (define l (vector-length vec))
+  (write-string ostr "#(")
+
+  (unless (= l 0)
+    (define (print-elements-from i)
+      (when (< i l)
+        (write-character ostr #\Space)
+        (print ostr (vector-ref vec i) readably)
+        (print-elements-from (1+ i))))
+
+    (print ostr (vector-ref vec 0) readably)
+    (print-elements-from 1))
+
+  (write-character ostr #\)))
+
 (define (print ostr obj readably)
   (cond ((string? obj)
          (print-string ostr obj readably))
@@ -234,6 +250,8 @@
          (print-symbol ostr obj))
         ((pair? obj)
          (print-list ostr obj readably))
+        ((vector? obj)
+         (print-vector ostr obj readably))
         ((function? obj)
          (write-string ostr "#<function>"))
         (#t
