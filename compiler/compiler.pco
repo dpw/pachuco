@@ -138,6 +138,7 @@
   access ; access class: read-only, written or early-function
   lambda ; the lambda that this variable refers to, if not written
   origin ; origin varrec for closure variables
+  boxed ; is the variable boxed?
   (attrs ()) ; legacy attributes
   )
 
@@ -147,7 +148,7 @@
     varrec))
 
 (define (check-varrec-attr attr)
-  (when (member? attr '(mode state access origin closure-stack lambda))
+  (when (member? attr '(mode state access origin closure-stack lambda boxed))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -182,7 +183,12 @@
             (true
              (remove-from-attrs attrs (cdr attrs)))))))
 
-(define (varrec-top-level? varrec) (eq? 'top-level (varrec-mode varrec)))
+(define (varrec-top-level? varrec)
+  (eq? 'top-level (varrec-mode varrec)))
+
+(define (varrec-boxed? varrec)
+  (varrec-boxed (varrec-origin varrec)))
+
 
 
 (define (overwrite-form form replacement)
@@ -527,7 +533,7 @@
           (true
            (let* ((local-varrec (make-local-varrec varrec mode)))
              (varrec-set-misc! varrec (acons depth local-varrec closure-stack))
-             (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
+             (varrec-set-boxed! varrec (varrec-written? varrec))
              (rplaca closure-cell (cons local-varrec (car closure-cell)))
              local-varrec)))))
 
@@ -542,7 +548,6 @@
 
 (define (collect-closures-body form varrecs depth closure-cell)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'boxed false)
     (varrec-set-misc! varrec (if (varrec-top-level? varrec)
                                  false
                                  (acons depth varrec ()))))
@@ -597,9 +602,6 @@
 ;;; to copy the original parameter value into the storage box.  So we
 ;;; have to rename the original parameter.  This involves wrapping the
 ;;; lambda body with a begin form.
-
-(define (varrec-boxed? varrec)
-  (varrec-attr (varrec-origin varrec) 'boxed))
 
 (define-trivial-walker introduce-boxes ())
 
