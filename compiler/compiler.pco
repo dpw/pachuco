@@ -795,12 +795,12 @@
     indirect-label))
 
 (define (lambda-assign-label varrec form)
-  (let* ((indirect-label (make-label-for (car varrec)
+  (let* ((indirect-label (make-label-for (varrec-name varrec)
                                          indirect-function-label-prefix)))
     (form-attr-set! form 'labels
       (cons indirect-label (if (form-attr form 'vararg)
                                ()
-                               (list (make-label-for (car varrec)
+                               (list (make-label-for (varrec-name varrec)
                                              direct-function-label-prefix)))))
     indirect-label))
 
