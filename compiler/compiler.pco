@@ -135,11 +135,12 @@
   name ; name as a symbol
   mode ; access mode: self, top-level, closure, param or local
   misc ; available for per-phase use
+  access ; access class: read-only, written or early-function
   (attrs ()) ; legacy attributes
   )
 
 (define (check-varrec-attr attr)
-  (when (eq? attr 'mode)
+  (when (member? attr '(mode state access))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -456,7 +457,7 @@
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form)))))
       (let* ((access (vector-ref varrec-access-table state)))
-        (varrec-attr-set! varrec 'access access)
+        (varrec-set-access! varrec access)
         (when (eq? access 'written)
           ;; Remove lambda/self cross references
           (let* ((lambda (varrec-attr-remove varrec 'lambda)))
@@ -471,9 +472,9 @@
   (classify-block-variables (attr-ref attrs 'params) 0 'param form))
 
 (define (varrec-written? varrec)
-  (eq? 'written (varrec-attr varrec 'access)))
+  (eq? 'written (varrec-access varrec)))
 (define (varrec-early-function? varrec)
-  (eq? 'early-function (varrec-attr varrec 'access)))
+  (eq? 'early-function (varrec-access varrec)))
 
 ;;; Mark the top-level definitions as such, so we can omit them from closures
 ;;;
@@ -505,7 +506,7 @@
 (define (make-local-varrec origin mode)
   (let* ((varrec (make-varrec (varrec-name origin))))
     (varrec-attr-set! varrec 'origin origin)
-    (varrec-attr-set! varrec 'access (varrec-attr origin 'access))
+    (varrec-set-access! varrec (varrec-access origin))
     (varrec-set-mode! varrec mode)
     varrec))
 
