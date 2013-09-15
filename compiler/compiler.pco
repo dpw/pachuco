@@ -122,17 +122,6 @@
                  attrs)
         (acons attr val attrs))))
 
-(define (attr-remove attrs-head attr)
-  (labels ((aux (l1 l2)
-             (cond ((null? l2)
-                    false)
-                   ((eq? (caar l2) attr)
-                    (rplacd l1 (cdr l2))
-                    (cdar l2))
-                   (true
-                    (aux l2 (cdr l2))))))
-    (aux attrs-head (cdr attrs-head))))
-
 
 (define (form-attr form attr)
   (attr-ref (second form) attr))
@@ -141,18 +130,40 @@
   (rplaca (cdr form) (attr-set! (second form) attr val))
   val)
 
+
+(define-struct varrec ((constructor make-varrec name))
+  name ; name as a symbol
+  (attrs ()) ; legacy attributes
+  )
+
 (define (varrec-attr varrec attr)
-  (attr-ref (cdr varrec) attr))
+  (attr-ref (varrec-attrs varrec) attr))
 
 (define (varrec-attr-defaulting varrec attr default)
-  (attr-ref-defaulting (cdr varrec) attr default))
+  (attr-ref-defaulting (varrec-attrs varrec) attr default))
 
 (define (varrec-attr-set! varrec attr val)
-  (rplacd varrec (attr-set! (cdr varrec) attr val))
+  (varrec-set-attrs! varrec (attr-set! (varrec-attrs varrec) attr val))
   val)
 
 (define (varrec-attr-remove varrec attr)
-  (attr-remove varrec attr))
+  (labels ((remove-from-attrs (l1 l2)
+             (cond ((null? l2)
+                    false)
+                   ((eq? (caar l2) attr)
+                    (rplacd l1 (cdr l2))
+                    (cdar l2))
+                   (true
+                    (remove-from-attrs l2 (cdr l2))))))
+    (let* ((attrs (varrec-attrs varrec)))
+      (cond ((null? attrs)
+             false)
+            ((eq? (caar attrs) attr)
+             (varrec-set-attrs! varrec (cdr attrs))
+             (cdar attrs))
+            (true
+             (remove-from-attrs attrs (cdr attrs)))))))
+
 
 (define (overwrite-form form replacement)
   (rplaca form (car replacement))
