@@ -141,7 +141,6 @@
   origin ; origin varrec for closure variables
   source ; source varrec for closure variables
   boxed ; is the variable boxed?
-  (attrs ()) ; legacy attributes
   )
 
 (define (make-varrec name)
@@ -149,48 +148,11 @@
     (varrec-set-origin! varrec varrec)
     varrec))
 
-(define (check-varrec-attr attr)
-  (when (member? attr '(mode state access origin closure-stack lambda boxed source fixups index label))
-    (error "use of legacy varrec attr ~S" attr)))
-
-(define (varrec-attr varrec attr)
-  (check-varrec-attr attr)
-  (attr-ref (varrec-attrs varrec) attr))
-
-(define (varrec-attr-defaulting varrec attr default)
-  (check-varrec-attr attr)
-  (attr-ref-defaulting (varrec-attrs varrec) attr default))
-
-(define (varrec-attr-set! varrec attr val)
-  (check-varrec-attr attr)
-  (varrec-set-attrs! varrec (attr-set! (varrec-attrs varrec) attr val))
-  val)
-
-(define (varrec-attr-remove varrec attr)
-  (check-varrec-attr attr)
-  (labels ((remove-from-attrs (l1 l2)
-             (cond ((null? l2)
-                    false)
-                   ((eq? (caar l2) attr)
-                    (rplacd l1 (cdr l2))
-                    (cdar l2))
-                   (true
-                    (remove-from-attrs l2 (cdr l2))))))
-    (let* ((attrs (varrec-attrs varrec)))
-      (cond ((null? attrs)
-             false)
-            ((eq? (caar attrs) attr)
-             (varrec-set-attrs! varrec (cdr attrs))
-             (cdar attrs))
-            (true
-             (remove-from-attrs attrs (cdr attrs)))))))
-
 (define (varrec-top-level? varrec)
   (eq? 'top-level (varrec-mode varrec)))
 
 (define (varrec-boxed? varrec)
   (varrec-boxed (varrec-origin varrec)))
-
 
 
 (define (overwrite-form form replacement)
@@ -859,14 +821,6 @@
            (varrec-set-source! varrec
                                (debug-uniquify-varrec (varrec-source varrec))))
          (varrec-set-lambda! varrec (debug-lambda (varrec-lambda varrec) false))
-         (varrec-set-attrs! varrec
-            (flatten*-mapfor (attr (varrec-attrs varrec))
-              (let* ((key (car attr))
-                     (val (cdr attr)))
-                (cond ((not val)
-                       ())
-                      (true
-                       (list attr))))))
          varrec)))
 
 (define (debug-uniquify-varrecs varrecs)
