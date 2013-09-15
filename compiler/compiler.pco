@@ -149,7 +149,7 @@
     varrec))
 
 (define (check-varrec-attr attr)
-  (when (member? attr '(mode state access origin closure-stack lambda boxed source))
+  (when (member? attr '(mode state access origin closure-stack lambda boxed source fixups))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -687,7 +687,12 @@
 
 (define-fill-closures (begin varrecs . body)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'fixups ()))
+    ;; A varrec can have no fixups, or it can be that fixups are not
+    ;; applicable to the varrec.  We need to distinguish these two
+    ;; cases.  The obvious way would be to use nil for no fixups, and
+    ;; false for not applicable.  But CL conflates nil and false.  So
+    ;; the no-fixups symbol is used to indicate no fixups.
+    (varrec-set-misc! varrec 'no-fixups))
 
   ;; Move the define-lambdas to the front of the begin body.  This is
   ;; because the approach we use for handling mutual references
@@ -747,8 +752,9 @@
     (if (eq? 'lambda (car val))
         (fill-closures-define-lambda varrec val)
         (fill-closures val))
-    (let* ((fixups (varrec-attr-remove varrec 'fixups)))
-      (when (and fixups (not (null? fixups)))
+    (let* ((fixups (varrec-misc varrec)))
+      (varrec-set-misc! varrec false)
+      (when (and fixups (not (eq? 'no-fixups fixups)))
         (rplaca (cddr form) (fixup-closures fixups val))))))
 
 (define (fixup-closures fixups res)
@@ -795,12 +801,15 @@
                                (cons 'label indirect-label))))
 
 (define (closure-slot-value varrec index source)
-  (let* ((fixups (varrec-attr-defaulting source 'fixups 'missing)))
-    (if (eq? fixups 'missing)
+  (let* ((fixups (varrec-misc source)))
+    (if (not fixups)
         (list 'ref source)
         (begin
-         (varrec-attr-set! source 'fixups (acons varrec index fixups))
-         (quoted-unspecified)))))
+          (when (eq? 'no-fixups fixups)
+            (set! fixups ()))
+
+          (varrec-set-misc! source (acons varrec index fixups))
+          (quoted-unspecified)))))
 
 (define (lambda-assign-genlabel form)
   (let* ((indirect-label (gen-label)))
@@ -838,7 +847,9 @@
          (varrec-name varrec))
         (true
          (varrec-set-name! varrec (cons (varrec-name varrec) (gensym)))
-         (varrec-set-misc! varrec false)
+         (varrec-set-misc! varrec (if (varrec-misc varrec)
+                                      'varrec-misc-occupied
+                                      false))
          (varrec-set-origin! varrec
                             (if (eq? (varrec-origin varrec) varrec)
                                 false
