@@ -134,6 +134,7 @@
 (define-struct varrec ((constructor make-varrec name))
   name ; name as a symbol
   mode ; access mode: self, top-level, closure, param or local
+  misc ; available for per-phase use
   (attrs ()) ; legacy attributes
   )
 
@@ -419,8 +420,7 @@
   (vector 'read-only 'written 'written 'early-function))
 
 (define (update-varrec-state varrec table)
-  (varrec-attr-set! varrec 'state
-                    (vector-ref table (varrec-attr varrec 'state))))
+  (varrec-set-misc! varrec (vector-ref table (varrec-misc varrec))))
 
 (define-classify-variables (ref varrec)
   (update-varrec-state varrec varrec-ref-state-table))
@@ -445,11 +445,12 @@
 
 (define (classify-block-variables varrecs init mode form)
   (dolist (varrec varrecs)
-    (varrec-attr-set! varrec 'state init)
+    (varrec-set-misc! varrec init)
     (varrec-set-mode! varrec mode))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
-    (let* ((state (varrec-attr-remove varrec 'state)))
+    (let* ((state (varrec-misc varrec)))
+      (varrec-set-misc! varrec false)
       (cond ((>= state 4) (error "bad variable ~S" (varrec-name varrec)))
             ((= state 2)
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
