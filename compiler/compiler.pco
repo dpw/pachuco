@@ -146,7 +146,7 @@
     varrec))
 
 (define (check-varrec-attr attr)
-  (when (member? attr '(mode state access origin))
+  (when (member? attr '(mode state access origin closure-stack))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -517,15 +517,14 @@
     varrec))
 
 (define (resolve-closure-var varrec mode depth closure-cell)
-  (let* ((closure-stack (varrec-attr varrec 'closure-stack)))
+  (let* ((closure-stack (varrec-misc varrec)))
     (cond ((not closure-stack)
            varrec)
           ((= depth (caar closure-stack))
            (cdar closure-stack))
           (true
            (let* ((local-varrec (make-local-varrec varrec mode)))
-             (varrec-attr-set! varrec 'closure-stack
-                               (acons depth local-varrec closure-stack))
+             (varrec-set-misc! varrec (acons depth local-varrec closure-stack))
              (varrec-attr-set! varrec 'boxed (varrec-written? varrec))
              (rplaca closure-cell (cons local-varrec (car closure-cell)))
              local-varrec)))))
@@ -542,12 +541,12 @@
 (define (collect-closures-body form varrecs depth closure-cell)
   (dolist (varrec varrecs)
     (varrec-attr-set! varrec 'boxed false)
-    (varrec-attr-set! varrec 'closure-stack
-                      (if (varrec-top-level? varrec) false
-                          (acons depth varrec ()))))
+    (varrec-set-misc! varrec (if (varrec-top-level? varrec)
+                                 false
+                                 (acons depth varrec ()))))
   (collect-closures-aux-recurse form depth closure-cell)
   (dolist (varrec varrecs)
-    (varrec-attr-remove varrec 'closure-stack)))
+    (varrec-set-misc! varrec false)))
 
 (define-collect-closures-aux (begin varrecs . body)
   (collect-closures-body form varrecs depth closure-cell))
@@ -572,8 +571,7 @@
     (dolist (local-varrec (append (car self-closure-cell)
                                   (car local-closure-cell)))
       (let* ((origin-varrec (varrec-origin local-varrec)))
-        (varrec-attr-set! origin-varrec 'closure-stack
-                          (cdr (varrec-attr origin-varrec 'closure-stack)))
+        (varrec-set-misc! origin-varrec (cdr (varrec-misc origin-varrec)))
         (varrec-attr-set! local-varrec 'source
             (resolve-closure-var origin-varrec 'closure depth closure-cell))))))
 
