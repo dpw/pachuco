@@ -560,7 +560,7 @@
     ;; function.  So we create a "self-closure" varrec, to refer to
     ;; the function inside the function.
     (let* ((self-varrec (attr-ref attrs 'self)))
-      (when (and self-varrec (not (varrec-written? self-varrec)))
+      (when self-varrec
         (form-attr-set! form 'self
           (resolve-closure-var self-varrec 'self (1+ depth)
                                self-closure-cell))))
