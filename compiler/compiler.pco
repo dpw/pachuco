@@ -194,7 +194,7 @@
   (let* ((dotted false))
     (labels ((undot (params)
                (cond ((pair? params)
-                      (rplaca params (list (car params)))
+                      (rplaca params (make-varrec (car params)))
                       (rplacd params (undot (cdr params)))
                       params)
                      ((null? params)
@@ -255,7 +255,7 @@
             ((return ((nparams . (unquote nparams)))
                (unquote wrapped-begin))))))))
 
-(define-simplify (define varrec . val)
+(define-simplify (define var . val)
   ;; Normalize defines to always include a value
   (if (null? val)
       (rplacd (cdr form) (list (quoted-unspecified)))
