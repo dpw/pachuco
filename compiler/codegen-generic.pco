@@ -475,9 +475,8 @@
 
 (define (func-lambda-attrs func)
   (cond ((eq? 'ref (first func))
-         (let* ((l (varrec-attr-defaulting (varrec-origin (form-attr func 'varrec))
-                                           'lambda false)))
-           (and l (car l))))
+         (let* ((l (varrec-lambda (varrec-origin (form-attr func 'varrec)))))
+           (and l (second l))))
         ((member? (first func) '(lambda static-lambda))
          (second func))
         (true

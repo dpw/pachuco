@@ -136,6 +136,7 @@
   mode ; access mode: self, top-level, closure, param or local
   misc ; available for per-phase use
   access ; access class: read-only, written or early-function
+  lambda ; the lambda that this variable refers to, if not written
   origin ; origin varrec for closure variables
   (attrs ()) ; legacy attributes
   )
@@ -146,7 +147,7 @@
     varrec))
 
 (define (check-varrec-attr attr)
-  (when (member? attr '(mode state access origin closure-stack))
+  (when (member? attr '(mode state access origin closure-stack lambda))
     (error "use of legacy varrec attr ~S" attr)))
 
 (define (varrec-attr varrec attr)
@@ -447,7 +448,7 @@
       ;; Record the lambda in the varrec.  We don't know if the varrec
       ;; is read-only at this point, but if it turns out not to be, we
       ;; remove this attr later on.
-      (varrec-attr-set! varrec 'lambda (cdr val))
+      (varrec-set-lambda! varrec val)
       (form-attr-set! val 'self varrec))))
 
 (define (classify-block-variables varrecs init mode form)
@@ -466,9 +467,10 @@
         (varrec-set-access! varrec access)
         (when (eq? access 'written)
           ;; Remove lambda/self cross references
-          (let* ((lambda (varrec-attr-remove varrec 'lambda)))
+          (let* ((lambda (varrec-lambda varrec)))
             (when lambda
-              (attr-set! (car lambda) 'self false))))))))
+              (varrec-set-lambda! varrec false)
+              (form-attr-set! lambda 'self false))))))))
 
 (define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 4 'local form))
@@ -832,8 +834,12 @@
          (varrec-name varrec))
         (true
          (varrec-set-name! varrec (cons (varrec-name varrec) (gensym)))
+         (varrec-set-misc! varrec false)
          (varrec-set-origin! varrec
-                             (debug-uniquify-varrec (varrec-origin varrec)))
+                            (if (eq? (varrec-origin varrec) varrec)
+                                false
+                                (debug-uniquify-varrec (varrec-origin varrec))))
+         (varrec-set-lambda! varrec (debug-lambda (varrec-lambda varrec) false))
          (varrec-set-attrs! varrec
             (flatten*-mapfor (attr (varrec-attrs varrec))
               (let* ((key (car attr))
@@ -842,9 +848,6 @@
                        ())
                       ((eq? key 'source)
                        (list (cons key (debug-uniquify-varrec val))))
-                      ((eq? key 'lambda)
-                       (list (list key (debug-lambda-attrs (first val) false)
-                                   'etc)))
                       (true
                        (list attr))))))
          varrec)))
@@ -855,32 +858,34 @@
 (define-debug-form (begin varrecs . body)
   (list* 'begin (debug-uniquify-varrecs varrecs) (debug-forms body)))
 
-(define (debug-lambda-attrs attrs show-body)
+(define (debug-lambda form show-body)
     ;; Need to process the body attr after attrs introducing varrecs.
   (let* ((body-attr false)
-         (res (flatten*-mapfor (attr attrs)
-                (let* ((key (car attr))
-                       (val (cdr attr)))
-                  (cond ((not val)
-                         ())
-                        ((or (eq? key 'params) (eq? key 'closure))
-                         (list (cons key (debug-uniquify-varrecs val))))
-                        ((eq? key 'self)
-                         (list (cons key (debug-uniquify-varrec val))))
-                        ((eq? key 'wrapped-begin)
-                         (list (cons key 'etc)))
-                        ((eq? key 'body)
-                         (list (if show-body
-                                   (set! body-attr (cons key val))
-                                   '(body . etc))))
-                        (true
-                         (list attr)))))))
+         (attrs (flatten*-mapfor (attr (second form))
+                  (let* ((key (car attr))
+                         (val (cdr attr)))
+                    (cond ((not val)
+                           ())
+                          ((or (eq? key 'params) (eq? key 'closure))
+                           (list (cons key (debug-uniquify-varrecs val))))
+                          ((eq? key 'self)
+                           (list (cons key (debug-uniquify-varrec val))))
+                          ((eq? key 'wrapped-begin)
+                           (list (cons key 'etc)))
+                          ((eq? key 'body)
+                           (list (if show-body
+                                     (set! body-attr (cons key val))
+                                     '(body . etc))))
+                          (true
+                           (list attr)))))))
     (when body-attr
       (rplacd body-attr (debug-form (cdr body-attr))))
-    res))
+    (list* (car form) attrs (if show-body
+                                (debug-forms (cddr form))
+                                'etc))))
 
 (define-debug-form ((lambda static-lambda) attrs . body)
-  (list* (car form) (debug-lambda-attrs attrs true) (debug-forms body)))
+  (debug-lambda form true))
 
 (define-debug-form ((define set!) varrec . val)
   (list* (car form) (debug-uniquify-varrec varrec) (debug-forms val)))
