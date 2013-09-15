@@ -439,7 +439,7 @@
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
     (let* ((state (varrec-attr-remove varrec 'state)))
-      (cond ((>= state 4) (error "bad variable ~S" (car varrec)))
+      (cond ((>= state 4) (error "bad variable ~S" (varrec-name varrec)))
             ((= state 2)
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form)))))
