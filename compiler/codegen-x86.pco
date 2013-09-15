@@ -383,18 +383,16 @@
 
 (define (varrec-operand varrec cg)
   (let* ((mode (varrec-mode varrec)))
-    (cond ((eq? mode 'self) %closure)
-          ((eq? mode 'top-level) (mem-operand (varrec-attr varrec 'label)))
-          (true
-           (let* ((index (varrec-attr varrec 'index)))
-             (cond ((eq? mode 'closure) (closure-slot %closure index))
-                   ((eq? mode 'param) (param-slot cg index))
-                   ((eq? mode 'local) (local-slot cg index))
-                   (true (error "strange variable mode ~S" mode))))))))
+    (cond ((eq? mode 'top-level) (mem-operand (varrec-index varrec)))
+          ((eq? mode 'param) (param-slot cg (varrec-index varrec)))
+          ((eq? mode 'local) (local-slot cg (varrec-index varrec)))
+          ((eq? mode 'closure) (closure-slot %closure (varrec-index varrec)))
+          ((eq? mode 'self) %closure)
+          (true (error "strange variable mode ~S" mode)))))
 
 (define-operator (define (val reg-mem-imm)) ()
   (emit-frame-push cg val)
-  (varrec-attr-set! (attr-ref attrs 'varrec) 'index (codegen-frame-base cg))
+  (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
   val)
 
 (define-operator (set! (val reg-imm)) ()

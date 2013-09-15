@@ -91,7 +91,7 @@
 
       (let* ((label (make-label-for (varrec-name varrec)
                                     variable-label-prefix)))
-        (varrec-attr-set! varrec 'label label)
+        (varrec-set-index! varrec label)
         (emit-comment cg "top-level ~S" (varrec-name varrec))
         (emit-label label)
         (emit-literal cg unspecified-representation)))
@@ -117,7 +117,7 @@
                ;; assign slot indices to varrecs
                (let* ((index 0))
                  (dolist (varrec varrecs)
-                   (varrec-attr-set! varrec 'index index)
+                   (varrec-set-index! varrec index)
                    (set! index (1+ index))))))
       (assign-varrec-indices closure)
       (assign-varrec-indices (attr-ref attrs 'params)))
