@@ -820,7 +820,9 @@
          (when (varrec-source varrec)
            (varrec-set-source! varrec
                                (debug-uniquify-varrec (varrec-source varrec))))
-         (varrec-set-lambda! varrec (debug-lambda (varrec-lambda varrec) false))
+         (when (varrec-lambda varrec)
+           (varrec-set-lambda! varrec
+                               (debug-lambda (varrec-lambda varrec) false)))
          varrec)))
 
 (define (debug-uniquify-varrecs varrecs)
