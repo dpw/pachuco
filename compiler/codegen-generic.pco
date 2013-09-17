@@ -658,3 +658,45 @@
 
 (define-raw-type "raw" value-scale)    ; memory as value-sized words
 (define-raw-type "raw-1" 0)            ; memory as bytes
+
+;; Access to compiler constants for GC
+
+(define compiler-constants
+  (list (cons 'value-size value-size)
+        (cons 'value-scale value-scale)
+        (cons 'number-tag number-tag)
+        (cons 'number-tag-bits number-tag-bits)
+        (cons 'special-tag special-tag)
+        (cons 'special-tag-bits special-tag-bits)
+        (cons 'pair-tag pair-tag)
+        (cons 'pair-tag-bits pair-tag-bits)
+        (cons 'vector-tag vector-tag)
+        (cons 'vector-tag-bits vector-tag-bits)
+        (cons 'string-tag string-tag)
+        (cons 'string-tag-bits string-tag-bits)
+        (cons 'symbol-tag symbol-tag)
+        (cons 'symbol-tag-bits symbol-tag-bits)
+        (cons 'closure-tag closure-tag)
+        (cons 'closure-tag-bits closure-tag-bits)
+        (cons 'box-tag box-tag)
+        (cons 'box-tag-bits box-tag-bits)))
+
+(define (compiler-constant-value ccsym)
+  (let* ((cc (assoc ccsym compiler-constants)))
+    (unless cc (error "unknown compiler constant ~S" ccsym))
+    (cdr cc)))
+
+(define-codegen-simplify (compiler-constant ccsym)
+  (overwrite-form form
+              (list 'quote (acons 'quoted (compiler-constant-value ccsym) ()))))
+
+;;; We currently conflate character and numbers.  So eliminate
+;;; character-related operators:
+
+(define-codegen-simplify ((character-code code-character) attrs ch)
+  (overwrite-form form ch)
+  (codegen-simplify form))
+
+(define-codegen-simplify (character? attrs ch)
+  (rplaca form 'number?)
+  (codegen-simplify form))

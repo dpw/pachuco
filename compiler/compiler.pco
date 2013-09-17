@@ -311,17 +311,6 @@
                                   (append (cddr operator) args)))
       (propagate-recurse form operator))))
 
-;;; We currently conflate character and numbers.  So eliminate
-;;; character-related operators:
-
-(define-simplify ((character-code code-character) attrs ch)
-  (overwrite-form form ch)
-  (simplify form))
-
-(define-simplify (character? attrs ch)
-  (rplaca form 'number?)
-  (simplify-recurse form))
-
 ;;; Convert all variable names (in defines, refs, set!s) to references
 ;;; to varrecs.  Also, collect definitions in begins.  The second
 ;;; element of a begin form holds a list of varrecs.
@@ -890,33 +879,3 @@
 
 (define-comment-form (ash-imm attrs n)
   (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
-
-;; Access to compiler constants for GC
-
-(define compiler-constants
-  (list (cons 'value-size value-size)
-        (cons 'value-scale value-scale)
-        (cons 'number-tag number-tag)
-        (cons 'number-tag-bits number-tag-bits)
-        (cons 'special-tag special-tag)
-        (cons 'special-tag-bits special-tag-bits)
-        (cons 'pair-tag pair-tag)
-        (cons 'pair-tag-bits pair-tag-bits)
-        (cons 'vector-tag vector-tag)
-        (cons 'vector-tag-bits vector-tag-bits)
-        (cons 'string-tag string-tag)
-        (cons 'string-tag-bits string-tag-bits)
-        (cons 'symbol-tag symbol-tag)
-        (cons 'symbol-tag-bits symbol-tag-bits)
-        (cons 'closure-tag closure-tag)
-        (cons 'closure-tag-bits closure-tag-bits)
-        (cons 'box-tag box-tag)
-        (cons 'box-tag-bits box-tag-bits)))
-
-(define (compiler-constant-value ccsym)
-  (let* ((cc (assoc ccsym compiler-constants)))
-    (unless cc (error "unknown compiler constant ~S" ccsym))
-    (cdr cc)))
-
-(define-simplify (compiler-constant ccsym)
-  (overwrite-form form (list 'quote (compiler-constant-value ccsym))))
