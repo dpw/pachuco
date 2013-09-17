@@ -419,12 +419,14 @@
 ;;; Simplifications of arithmetic operators
 
 (define (simplify-binary-op form args identity)
-  (simplify-recurse form)
+  (codegen-simplify-recurse form)
   (cond ((null? args)
-         (overwrite-form form (list 'quote identity)))
+         (overwrite-form form (list 'quote (acons 'quoted identity ()))))
         ((null? (cdr args))
          (overwrite-form form (car args)))
         ((null? (cddr args))
+         ;; always move a quoted arg to the second position, for
+         ;; better code generation
          (when (eq? 'quote (caar args))
            (let* ((tmp (first args)))
              (rplaca args (second args))
@@ -437,18 +439,20 @@
                                              (list b a)
                                              (list a b)))))))))
 
-(define-simplify (+ attrs . args) (simplify-binary-op form args 0))
-(define-simplify (* attrs . args) (simplify-binary-op form args 1))
+(define-codegen-simplify (+ attrs . args) (simplify-binary-op form args 0))
+(define-codegen-simplify (* attrs . args) (simplify-binary-op form args 1))
 
-(define-simplify (- attrs a . args)
-  (simplify-recurse form)
+(define-codegen-simplify (- attrs a . args)
+  (codegen-simplify-recurse form)
   (cond ((null? args) (rplaca form 'negate))
         ((not (null? (cdr args)))
          (overwrite-form form
                          (reduce a args (lambda (a b) (list '- () a b)))))))
 
-(define-simplify ((eq? = /=) attrs a b)
-  (simplify-recurse form)
+(define-codegen-simplify ((eq? = /=) attrs a b)
+  (codegen-simplify-recurse form)
+  ;; always move a quoted arg to the second position, for better code
+  ;; generation
   (when (eq? 'quote (car a))
     (overwrite-form form (list (car form) attrs b a))))
 
@@ -520,22 +524,21 @@
     (emit cg ".text")
     (format "~A+~D" label closure-tag)))
 
-(define-simplify (c-call c-function-name . args)
+(define-codegen-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
-  (simplify-recurse form))
+  (codegen-simplify-recurse form))
 
 ;;; Misc runtime support
 
-(define-simplify (raw-label name)
+(define-codegen-simplify ((raw-label raw-global-ref) name)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-simplify (raw-global-ref name)
+(define-codegen-simplify (raw-global-set! name val)
+  (codegen-simplify val)
   (rplaca (cdr form) (list (cons 'name name))))
 
-(define-simplify (raw-global-set! name val)
-  (rplaca (cdr form) (list (cons 'name name))))
-
-(define-simplify (raw-alloc tag-bits-ccsym size)
+(define-codegen-simplify (raw-alloc tag-bits-ccsym size)
+  (codegen-simplify size)
   (rplaca (cdr form) (list (cons 'tag-bits tag-bits-ccsym))))
 
 ;; raw-jump-with-arg-space and raw-apply-jump should always appear in
