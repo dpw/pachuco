@@ -11,7 +11,6 @@
                     (lambda (program) (unquote ph)))))))
 
 (define compiler-phases (expand-compiler-phases
-                          (normalize-lambdas program)
                           (simplify program)
                           (resolve-variables program ())
                           (classify-variables program)
@@ -163,47 +162,6 @@
 (define (quoted-unspecified)
   (list 'quote #u))
 
-;;; Convert lambda forms to attributed forms, and convert parameter
-;;; names to trivial varrecs
-;;;
-;;; Attributes of lambda after normalize-lambdas:
-;;;
-;;; params: The parameter list (undotted if it was dotted)
-;;;
-;;; vararg: the vararg variable symbol, or false
-;;;
-;;;  E.g.
-;;;
-;;; (lambda (x y) ...)
-;;; => (lambda ((params (x) (y)) (vararg . false)) ...)
-;;;
-;;; (lambda (x . y) ...)
-;;;  => (lambda ((params (x)) (vararg . y)) ...)
-
-(define (normalize-lambda-params params)
-  (let* ((dotted false))
-    (labels ((undot (params)
-               (cond ((pair? params)
-                      (rplaca params (make-varrec (car params)))
-                      (rplacd params (undot (cdr params)))
-                      params)
-                     ((null? params)
-                      ())
-                     (true
-                      (set! dotted params)
-                      ()))))
-      (let* ((undotted-params (undot params)))
-        (list (cons 'params undotted-params) (cons 'vararg dotted))))))
-
-(define-trivial-walker normalize-lambdas ())
-
-(define-normalize-lambdas (lambda params . body)
-  (rplaca (cdr form) (normalize-lambda-params params))
-  (normalize-lambdas-recurse form))
-
-;;; This phase is for miscellaneous simplifications and source
-;;; rearrangements
-
 (define-trivial-walker simplify ())
 
 (define-simplify (begin attrs . body)
@@ -212,38 +170,65 @@
       (overwrite-form form (quoted-unspecified))
       (simplify-recurse form)))
 
-(define-simplify (lambda attrs . body)
-  ;; Adjust lambdas so that they only take one body form, wrapped in
-  ;; the argument handling code
-  (wrap-lambda-body form body)
-  (simplify-recurse form))
+(define-simplify (lambda params . body)
+  ;; Look for a dotted param list indicating a varargs param, and
+  ;; remove it from the parameter list, so that the parameter list is
+  ;; always undotted.
+  (let* ((vararg false)
+         (nparams 0))
+    (labels ((undot (params)
+               (set! nparams (1+ nparams))
+               (rplaca params (make-varrec (car params)))
+               (if (pair? (cdr params))
+                   (undot (cdr params))
+                   (begin
+                     (set! vararg (cdr params))
+                     (rplacd params ())))))
+      (if (pair? params)
+          (undot params)
+          (begin
+            (set! vararg params)
+            (set! params ())))
 
-(define (wrap-lambda-body lambda-form body)
+      (cond ((null? vararg)
+             (set! vararg false))
+            ((not (symbol? vararg))
+             (error "strange dotted varargs parameter ~S" vararg)))
+
+      ;; wrapped-begin is the begin form that surrounds the original
+      ;; lambda body.  We stash it in an attribute, because the
+      ;; introduce-boxes phase needs to get access to it later.
+      (let* ((wrapped-begin (normalize-lambda-body body))
+             (wrapped-body (wrap-lambda-body wrapped-begin nparams vararg)))
+        (rplacd form (list (list (cons 'params params)
+                                 (cons 'vararg vararg)
+                                 (cons 'wrapped-begin wrapped-begin))
+                           wrapped-body))
+        (simplify wrapped-body)))))
+
+(define (normalize-lambda-body body)
+  ;; Handle the empty-body case of a lambda, and make sure the body is
+  ;; inside a begin form
+  (list* 'begin () (if (null? body)
+                       (list (quoted-unspecified))
+                       body)))
+
+(define (wrap-lambda-body wrapped-begin nparams vararg)
   ;; wrap a lambda body with code required to check that the number of
   ;; arguments matches the number of parameters, or to handle varargs
-  (let* ((nparams (length (form-attr lambda-form 'params)))
-         (vararg (form-attr lambda-form 'vararg))
-         (wrapped-begin (list* 'begin () (if (null? body)
-                                             (list (quoted-unspecified))
-                                             body))))
-    ;; wrapped-begin is the begin form that surrounds the original
-    ;; lambda body.  We stash it in an attribute, because the
-    ;; introduce-boxes phase needs to get access to it later.
-    (form-attr-set! lambda-form 'wrapped-begin wrapped-begin)
-    (rplacd (cdr lambda-form)
-      (if vararg
-          (quasiquote
-            ((begin ()
-                    (define raw-arg-count (arg-count ()))
-                    (define (unquote vararg) (call () (ref handle-varargs)
-                                                   (quote (unquote nparams))
-                                                   (ref raw-arg-count)
-                                                   (raw-args-base ())))
-                    (varargs-return () (ref raw-arg-count)
-                                    (unquote wrapped-begin)))))
-          (quasiquote
-            ((return ((nparams . (unquote nparams)))
-               (unquote wrapped-begin))))))))
+  (if vararg
+      (quasiquote
+        (begin ()
+               (define raw-arg-count (arg-count ()))
+               (define (unquote vararg) (call () (ref handle-varargs)
+                                              (quote (unquote nparams))
+                                              (ref raw-arg-count)
+                                              (raw-args-base ())))
+               (varargs-return () (ref raw-arg-count)
+                               (unquote wrapped-begin))))
+      (quasiquote
+        (return ((nparams . (unquote nparams)))
+                (unquote wrapped-begin)))))
 
 (define-simplify (define var . val)
   ;; Normalize defines to always include a value
