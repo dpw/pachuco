@@ -855,9 +855,8 @@
 (define-comment-form ((set! define) attrs val)
   (list (car form) (varrec-name (attr-ref attrs 'varrec)) (comment-form val)))
 
-(define-comment-form (quote attrs)
-  (let* ((val (attr-ref attrs 'quoted)))
-    (list 'quote (if (string? val) (escape-string-literal val) val))))
+(define-comment-form (quote val)
+  (list 'quote (if (string? val) (escape-string-literal val) val)))
 
 (define-comment-form (raw attrs)
   (list 'raw (attr-ref attrs 'value)))

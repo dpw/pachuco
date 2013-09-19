@@ -143,7 +143,7 @@
             (trashy-codegen-discarding (quasiquote
                (tail-call ((nparams . 2))
                  (ref ((varrec . (unquote (codegen-arity-mismatch-varrec cg)))))
-                 (quote ((quoted . (unquote nparams))))
+                 (quote (unquote nparams))
                  (arg-count ())))
                                        cg false)))
         (emit cg ".globl ~A" (second labels))
@@ -322,14 +322,11 @@
 (define-operator (raw) ()
   (attr-ref attrs 'value))
 
-(define-codegen-simplify (quote quoted)
-  (rplaca (cdr form) (list (cons 'quoted quoted))))
-
 (define (quote-false? form)
-  (and (eq? 'quote (car form)) (eq? (form-attr form 'quoted) #f)))
+  (and (eq? 'quote (car form)) (eq? (second form) #f)))
 
 (define-operator (quote) ()
-  (let* ((val (codegen-quoted (attr-ref attrs 'quoted) cg)))
+  (let* ((val (codegen-quoted attrs cg)))
     ;;; If the quoted form resulted in a label, that means it emitted
     ;;; code, and we need to switch back to the code section
     (unless (number? val) (emit cg ".text"))
@@ -421,7 +418,7 @@
 (define (simplify-binary-op form args identity)
   (codegen-simplify-recurse form)
   (cond ((null? args)
-         (overwrite-form form (list 'quote (acons 'quoted identity ()))))
+         (overwrite-form form (list 'quote identity)))
         ((null? (cdr args))
          (overwrite-form form (car args)))
         ((null? (cddr args))
@@ -462,7 +459,7 @@
 (define-codegen-simplify (ash attrs n shift)
   (codegen-simplify-recurse form)
   (when (eq? 'quote (car shift))
-    (let* ((shiftval (form-attr shift 'quoted)))
+    (let* ((shiftval (second shift)))
       (when (number? shiftval)
         (overwrite-form form
           (cond ((= shiftval 0) n)
@@ -473,7 +470,7 @@
                 (true
                  (quasiquote (begin ()
                                     (unquote n)
-                                    (quote ((quoted . 0))))))))))))
+                                    (quote 0))))))))))
 
 ;;; Function calls
 
@@ -687,8 +684,7 @@
     (cdr cc)))
 
 (define-codegen-simplify (compiler-constant ccsym)
-  (overwrite-form form
-              (list 'quote (acons 'quoted (compiler-constant-value ccsym) ()))))
+  (overwrite-form form (list 'quote (compiler-constant-value ccsym))))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
