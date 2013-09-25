@@ -159,16 +159,6 @@
 (reify (make-vector a init))
 (reify (vector-length a))
 
-(when-interpreting
-  ;; Provide function forms for some interpreter builtins
-  (reify (error-halt))
-  (reify (intern a))
-
-  ;; Gensym is an interesting case.  We need it early on for macros.
-  ;; So when interpreting, we get it from the host.  When compiling,
-  ;; we introduce it much later
-  (reify (gensym)))
-
 ;;; Numbers
 
 (defmacro (1- n) (quasiquote (- (unquote n) 1)))

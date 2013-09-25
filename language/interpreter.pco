@@ -177,16 +177,20 @@
         ((unquote (interpreter-builtin-for op))
          '(unquote (car op)) (function (unquote (car op))))))))
 
-(define-interpreter-builtin-op (error-halt))
+(define (register-interpreter-builtin-func name func)
+  (register-interpreter-builtin-var name (lambda (actuals)
+                                           (apply func actuals))))
+
+(register-interpreter-builtin-func 'error-halt (function error-halt))
 
 (define-interpreter-builtin-boolean-op (eq? a b))
 (define-interpreter-builtin-boolean-op (function? a))
 
 (define-interpreter-builtin-boolean-op (symbol? a))
-(define-interpreter-builtin-op (gensym))
+(register-interpreter-builtin-func 'gensym (function gensym))
 (define-interpreter-builtin-op (symbol-name a) subject-language-symbol-name)
 (define-interpreter-builtin-op (symbol-id a))
-(define-interpreter-builtin-op (intern str) subject-language-intern)
+(register-interpreter-builtin-func 'intern (function subject-language-intern))
 
 (define-interpreter-builtin-boolean-op (pair? a))
 (define-interpreter-builtin-op (car a))
@@ -247,10 +251,13 @@
 (define-interpreter-builtin-op (raw-vector-set! a b c) vector-set!)
 (define-interpreter-builtin-op (raw-vector-copy a b c d e) vector-copy)
 
-(define-interpreter-builtin-op (raw-write-substring a b c d))
-(define-interpreter-builtin-op (raw-read-substring a b c d))
-(define-interpreter-builtin-op (open-file-for-reading a))
-(define-interpreter-builtin-op (close-file a))
+(register-interpreter-builtin-func 'raw-write-substring
+                                   (function raw-write-substring))
+(register-interpreter-builtin-func 'raw-read-substring
+                                   (function raw-read-substring))
+(register-interpreter-builtin-func 'open-file-for-reading
+                                   (function open-file-for-reading))
+(register-interpreter-builtin-func 'close-file (function close-file))
 (register-interpreter-builtin-var 'raw-stdout raw-stdout)
 (register-interpreter-builtin-var 'raw-stderr raw-stderr)
 (register-interpreter-builtin-var 'raw-stdin raw-stdin)
