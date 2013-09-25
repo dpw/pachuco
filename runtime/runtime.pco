@@ -2,8 +2,6 @@
 
 (defmacro (when-compiling . rest)
   (if compiling (cons 'definitions rest) '(definitions)))
-(defmacro (when-interpreting . rest)
-  (if compiling '(definitions) (cons 'definitions rest)))
 
 ;;; Basics needed by quasiquote
 
@@ -809,9 +807,9 @@
          (and (vector? b) (vector-equal? a b)))
         (#t (eq? a b))))
 
-;;; Command line access
 
 (when-compiling
+  ;;; Command line access
   (define (copy-c-string addr)
     (define (strlen addr)
       (define (aux offset)
@@ -834,17 +832,14 @@
     (aux 0))
 
   (define command-line-args
-          (c-string-array-to-list (raw-ref (raw-label "lisp_argv")))))
+          (c-string-array-to-list (raw-ref (raw-label "lisp_argv"))))
 
+  (define (compiled-runtime-main)
+    (set! gc-stack-top (raw-args-base))
+    (runtime-main)))
 
-;;; Entry point function
-
-(define runtime-main-args-base)
-
-(when-interpreting (define (raw-args-base) #f))
-
+;;; Program entry point
 (define (runtime-main)
-  (set! runtime-main-args-base (raw-args-base))
   (main)
   (flush-ostream stdout))
 

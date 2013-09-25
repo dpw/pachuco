@@ -21,7 +21,7 @@ interpret)
     form="(do-interpret-files '($(string_list $*)) '(runtime-main))"
     ;;
 compile)
-    form="(do-compile-files '($(string_list $*)) '(runtime-main))"
+    form="(do-compile-files '($(string_list $*)) '(compiled-runtime-main))"
     ;;
 expand)
     form="(do-expand-files '($(string_list $*)))"
@@ -29,7 +29,7 @@ expand)
 dump)
     phase=$1
     shift
-    form="(do-dump-program \"$phase\" '($(string_list $*)) '(runtime-main))"
+    form="(do-dump-program \"$phase\" '($(string_list $*)) '(compiled-runtime-main))"
     ;;
 *)
     echo "unknown command $1" 1>&2

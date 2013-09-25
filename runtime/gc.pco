@@ -15,6 +15,9 @@
   (define gc-to-space #f)
   (define gc-to-space-end #f)
 
+  ;; the top address of the stack.  This is set in compiled-runtime-main.
+  (define gc-stack-top)
+
   (define (gc-live val)
     ;; handle a live value
     (if (and (<= gc-from-space val) (< val gc-from-space-end))
@@ -61,7 +64,7 @@
 
     ;; copy all live data
     (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
-    (gc-root-set (raw-args-base) runtime-main-args-base)
+    (gc-root-set (raw-args-base) gc-stack-top)
 
     (define live-bytes
             (raw->fixnum (raw-- gc-to-space-end (raw-global-ref heap_alloc))))
