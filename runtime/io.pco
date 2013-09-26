@@ -1,51 +1,5 @@
 ;;; I/O
 
-(define (check-syscall-result name res)
-  (when (< res 0)
-    (error "~A: ~D" name (- res)))
-  res)
-
-(defmacro (checked-syscall name . args)
-  (quasiquote
-    (check-syscall-result (unquote name)
-      (raw->fixnum (c-call (unquote name) . (unquote args))))))
-
-(defmacro (define-syscall-read-write name sysname)
-  (quasiquote (define ((unquote name) fd str offset len)
-                (check-string-range str offset len)
-                (checked-syscall  (unquote sysname) (fixnum->raw fd)
-                                  (raw-string-address str offset)
-                                  (fixnum->raw len)))))
-
-(define (make-c-string str)
-  (define len (string-length str))
-  (define c-str (make-string (1+ len) (code-character 0)))
-  (string-copy str 0 c-str 0 len)
-  (raw-string-address c-str 0))
-
-(when-compiling
-  (define-syscall-read-write raw-write-substring "write")
-  (define raw-stdout 1)
-  (define raw-stderr 2)
-
-  (define-syscall-read-write raw-read-substring "read")
-  (define raw-stdin 0)
-
-  (define (syscall-open pathname flags mode)
-    (checked-syscall "open" (make-c-string pathname)
-                     (fixnum->raw flags) (fixnum->raw mode)))
-
-  (define (syscall-close fd)
-    (checked-syscall "close" (fixnum->raw fd)))
-
-  ;; O_* values for Linux x86/x86_64
-
-  (define (open-file-for-reading pathname)
-    (syscall-open pathname 0 0))
-
-  (define (close-file fd)
-    (syscall-close fd)))
-
 ;;; Output streams
 
 (define-struct ostream ((constructor make-ostream pos buf fd))
@@ -408,11 +362,6 @@
 (set! (error message . args)
   (formout stderr "~A~%" (format-list message args))
   (error-halt))
-
-(when-compiling
-  (define gensym-counter 0)
-  (define (gensym)
-    (intern (format "gensym-~D" (set! gensym-counter (1+ gensym-counter))))))
 
 ;;; Input streams
 

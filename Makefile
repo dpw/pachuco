@@ -54,7 +54,8 @@ CL_COMPILER_SOURCES= \
     bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
-RUNTIME_SOURCES=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco runtime/io.pco runtime/gc.pco
+RUNTIME=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco no-interp!runtime/compiled-builtins.pco runtime/io.pco no-interp!runtime/gc.pco
+RUNTIME_SOURCES=$(patsubst no-interp!%,%,$(RUNTIME))
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 
 # The initial compiler used.  Default to bootstrapping from SBCL
@@ -81,10 +82,10 @@ define stage_template
 .PHONY: $(2)-interp-test $(2)-compile $(2)-test-run $(2)-time
 
 $(2)-interp-test: $(1) $(RUNTIME_SOURCES) test/test.pco
-	$(1) interpret $(RUNTIME_SOURCES) test/test.pco
+	$(1) interpret $(RUNTIME) test/test.pco
 
 $(2)-compile: $(1) $(RUNTIME_SOURCES) test/test.pco
-	$(1) compile $(RUNTIME_SOURCES) test/test.pco
+	$(1) compile $(RUNTIME) test/test.pco
 
 $(eval $(call compile,$(1),build/$(2)-test,test/test.pco))
 $(eval $(call compile,$(1),build/$(2)-gc-test,test/gc-test.pco))
@@ -100,16 +101,16 @@ $(2)-arity-mismatch-test-run: build/$(2)-arity-mismatch-test
 	( $$< ; [ $$$$? -ge 128 ] ) 2>/dev/null
 
 $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
-	$(1) expand $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	$(1) expand $(RUNTIME) $(SL_COMPILER_SOURCES)
 
 $(2)-dump: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
-	$(1) dump $(DUMP_PHASE) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
+	$(1) dump $(DUMP_PHASE) $(RUNTIME) $(SL_COMPILER_SOURCES)
 
 $(2)-expand-test: $(1) $(RUNTIME_SOURCES) test/test.pco
-	$(1) expand $(RUNTIME_SOURCES) test/test.pco
+	$(1) expand $(RUNTIME) test/test.pco
 
 $(2)-dump-test: $(1) $(RUNTIME_SOURCES) test/test.pco
-	$(1) dump $(DUMP_PHASE) $(RUNTIME_SOURCES) test/test.pco
+	$(1) dump $(DUMP_PHASE) $(RUNTIME) test/test.pco
 
 $(eval $(call compile,$(1),build/$(3),$(SL_COMPILER_SOURCES)))
 
@@ -134,4 +135,4 @@ build/repl build/repl.s: language/repl.pco language/util.pco language/interprete
 
 .PHONY: repl
 repl: build/repl
-	build/repl $(RUNTIME_SOURCES)
+	build/repl $(patsubst no-interp!%,,$(RUNTIME))

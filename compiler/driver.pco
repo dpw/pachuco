@@ -17,18 +17,20 @@
 
 (define (make-initial-dual-env)
   (let* ((eval-env (make-initial-interpreter-env)))
-    (eval-body-form '(define compiling #f) eval-env)
     (cons (make-initial-macro-env) eval-env)))
 
 (define (expand-files files target)
   (let* ((dual-env (make-initial-dual-env)))
     (dolist (f files)
-      (dolist (form (read-file f))
-        (eval-form '(set! compiling #f) (cdr dual-env))
-        (eval-body-form (expand-body-form form dual-env) (cdr dual-env))
-
-        (eval-form '(set! compiling #t) (cdr dual-env))
-        (funcall target (expand-body-form form dual-env))))
+      (let* ((no-interp (if (string-equal? "no-interp!" (substring f 0 10))
+                            (begin
+                              (set! f (substring f 10 (- (string-length f) 10)))
+                              true)
+                            false)))
+        (dolist (form (read-file f))
+          (let* ((expanded (expand-body-form form dual-env)))
+            (funcall target expanded)
+            (unless no-interp (eval-body-form expanded (cdr dual-env)))))))
     dual-env))
 
 (define (do-interpret-files files form)

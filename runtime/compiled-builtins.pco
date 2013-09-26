@@ -1,0 +1,175 @@
+;;; Definition of built-in functions for the compiled runtime
+
+(define compiled #t)
+
+(define (error-halt)
+  (c-call "abort"))
+
+(define (arity-mismatch nparams nargs)
+  (error "expected ~S arguments, got ~S" nparams nargs))
+
+(define (make-varargs-list addr bottom l)
+  (if (> addr bottom)
+      (begin
+       (set! addr (raw-- addr (fixnum->raw (compiler-constant value-size))))
+       (set! l (cons (raw-ref addr) l))
+       (raw-set! addr #f)
+       (make-varargs-list addr bottom l))
+      l))
+
+(define (handle-varargs nparams nargs args-base)
+  (when (< nargs nparams)
+      (error "expected at least ~S arguments, got ~S" nparams nargs))
+
+  ;; (fixnum->raw (ash ...) leads to a sequence of two shifts, but
+  ;; that is better than the variable shift we would get it this is
+  ;; turned into a subtraction (there is no constant folding on
+  ;; subtractions).
+  (make-varargs-list (raw-+ args-base
+                            (fixnum->raw (ash nargs
+                                            (compiler-constant value-scale))))
+                     (raw-+ args-base
+                            (fixnum->raw (ash nparams
+                                            (compiler-constant value-scale))))
+                     ()))
+
+(define (apply func arg1 . args)
+  (define (count-args args)
+    (if (null? (cdr args))
+        (length (car args))
+        (1+ (count-args (cdr args)))))
+
+  (define (copy-final-args args addr)
+    (unless (null? args)
+      (raw-set! addr (car args))
+      (copy-final-args (cdr args)
+                 (raw-+ addr (fixnum->raw (compiler-constant value-size))))))
+
+  (define (copy-args args addr)
+    (if (null? (cdr args))
+        (copy-final-args (car args) addr)
+        (begin
+          (raw-set! addr (car args))
+          (copy-args (cdr args)
+                 (raw-+ addr (fixnum->raw (compiler-constant value-size)))))))
+
+  (set! args (cons arg1 args))
+  (define arg-count (count-args args))
+  (raw-jump-with-arg-space raw-arg-count arg-count
+    (lambda ()
+      (copy-args args (raw-args-base))
+      (set! args #f)
+      (set! arg1 #f)
+      (raw-apply-jump func arg-count))))
+
+;;; Symbols
+
+(define symbol-table #f)
+(define symbol-id-counter 0)
+
+(define (intern str)
+  ;; have we constructed the symbol table from the symbol list dumped
+  ;; by the compiler yet?
+  (unless symbol-table
+    (set! symbol-table (make-hashtable string-hash string-equal?))
+
+    (define (add-symbols offset end-offset)
+      (when (< offset end-offset)
+        (define sym (raw-ref (raw-+ (raw-label "symbols_start")
+                                    (fixnum->raw offset))))
+        (hashtable-set! symbol-table (symbol-name sym) sym)
+        (add-symbols (+ offset (compiler-constant value-size))
+                     end-offset)))
+
+    (add-symbols 0 (raw->fixnum (raw-- (raw-label "symbols_end")
+                                       (raw-label "symbols_start")))))
+
+  (define res (hashtable-ref symbol-table str))
+  (if res res
+      (begin
+        (define res (raw-make-symbol str
+                            (set! symbol-id-counter (1- symbol-id-counter))))
+        (hashtable-set! symbol-table str res)
+        res)))
+
+(define gensym-counter 0)
+(define (gensym)
+  (intern (format "gensym-~D" (set! gensym-counter (1+ gensym-counter)))))
+
+;;; I/O
+
+(define (check-syscall-result name res)
+  (when (< res 0)
+    (error "~A: ~D" name (- res)))
+  res)
+
+(defmacro (checked-syscall name . args)
+  (quasiquote
+    (check-syscall-result (unquote name)
+      (raw->fixnum (c-call (unquote name) . (unquote args))))))
+
+(defmacro (define-syscall-read-write name sysname)
+  (quasiquote (define ((unquote name) fd str offset len)
+                (check-string-range str offset len)
+                (checked-syscall  (unquote sysname) (fixnum->raw fd)
+                                  (raw-string-address str offset)
+                                  (fixnum->raw len)))))
+
+(define (make-c-string str)
+  (define len (string-length str))
+  (define c-str (make-string (1+ len) (code-character 0)))
+  (string-copy str 0 c-str 0 len)
+  (raw-string-address c-str 0))
+
+(define-syscall-read-write raw-write-substring "write")
+(define raw-stdout 1)
+(define raw-stderr 2)
+
+(define-syscall-read-write raw-read-substring "read")
+(define raw-stdin 0)
+
+(define (syscall-open pathname flags mode)
+  (checked-syscall "open" (make-c-string pathname)
+                   (fixnum->raw flags) (fixnum->raw mode)))
+
+(define (syscall-close fd)
+  (checked-syscall "close" (fixnum->raw fd)))
+
+;; O_* values for Linux x86/x86_64
+
+(define (open-file-for-reading pathname)
+  (syscall-open pathname 0 0))
+
+(define (close-file fd)
+  (syscall-close fd))
+
+;;; Command line access
+
+(define (copy-c-string addr)
+  (define (strlen addr)
+    (define (aux offset)
+        (if (= 0 (raw->fixnum (raw-1-vec-ref addr offset)))
+            offset
+            (aux (1+ offset))))
+    (aux 0))
+
+  (define len (strlen addr))
+  (define str (make-string len (code-character 0)))
+  (raw-1-copy addr (raw-string-address str 0) len)
+  str)
+
+(define (c-string-array-to-list addr)
+  (define (aux index)
+      (define str-addr (raw-vec-ref addr index))
+    (if (eq? 0 str-addr)
+        ()
+        (cons (copy-c-string str-addr) (aux (1+ index)))))
+  (aux 0))
+
+(define command-line-args
+    (c-string-array-to-list (raw-ref (raw-label "lisp_argv"))))
+
+;;; Program entry point
+(define (compiled-runtime-main)
+  (set! gc-stack-top (raw-args-base))
+  (runtime-main))
