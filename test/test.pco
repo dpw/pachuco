@@ -14,12 +14,11 @@
   ;; interpreter does something different, in the name of simplicity.
   ;; What a lanuage spec might have to say about this is uncertain at
   ;; this point.
-  (when-compiling
+  (when compiled
+    (define x 0)
     (begin
-      (define x 0)
-      (begin
-        (define x x)
-        (assert-result x #u))))
+     (define x x)
+     (assert-result x #u)))
 
   (assert-result (function? ()) #f)
   (assert-result (function? (lambda ())) #t)
@@ -90,7 +89,7 @@
          (assert-result (ashx 48 -2) 12)
          (assert-result (ashx -5 -1) -3)
 
-         (when-compiling
+         (when compiled
            (assert-result (ashx 1 1000) 0)
            (assert-result (ashx 1 -1000) 0)
            (assert-result (ashx -1 -1000) -1)

@@ -1,232 +1,231 @@
-(when-compiling
-  ;; gc-type table is a vector mapping from the low-order bits of a value
-  ;; to the appropriate type-specific GC routine
-  (define gc-type-table #f)
+;; gc-type table is a vector mapping from the low-order bits of a value
+;; to the appropriate type-specific GC routine
+(define gc-type-table #f)
 
-  ;; the mask to apply to a value to get an index into gc-type-table
-  (define gc-raw-tag-mask #f)
+;; the mask to apply to a value to get an index into gc-type-table
+(define gc-raw-tag-mask #f)
 
-  ;; are we inside the GC?
-  (define gc-active #f)
+;; are we inside the GC?
+(define gc-active #f)
 
-  ;; the limits of from-space and to-space
-  (define gc-from-space #f)
-  (define gc-from-space-end #f)
-  (define gc-to-space #f)
-  (define gc-to-space-end #f)
+;; the limits of from-space and to-space
+(define gc-from-space #f)
+(define gc-from-space-end #f)
+(define gc-to-space #f)
+(define gc-to-space-end #f)
 
-  ;; the top address of the stack.  This is set in compiled-runtime-main.
-  (define gc-stack-top)
+;; the top address of the stack.  This is set in compiled-runtime-main.
+(define gc-stack-top)
 
-  (define (gc-live val)
-    ;; handle a live value
-    (if (and (<= gc-from-space val) (< val gc-from-space-end))
-        ;; value could be a reference into from-space; dispatch to a
-        ;; type-specific GC routine
-        (funcall (raw-vector-ref gc-type-table
-                                 (raw->fixnum (raw-logand gc-raw-tag-mask val)))
-                 val)
-        ;; not a reference to from-space, therefore a reference into
-        ;; to-space, to quoted data, or a fixnum.  we don't need to do
-        ;; anything with those.
-        val))
+(define (gc-live val)
+  ;; handle a live value
+  (if (and (<= gc-from-space val) (< val gc-from-space-end))
+      ;; value could be a reference into from-space; dispatch to a
+      ;; type-specific GC routine
+      (funcall (raw-vector-ref gc-type-table
+                               (raw->fixnum (raw-logand gc-raw-tag-mask val)))
+               val)
+      ;; not a reference to from-space, therefore a reference into
+      ;; to-space, to quoted data, or a fixnum.  we don't need to do
+      ;; anything with those.
+      val))
 
-  (define (gc-root-set start-addr end-addr)
-    (when (< start-addr end-addr)
-      (raw-set! start-addr (gc-live (raw-ref start-addr)))
-      (gc-root-set (raw-+ start-addr
-                          (fixnum->raw (compiler-constant value-size)))
-                   end-addr)))
+(define (gc-root-set start-addr end-addr)
+  (when (< start-addr end-addr)
+    (raw-set! start-addr (gc-live (raw-ref start-addr)))
+    (gc-root-set (raw-+ start-addr
+                        (fixnum->raw (compiler-constant value-size)))
+                 end-addr)))
 
-  (define (gc)
-    ;; Record the extent of the old heap
-    (set! gc-from-space (raw-global-ref heap_start))
-    (set! gc-from-space-end (raw-global-ref heap_end))
+(define (gc)
+  ;; Record the extent of the old heap
+  (set! gc-from-space (raw-global-ref heap_start))
+  (set! gc-from-space-end (raw-global-ref heap_end))
 
-    ;; Set up the new heap
-    (set! gc-to-space (raw-global-ref heap2_start))
-    (set! gc-to-space-end (raw-global-ref heap2_end))
+  ;; Set up the new heap
+  (set! gc-to-space (raw-global-ref heap2_start))
+  (set! gc-to-space-end (raw-global-ref heap2_end))
 
-    (raw-global-set! heap_alloc gc-to-space-end)
-    (raw-global-set! heap_threshold gc-to-space)
+  (raw-global-set! heap_alloc gc-to-space-end)
+  (raw-global-set! heap_threshold gc-to-space)
 
-    ;; We should be ok to do new allocations now
-    (when gc-active (error "Recursive GC"))
-    (set! gc-active #t)
+  ;; We should be ok to do new allocations now
+  (when gc-active (error "Recursive GC"))
+  (set! gc-active #t)
 
-    (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
-      (formout stderr "GC... "))
+  (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
+    (formout stderr "GC... "))
 
-    ;; it's critical that the GC type table is in to-space, so that it
-    ;; doesn't get disrupted by copying.  So we construct it afresh at
-    ;; the start of each GC.
-    (construct-gc-type-table)
+  ;; it's critical that the GC type table is in to-space, so that it
+  ;; doesn't get disrupted by copying.  So we construct it afresh at
+  ;; the start of each GC.
+  (construct-gc-type-table)
 
-    ;; copy all live data
-    (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
-    (gc-root-set (raw-args-base) gc-stack-top)
+  ;; copy all live data
+  (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
+  (gc-root-set (raw-args-base) gc-stack-top)
 
-    (define live-bytes
-            (raw->fixnum (raw-- gc-to-space-end (raw-global-ref heap_alloc))))
+  (define live-bytes
+          (raw->fixnum (raw-- gc-to-space-end (raw-global-ref heap_alloc))))
 
-    ;; dispose of the old heap
-    (raw-global-set! heap_start gc-to-space)
-    (raw-global-set! heap_end gc-to-space-end)
-    (raw-global-set! heap2_start gc-from-space)
-    (raw-global-set! heap2_end gc-from-space-end)
+  ;; dispose of the old heap
+  (raw-global-set! heap_start gc-to-space)
+  (raw-global-set! heap_end gc-to-space-end)
+  (raw-global-set! heap2_start gc-from-space)
+  (raw-global-set! heap2_end gc-from-space-end)
 
-    ;; all done
-    (set! gc-active (set! gc-from-space (set! gc-from-space-end
-      (set! gc-to-space (set! gc-to-space-end
-        (set! gc-type-table (set! gc-raw-tag-mask #f)))))))
+  ;; all done
+  (set! gc-active (set! gc-from-space (set! gc-from-space-end
+    (set! gc-to-space (set! gc-to-space-end
+      (set! gc-type-table (set! gc-raw-tag-mask #f)))))))
 
-    (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
-      (formout stderr "done, ~D bytes live~%" live-bytes)))
+  (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
+    (formout stderr "done, ~D bytes live~%" live-bytes)))
 
-  (define (gc-test-copy val)
-    ;; a test function that uses the GC machinery to destructively
-    ;; copy objects
+(define (gc-test-copy val)
+  ;; a test function that uses the GC machinery to destructively
+  ;; copy objects
 
-    ;; heap_alloc moves downwards, so from-space is above it, and
-    ;; to-space is below it
-    (set! gc-from-space (raw-global-ref heap_alloc))
-    (set! gc-from-space-end (raw-global-ref heap_end))
-    (set! gc-to-space (raw-global-ref heap_start))
-    (set! gc-to-space-end gc-from-space)
-    (construct-gc-type-table)
+  ;; heap_alloc moves downwards, so from-space is above it, and
+  ;; to-space is below it
+  (set! gc-from-space (raw-global-ref heap_alloc))
+  (set! gc-from-space-end (raw-global-ref heap_end))
+  (set! gc-to-space (raw-global-ref heap_start))
+  (set! gc-to-space-end gc-from-space)
+  (construct-gc-type-table)
 
-    (define res (gc-live val))
+  (define res (gc-live val))
 
-    (set! gc-from-space (set! gc-from-space-end
-      (set! gc-to-space (set! gc-to-space-end
-        (set! gc-type-table (set! gc-raw-tag-mask #f))))))
+  (set! gc-from-space (set! gc-from-space-end
+    (set! gc-to-space (set! gc-to-space-end
+      (set! gc-type-table (set! gc-raw-tag-mask #f))))))
 
-    res)
+  res)
 
-  (defmacro (define-gc-types . type-gcs)
-    ;; a convenience macro which takes a body full of type-gc
-    ;; declarations, and produces a construct-gc-type-table definition
+(defmacro (define-gc-types . type-gcs)
+  ;; a convenience macro which takes a body full of type-gc
+  ;; declarations, and produces a construct-gc-type-table definition
 
-    ;; first, produce the code to generate tags-bits-funcs.  This is a
-    ;; list of triples, each one giving a type tag, it tag-bits, and
-    ;; the copier function.
-    (define tbf-form
-      (mapfor (type-gc type-gcs)
-        (define type (first type-gc))
-        (define tag (list 'compiler-constant (compound-symbol type "-tag")))
-        (define bits
-            (list 'compiler-constant (compound-symbol type "-tag-bits")))
-        (quasiquote
-          (list (unquote tag) (unquote bits)
-                ((unquote (second type-gc)) (unquote tag) (unquote bits)
-                                        . (unquote (cddr type-gc)))))))
+  ;; first, produce the code to generate tags-bits-funcs.  This is a
+  ;; list of triples, each one giving a type tag, it tag-bits, and
+  ;; the copier function.
+  (define tbf-form
+    (mapfor (type-gc type-gcs)
+      (define type (first type-gc))
+      (define tag (list 'compiler-constant (compound-symbol type "-tag")))
+      (define bits
+          (list 'compiler-constant (compound-symbol type "-tag-bits")))
+      (quasiquote
+        (list (unquote tag) (unquote bits)
+              ((unquote (second type-gc)) (unquote tag) (unquote bits)
+                                      . (unquote (cddr type-gc)))))))
 
-    (quasiquote
-      (define (construct-gc-type-table)
-        (define tag-bits-funcs (list
-          (list 0 0 (lambda (val)
-                      (error "unknown type with tag ~D"
-                             (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
-          . (unquote tbf-form)))
-        (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
-        (define table-size (ash 1 max-bits))
-        (set! gc-type-table (make-vector table-size #f))
-        (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
+  (quasiquote
+    (define (construct-gc-type-table)
+      (define tag-bits-funcs (list
+        (list 0 0 (lambda (val)
+                    (error "unknown type with tag ~D"
+                           (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
+        . (unquote tbf-form)))
+      (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
+      (define table-size (ash 1 max-bits))
+      (set! gc-type-table (make-vector table-size #f))
+      (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
 
-        ;; fill in the table
-        (dolist (tbf tag-bits-funcs)
-          (define step (ash 1 (second tbf)))
-          (define i (first tbf))
-          (while (< i table-size)
-            (vector-set! gc-type-table i (third tbf))
-            (set! i (+ i step)))))))
+      ;; fill in the table
+      (dolist (tbf tag-bits-funcs)
+        (define step (ash 1 (second tbf)))
+        (define i (first tbf))
+        (while (< i table-size)
+          (vector-set! gc-type-table i (third tbf))
+          (set! i (+ i step)))))))
 
-  (defmacro (gc-identity-type tag bits)
-    ;; this could just be 'identity, except that the identity closure
-    ;; currently lives on the heap, and we want to avoid references to
-    ;; established type-table when we construct gc-type-table
-    '(lambda (x) x))
+(defmacro (gc-identity-type tag bits)
+  ;; this could just be 'identity, except that the identity closure
+  ;; currently lives on the heap, and we want to avoid references to
+  ;; established type-table when we construct gc-type-table
+  '(lambda (x) x))
 
-  (defmacro (gc-address-type tag bits . copier)
-    ;; a type that involves copying
-    (define to-val (gensym))
-    (quasiquote
-      (begin
-        (define raw-tag (fixnum->raw (unquote tag)))
-        (define raw-tag-mask (fixnum->raw (1- (ash 1 (unquote bits)))))
+(defmacro (gc-address-type tag bits . copier)
+  ;; a type that involves copying
+  (define to-val (gensym))
+  (quasiquote
+    (begin
+      (define raw-tag (fixnum->raw (unquote tag)))
+      (define raw-tag-mask (fixnum->raw (1- (ash 1 (unquote bits)))))
 
-        (lambda (val)
-          ;; look at the first word of the object to see if it was
-          ;; already copied
-          (define addr (raw-- val raw-tag))
-          (define (unquote to-val) (raw-ref addr))
-          (if (and (<= gc-to-space (unquote to-val))
-                   (< (unquote to-val) gc-to-space-end)
-                   ;; We also need to check that the forwarding
-                   ;; reference has the same tag as the object itself.
-                   ;; Otherwise, it might just be a fixnum that
-                   ;; happens to fall in the to-space address range.
-                   (= raw-tag (raw-logand (unquote to-val) raw-tag-mask)))
-              ;; the first word contains the forwarding reference
-              (unquote to-val)
-              ;; copy
-              (begin . (unquote copier)))))))
+      (lambda (val)
+        ;; look at the first word of the object to see if it was
+        ;; already copied
+        (define addr (raw-- val raw-tag))
+        (define (unquote to-val) (raw-ref addr))
+        (if (and (<= gc-to-space (unquote to-val))
+                 (< (unquote to-val) gc-to-space-end)
+                 ;; We also need to check that the forwarding
+                 ;; reference has the same tag as the object itself.
+                 ;; Otherwise, it might just be a fixnum that
+                 ;; happens to fall in the to-space address range.
+                 (= raw-tag (raw-logand (unquote to-val) raw-tag-mask)))
+            ;; the first word contains the forwarding reference
+            (unquote to-val)
+            ;; copy
+            (begin . (unquote copier)))))))
 
-  (define-gc-types
-    (number gc-identity-type)
-    (special gc-identity-type)
+(define-gc-types
+  (number gc-identity-type)
+  (special gc-identity-type)
 
-    (pair gc-address-type
-      (define a (car val))
-      (define copy (cons () ()))
-      (raw-set! addr copy)
-      (rplaca copy (gc-live a))
-      (rplacd copy (gc-live (cdr val)))
-      copy)
+  (pair gc-address-type
+    (define a (car val))
+    (define copy (cons () ()))
+    (raw-set! addr copy)
+    (rplaca copy (gc-live a))
+    (rplacd copy (gc-live (cdr val)))
+    copy)
 
-    (vector gc-address-type
-      (define len (vector-length val))
-      (define copy (make-vector len #f))
-      (raw-set! addr copy)
-      (gc-copy-vec addr
-                   (raw-- copy (fixnum->raw (compiler-constant vector-tag)))
-                   (1+ len) 1)
-      copy)
+  (vector gc-address-type
+    (define len (vector-length val))
+    (define copy (make-vector len #f))
+    (raw-set! addr copy)
+    (gc-copy-vec addr
+                 (raw-- copy (fixnum->raw (compiler-constant vector-tag)))
+                 (1+ len) 1)
+    copy)
 
-    (string gc-address-type
-      (define len (string-length val))
-      (define copy (make-string len 0))
-      (raw-set! addr copy)
-      (raw-string-copy val 0 copy 0 len)
-      copy)
+  (string gc-address-type
+    (define len (string-length val))
+    (define copy (make-string len 0))
+    (raw-set! addr copy)
+    (raw-string-copy val 0 copy 0 len)
+    copy)
 
-    (symbol gc-address-type
-      ;; This won't work for a symbol a circular name or id slot.  But
-      ;; that would be really perverse.
-      (define copy (raw-make-symbol (gc-live (symbol-name val))
-                                    (gc-live (symbol-id val))))
-      (raw-set! addr copy)
-      copy)
+  (symbol gc-address-type
+    ;; This won't work for a symbol a circular name or id slot.  But
+    ;; that would be really perverse.
+    (define copy (raw-make-symbol (gc-live (symbol-name val))
+                                  (gc-live (symbol-id val))))
+    (raw-set! addr copy)
+    copy)
 
-    (closure gc-address-type
-      (define code (raw-ref addr))
-      (define size (raw-vec-ref code -1))
-      (define copy-addr (raw-alloc closure-tag-bits size))
-      (define copy (raw-+ copy-addr
-                          (fixnum->raw (compiler-constant closure-tag))))
-      (raw-set! addr copy)
-      (raw-set! copy-addr code)
-      (gc-copy-vec addr copy-addr size 1)
-      copy)
+  (closure gc-address-type
+    (define code (raw-ref addr))
+    (define size (raw-vec-ref code -1))
+    (define copy-addr (raw-alloc closure-tag-bits size))
+    (define copy (raw-+ copy-addr
+                        (fixnum->raw (compiler-constant closure-tag))))
+    (raw-set! addr copy)
+    (raw-set! copy-addr code)
+    (gc-copy-vec addr copy-addr size 1)
+    copy)
 
-    (box gc-address-type
-      (define boxed (raw-box-ref val))
-      (define copy (raw-make-box unspecified))
-      (raw-set! addr copy)
-      (raw-box-set! copy (gc-live boxed))
-      copy))
+  (box gc-address-type
+    (define boxed (raw-box-ref val))
+    (define copy (raw-make-box unspecified))
+    (raw-set! addr copy)
+    (raw-box-set! copy (gc-live boxed))
+    copy))
 
-  (define (gc-copy-vec src dest len i)
-    (when (< i len)
-      (raw-vec-set! dest i (gc-live (raw-vec-ref src i)))
-      (gc-copy-vec src dest len (1+ i)))))
+(define (gc-copy-vec src dest len i)
+  (when (< i len)
+    (raw-vec-set! dest i (gc-live (raw-vec-ref src i)))
+    (gc-copy-vec src dest len (1+ i))))

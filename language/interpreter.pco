@@ -262,6 +262,8 @@
 (register-interpreter-builtin-var 'raw-stderr raw-stderr)
 (register-interpreter-builtin-var 'raw-stdin raw-stdin)
 
+(register-interpreter-builtin-var 'compiled #f)
+
 (define-interpreter-builtin-form apply
   (funcall (eval-form-aux (car args) env false)
            (apply (function list*) (eval-forms (cdr args) env))))

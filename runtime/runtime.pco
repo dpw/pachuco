@@ -206,65 +206,67 @@
   (error-halt))
 
 (when-compiling
+  (define compiled #t)
+
   (define (error-halt)
-    (c-call "abort"))
+    (c-call "abort")))
 
-  (define (arity-mismatch nparams nargs)
-    (error "expected ~S arguments, got ~S" nparams nargs))
+(define (arity-mismatch nparams nargs)
+  (error "expected ~S arguments, got ~S" nparams nargs))
 
-  (define (make-varargs-list addr bottom l)
-    (if (> addr bottom)
+(define (make-varargs-list addr bottom l)
+  (if (> addr bottom)
+      (begin
+       (set! addr (raw-- addr (fixnum->raw (compiler-constant value-size))))
+       (set! l (cons (raw-ref addr) l))
+       (raw-set! addr #f)
+       (make-varargs-list addr bottom l))
+      l))
+
+(define (handle-varargs nparams nargs args-base)
+  (when (< nargs nparams)
+      (error "expected at least ~S arguments, got ~S" nparams nargs))
+
+  ;; (fixnum->raw (ash ...) leads to a sequence of two shifts, but
+  ;; that is better than the variable shift we would get it this is
+  ;; turned into a subtraction (there is no constant folding on
+  ;; subtractions).
+  (make-varargs-list (raw-+ args-base
+                            (fixnum->raw (ash nargs
+                                            (compiler-constant value-scale))))
+                     (raw-+ args-base
+                            (fixnum->raw (ash nparams
+                                            (compiler-constant value-scale))))
+                     ()))
+
+(define (apply func arg1 . args)
+  (define (count-args args)
+    (if (null? (cdr args))
+        (length (car args))
+        (1+ (count-args (cdr args)))))
+
+  (define (copy-final-args args addr)
+    (unless (null? args)
+      (raw-set! addr (car args))
+      (copy-final-args (cdr args)
+                 (raw-+ addr (fixnum->raw (compiler-constant value-size))))))
+
+  (define (copy-args args addr)
+    (if (null? (cdr args))
+        (copy-final-args (car args) addr)
         (begin
-         (set! addr (raw-- addr (fixnum->raw (compiler-constant value-size))))
-         (set! l (cons (raw-ref addr) l))
-         (raw-set! addr #f)
-         (make-varargs-list addr bottom l))
-        l))
+          (raw-set! addr (car args))
+          (copy-args (cdr args)
+                 (raw-+ addr (fixnum->raw (compiler-constant value-size)))))))
 
-  (define (handle-varargs nparams nargs args-base)
-    (when (< nargs nparams)
-        (error "expected at least ~S arguments, got ~S" nparams nargs))
-
-    ;; (fixnum->raw (ash ...) leads to a sequence of two shifts, but
-    ;; that is better than the variable shift we would get it this is
-    ;; turned into a subtraction (there is no constant folding on
-    ;; subtractions).
-    (make-varargs-list (raw-+ args-base
-                              (fixnum->raw (ash nargs
-                                              (compiler-constant value-scale))))
-                       (raw-+ args-base
-                              (fixnum->raw (ash nparams
-                                              (compiler-constant value-scale))))
-                       ()))
-
-  (define (apply func arg1 . args)
-    (define (count-args args)
-      (if (null? (cdr args))
-          (length (car args))
-          (1+ (count-args (cdr args)))))
-
-    (define (copy-final-args args addr)
-      (unless (null? args)
-        (raw-set! addr (car args))
-        (copy-final-args (cdr args)
-                   (raw-+ addr (fixnum->raw (compiler-constant value-size))))))
-
-    (define (copy-args args addr)
-      (if (null? (cdr args))
-          (copy-final-args (car args) addr)
-          (begin
-            (raw-set! addr (car args))
-            (copy-args (cdr args)
-                   (raw-+ addr (fixnum->raw (compiler-constant value-size)))))))
-
-    (set! args (cons arg1 args))
-    (define arg-count (count-args args))
-    (raw-jump-with-arg-space raw-arg-count arg-count
-      (lambda ()
-        (copy-args args (raw-args-base))
-        (set! args #f)
-        (set! arg1 #f)
-        (raw-apply-jump func arg-count)))))
+  (set! args (cons arg1 args))
+  (define arg-count (count-args args))
+  (raw-jump-with-arg-space raw-arg-count arg-count
+    (lambda ()
+      (copy-args args (raw-args-base))
+      (set! args #f)
+      (set! arg1 #f)
+      (raw-apply-jump func arg-count))))
 
 ;;; Lists
 
@@ -808,35 +810,36 @@
         (#t (eq? a b))))
 
 
-(when-compiling
-  ;;; Command line access
-  (define (copy-c-string addr)
-    (define (strlen addr)
-      (define (aux offset)
-          (if (= 0 (raw->fixnum (raw-1-vec-ref addr offset)))
-              offset
-              (aux (1+ offset))))
-      (aux 0))
+;;; Command line access
 
-    (define len (strlen addr))
-    (define str (make-string len (code-character 0)))
-    (raw-1-copy addr (raw-string-address str 0) len)
-    str)
-
-  (define (c-string-array-to-list addr)
-    (define (aux index)
-        (define str-addr (raw-vec-ref addr index))
-      (if (eq? 0 str-addr)
-          ()
-          (cons (copy-c-string str-addr) (aux (1+ index)))))
+(define (copy-c-string addr)
+  (define (strlen addr)
+    (define (aux offset)
+        (if (= 0 (raw->fixnum (raw-1-vec-ref addr offset)))
+            offset
+            (aux (1+ offset))))
     (aux 0))
 
-  (define command-line-args
-          (c-string-array-to-list (raw-ref (raw-label "lisp_argv"))))
+  (define len (strlen addr))
+  (define str (make-string len (code-character 0)))
+  (raw-1-copy addr (raw-string-address str 0) len)
+  str)
 
-  (define (compiled-runtime-main)
-    (set! gc-stack-top (raw-args-base))
-    (runtime-main)))
+(define (c-string-array-to-list addr)
+  (define (aux index)
+      (define str-addr (raw-vec-ref addr index))
+    (if (eq? 0 str-addr)
+        ()
+        (cons (copy-c-string str-addr) (aux (1+ index)))))
+  (aux 0))
+
+(when-compiling
+  (define command-line-args
+          (c-string-array-to-list (raw-ref (raw-label "lisp_argv")))))
+
+(define (compiled-runtime-main)
+  (set! gc-stack-top (raw-args-base))
+  (runtime-main))
 
 ;;; Program entry point
 (define (runtime-main)
