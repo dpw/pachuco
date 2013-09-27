@@ -1,7 +1,7 @@
 ;;; Intepreter/compiler driver code
 
 ;;; List-like buffers
-;;; Represented as (head . tail)
+;;; Represented as ((() . head) . tail)
 
 (define (make-buffer)
   ;; create a buffer
@@ -42,8 +42,9 @@
   (let* ((eval-env (make-initial-interpreter-env)))
     (cons (make-initial-macro-env) eval-env)))
 
-(define (expand-files files target)
-  (let* ((dual-env (make-initial-dual-env)))
+(define (expand-files files buffer)
+  (let* ((dual-env (make-initial-dual-env))
+         (interp-forms (make-buffer)))
     (dolist (f files)
       (let* ((no-interp (if (string-equal? "no-interp!" (substring f 0 10))
                             (begin
@@ -52,27 +53,29 @@
                             false)))
         (dolist (form (read-file f))
           (let* ((expanded (expand-body-form form dual-env)))
-            (funcall target expanded)
+            (buffer-add (if no-interp buffer interp-forms) expanded)
             (unless no-interp (eval-body-form expanded (cdr dual-env)))))))
+    (buffer-concat buffer interp-forms)
     dual-env))
 
 (define (do-interpret-files files form)
-  (let* ((dual-env (expand-files files (lambda (expanded)))))
+  (let* ((dual-env (expand-files files (make-buffer))))
     (eval-form form (cdr dual-env))))
 
 (define (do-expand-files files)
-  (expand-files files (lambda (expanded)
-                        (formout-pretty stdout "~S~%" expanded))))
+  (let* ((buffer (make-buffer)))
+    (expand-files files buffer)
+    (dolist (form (buffer-list buffer))
+      (formout-pretty stdout "~S~%" form))))
 
 (define (do-compile-files files form)
   (let* ((program (make-buffer)))
-    (expand-files files (lambda (expanded) (buffer-add program expanded)))
+    (expand-files files program)
     (buffer-add program form)
     (compile-program (buffer-list program))))
 
 (define (do-dump-program to-phase files form)
   (let* ((program (make-buffer)))
-    (expand-files files (lambda (expanded) (buffer-add program expanded)))
+    (expand-files files program)
     (buffer-add program form)
     (dump-program to-phase (buffer-list program))))
-
