@@ -23,7 +23,6 @@
   (let* ((todo (codegen-todo cg)))
     (unless (null? todo)
       (codegen-set-todo! cg (cdr todo))
-      (emit-comment cg "BREAK")
       (codegen-function cg (car todo))
       (codegen-do-todos cg))))
 

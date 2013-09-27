@@ -9,9 +9,6 @@ Options:
 -o: Output executable
 -s: Don't delete the generated assembly files after compilation
 -v: Verbose - display the actual compilation command
--S: Split the generated assembly into multiple files.  For use on
-    very memory-limited machines where assembling a single file would cause
-    swapping.
 -T: Time the compiler.  Compiler output is sent to /dev/null.
 -C: Use the specified compiler executable.
 -D: Use the compiler and runtime under the specified directory, rather
@@ -27,7 +24,6 @@ files=
 dest=
 time=
 leaveasm=
-splitasm=
 verbose=
 compiler=$basedir/build/stage2
 runtimedir=$basedir/runtime
@@ -58,11 +54,6 @@ while [ $# -gt 0 ] ; do
 
     -s)
         leaveasm=1
-        shift 1
-        ;;
-
-    -S)
-        splitasm=1
         shift 1
         ;;
 
@@ -112,13 +103,6 @@ else
     asmclean="$asmout"
     asmfiles="$asmout"
     eval $cmd >"$asmout"
-
-    if [ -n "$splitasm" ] ; then
-        asmdir="${asmdest}-asm"
-        mkdir $asmdir
-        asmclean="$asmout $asmdir"
-        asmfiles=`awk -v dir=$asmdir 'BEGIN { l = 0; fnum = 0; fn=dir "/0.s"; print fn; } /^# BREAK$/ { if (l > 10000) { l = 0; fnum++; fn=dir "/" fnum ".s"; print fn; next; } } { l++; print $0 >fn; }' $asmout`
-    fi
 
     target=''
     # bit of a hack: if we are on x86-86, but it looks like the compiler
