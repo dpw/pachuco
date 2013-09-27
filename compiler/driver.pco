@@ -1,5 +1,28 @@
 ;;; Intepreter/compiler driver code
 
+;;; List-like buffers
+;;; Represented as (head . tail)
+
+(define (make-buffer)
+  ;; create a buffer
+  (let* ((buf (cons () ())))
+    (cons buf buf)))
+
+(define (buffer-add buf el)
+  ;; add an item to the end of a buffer
+  (let* ((newtail (cons el ())))
+    (rplacd (cdr buf) newtail)
+    (rplacd buf newtail)))
+
+(define (buffer-concat buf1 buf2)
+  ;; concatenate two buffers
+  (rplacd (cdr buf1) (cdar buf2))
+  (rplacd buf1 (cdr buf2)))
+
+(define (buffer-list buf)
+  ;; turn a buffer into a list
+  (cdar buf))
+
 (define (read-file-to-buffer file buf)
   (let* ((eof (cons () ())))
     (with-open-file-for-reading (s file)
