@@ -57,8 +57,9 @@
 
     vector? make-vector vector-length raw-vector-address
     raw-vector-ref raw-vector-set! raw-vector-copy
-    raw-vec-set! raw-vec-ref raw-ref raw-set! raw-copy
-    raw-1-vec-set! raw-1-vec-ref raw-1-ref raw-1-set! raw-1-copy
+    raw-mem-offset-set! raw-mem-offset-ref raw-mem-ref raw-mem-set! raw-mem-copy
+    raw-mem-1-offset-set! raw-mem-1-offset-ref raw-mem-1-ref raw-mem-1-set!
+    raw-mem-1-copy
 
     raw-make-box raw-box-ref raw-box-set!
 

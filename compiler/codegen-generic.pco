@@ -631,11 +631,11 @@
         (list* (cons 'scale (unquote scale))
                raw-base-type-attrs))
 
-      (define-codegen-simplify ((unquote (compound-symbol name "-vec-ref"))
+      (define-codegen-simplify ((unquote (compound-symbol name "-offset-ref"))
                                 attrs addr index)
         (genericize-vec-op form 'raw-vec-ref (unquote type-attrs)))
 
-      (define-codegen-simplify ((unquote (compound-symbol name "-vec-set!"))
+      (define-codegen-simplify ((unquote (compound-symbol name "-offset-set!"))
                                 attrs addr index val)
         (genericize-vec-op form 'raw-vec-set! (unquote type-attrs)))
 
@@ -653,8 +653,8 @@
         (rplaca (cdr form) (unquote type-attrs))
         (codegen-simplify-recurse form))))))
 
-(define-raw-type "raw" value-scale)    ; memory as value-sized words
-(define-raw-type "raw-1" 0)            ; memory as bytes
+(define-raw-type "raw-mem" value-scale)    ; memory as value-sized words
+(define-raw-type "raw-mem-1" 0)            ; memory as bytes
 
 ;; Access to compiler constants for GC
 

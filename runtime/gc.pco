@@ -32,7 +32,7 @@
 
 (define (gc-root-set start-addr end-addr)
   (when (< start-addr end-addr)
-    (raw-set! start-addr (gc-live (raw-ref start-addr)))
+    (raw-mem-set! start-addr (gc-live (raw-mem-ref start-addr)))
     (gc-root-set (raw-+ start-addr
                         (fixnum->raw (compiler-constant value-size)))
                  end-addr)))
@@ -158,7 +158,7 @@
         ;; look at the first word of the object to see if it was
         ;; already copied
         (define addr (raw-- val raw-tag))
-        (define (unquote to-val) (raw-ref addr))
+        (define (unquote to-val) (raw-mem-ref addr))
         (if (and (<= gc-to-space (unquote to-val))
                  (< (unquote to-val) gc-to-space-end)
                  ;; We also need to check that the forwarding
@@ -178,7 +178,7 @@
   (pair gc-address-type
     (define a (car val))
     (define copy (cons () ()))
-    (raw-set! addr copy)
+    (raw-mem-set! addr copy)
     (rplaca copy (gc-live a))
     (rplacd copy (gc-live (cdr val)))
     copy)
@@ -186,7 +186,7 @@
   (vector gc-address-type
     (define len (vector-length val))
     (define copy (make-vector len #f))
-    (raw-set! addr copy)
+    (raw-mem-set! addr copy)
     (gc-copy-vec addr
                  (raw-- copy (fixnum->raw (compiler-constant vector-tag)))
                  (1+ len) 1)
@@ -195,7 +195,7 @@
   (string gc-address-type
     (define len (string-length val))
     (define copy (make-string len 0))
-    (raw-set! addr copy)
+    (raw-mem-set! addr copy)
     (raw-string-copy val 0 copy 0 len)
     copy)
 
@@ -204,28 +204,28 @@
     ;; that would be really perverse.
     (define copy (raw-make-symbol (gc-live (symbol-name val))
                                   (gc-live (symbol-id val))))
-    (raw-set! addr copy)
+    (raw-mem-set! addr copy)
     copy)
 
   (closure gc-address-type
-    (define code (raw-ref addr))
-    (define size (raw-vec-ref code -1))
+    (define code (raw-mem-ref addr))
+    (define size (raw-mem-offset-ref code -1))
     (define copy-addr (raw-alloc closure-tag-bits size))
     (define copy (raw-+ copy-addr
                         (fixnum->raw (compiler-constant closure-tag))))
-    (raw-set! addr copy)
-    (raw-set! copy-addr code)
+    (raw-mem-set! addr copy)
+    (raw-mem-set! copy-addr code)
     (gc-copy-vec addr copy-addr size 1)
     copy)
 
   (box gc-address-type
     (define boxed (raw-box-ref val))
     (define copy (raw-make-box unspecified))
-    (raw-set! addr copy)
+    (raw-mem-set! addr copy)
     (raw-box-set! copy (gc-live boxed))
     copy))
 
 (define (gc-copy-vec src dest len i)
   (when (< i len)
-    (raw-vec-set! dest i (gc-live (raw-vec-ref src i)))
+    (raw-mem-offset-set! dest i (gc-live (raw-mem-offset-ref src i)))
     (gc-copy-vec src dest len (1+ i))))
