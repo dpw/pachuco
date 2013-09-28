@@ -562,7 +562,7 @@
   ;; convert a vector-type-specific operator into a generic vec operator
   (rplaca form name)
   (rplaca (cdr form) attrs)
-  (codegen-simplify-recurse form))
+  (codegen-simplify form))
 
 (define (make-copy-mem-form src src-index dest dest-index len attrs)
   (quasiquote

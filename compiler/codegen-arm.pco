@@ -711,7 +711,7 @@
 
 (define (simplify-vec-op form index)
   (when (eq? 'quote (car index))
-    (let* ((indexval (form-attr index 'quoted)))
+    (let* ((indexval (second index)))
       (when (number? indexval)
         (let* ((attrs (second form)))
           (rplaca (cdr form)
