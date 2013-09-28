@@ -9,7 +9,7 @@
 func=$1
 shift
 
-tar czf - $* $CL_COMPILER_SOURCES | ssh $BOOTSTRAP_HOST "
+tar czf - $(echo "$*" | sed 's|no-interp!||g') $CL_COMPILER_SOURCES | ssh $BOOTSTRAP_HOST "
   CL_COMPILER_SOURCES=\"$CL_COMPILER_SOURCES\"
   export CL_COMPILER_SOURCES
   cd /tmp
