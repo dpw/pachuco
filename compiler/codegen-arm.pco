@@ -709,6 +709,9 @@
                                  (tag-bits . 0)
                                  (header-size . 0)))
 
+;; Due to the limitations of the offsets on ldr/str instructions, it's
+;; a good idea to fully calculate constant offsets before
+;; reg-imm12-operand-constraint gets to run.
 (define (simplify-vec-op form index)
   (when (eq? 'quote (car index))
     (let* ((indexval (second index)))
@@ -757,7 +760,7 @@
 
 (define-operator (fixnum->raw (val reg-imm)) ()
   (if (immediate? val)
-      (set! val (ash val (- number-tag-bits)))
+      (ash val (- number-tag-bits))
       (begin
         (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
                (reg-asm-operand val) number-tag-bits)
@@ -765,7 +768,7 @@
 
 (define-operator (raw->fixnum (val reg-imm)) ()
   (if (immediate? val)
-      (set! val (fixnum-representation val))
+      (fixnum-representation val)
       (begin
         (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
                (reg-asm-operand val) number-tag-bits)
