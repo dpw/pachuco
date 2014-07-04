@@ -1,4 +1,5 @@
-;;; The compiler
+;;; The core of the compiler.  Transforms the macro-expanded source
+;;; code into an annotated form ready for code generation.
 
 ;;; Here we define the sequence of program-transformation phases
 ;;; within the compiler (i.e. prior to the final code generation
@@ -38,6 +39,8 @@
         (set! done (string-equal? to-phase (car ph))))))
   (formout-pretty stdout "~S~%" (debug-form program)))
 
+;;; Keywords that indicate a special form where all subsequent
+;;; elements are treated as normal expressions.
 (define keywords-1
   '(begin if
 
@@ -69,14 +72,18 @@
 
     raw-args-base raw-jump-with-arg-space raw-apply-jump))
 
+;;; Keywords that indicate a special form where the second element is
+;;; also special, but all elements after that are treated as normal
+;;; expressions.
 (define keywords-2 '(define lambda set! quote
                      c-call raw-label raw-global-ref raw-global-set!
                      compiler-constant raw-alloc))
 
-;;; Transform a program so that every form begins with a
-;;; distinguishing keyword (e.g. resolve calls and self-quoting
-;;; forms).  "definitions" forms are also spliced into their
-;;; containing bodies at this point.
+;;; Normalization transforms the source program so that every form
+;;; begins with a distinguishing keyword (i.e. resolving function
+;;; calls, variable references, and self-quoting forms).
+;;; "definitions" forms are also spliced into their containing bodies
+;;; at this point.
 
 (define keywords-symtab (make-symboltable))
 (dolist (kw keywords-1) (symboltable-set! keywords-symtab kw 1))
@@ -130,7 +137,9 @@
   (rplaca (cdr form) (attr-set! (second form) attr val))
   val)
 
-
+;; The representation of a variable.  The "simplify" and
+;; "resolve-variables" phases replace all variable names with
+;; references to varrecs.
 (define-struct varrec ((constructor make-varrec-aux name))
   name ; name as a symbol
   mode ; access mode: self, top-level, closure, param or local
@@ -276,9 +285,12 @@
 (define-propagate (begin attrs . body)
   (propagate-last body operator)
 
-  ;; bind is a bit broken.  'body' does not share structure with the
-  ;; actual form.  Work around that by patching 'body' back into the
-  ;; form
+  ;; The definition of bind in runtime.pco, as used by the
+  ;; define-propogate macro, is currently a bit broken: 'body' here
+  ;; does not share structure with the form from the source program.
+  ;; Rather, it is a list containing the same elements.  We might have
+  ;; manipulated 'body' above, so order not to discard it, we patch
+  ;; 'body' back into the form.
   (rplacd (cdr form) body))
 
 (define-propagate (if attrs test then else)
@@ -298,8 +310,8 @@
       (propagate-recurse form operator))))
 
 ;;; Convert all variable names (in defines, refs, set!s) to references
-;;; to varrecs.  Also, collect definitions in begins.  The second
-;;; element of a begin form holds a list of varrecs.
+;;; to varrecs.  Also, attach to each 'begin' form a list of all
+;;; varrecs it defines.
 
 (define-trivial-walker resolve-variables (frames))
 
@@ -340,9 +352,15 @@
 
 ;;; Classify all variables into read-only and (potentially)
 ;;; read-write, or early function (a read-only variable with a
-;;; function value that is potential ready before its definition).
+;;; function value that is potentially read before its definition).
 ;;;
-;;; A state is attached to each varrec:
+;;; During classification, a simple state machine operates for each
+;;; variable, with transitions triggered by forms that refer to that
+;;; variable.  The state machine's table is shown below.  The state is
+;;; recorded in the misc field of a varrec, represented by a small
+;;; integer.
+;;;
+;;; States:
 ;;;
 ;;; I (4) - initial state
 ;;; r (5) - read before a define
