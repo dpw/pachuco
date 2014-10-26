@@ -186,9 +186,8 @@
 
 ;;; Helper init-mem function
 ;;;
-;;; Init-mem functions are used by make-vec and alloc-closure to clear
-;;; the allocated memory.  The caller sets up %init-mem-count and
-;;; %init-mem-val.
+;;; Init-mem functions are used by make-vec to clear the allocated
+;;; memory.  The caller sets up %init-mem-count and %init-mem-val.
 
 (define init-mem-variants (vector "init_mem_bytes" false "init_mem"))
 (define str-variants (vector "strb" false "str"))
@@ -313,15 +312,14 @@
 
 (define-tag-check function? closure-tag closure-tag-bits)
 
-(define-operator (alloc-closure) ((temp-fixed-regs %init-mem-val %init-mem-ptr
-                                                   %init-mem-count))
+;; alloc-closure simply allocates space for the closure, it does not
+;; initialize its contents.  This is because it will always be
+;; enclosed by a lambda that does the initialization.
+(define-operator (alloc-closure) ((temp-regs labelreg))
   (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'length)))
-              value-scale
-              (list* %init-mem-val %init-mem-ptr %init-mem-count spare-regs))
-  (emiti cg "ldr ~A, =~A" (reg-asm-operand %init-mem-val)
-         (attr-ref attrs 'label))
-  (emiti cg "str ~A, [~A]" (reg-asm-operand %init-mem-val)
-         (reg-asm-operand %alloc))
+              value-scale (cons labelreg spare-regs))
+  (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg) (attr-ref attrs 'label))
+  (emiti cg "str ~A, [~A]" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) closure-tag)
   result)
