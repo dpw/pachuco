@@ -234,7 +234,7 @@
 
     ;; load register globals from the variables assigned by the C setup
     ;; code
-    (bind (temp . rest) general-registers
+    (let* ((temp (first general-registers)))
       (dolist (rglob register-globals)
         (access-global cg "ldr" (cdr rglob) (car rglob) temp)))
 
@@ -444,13 +444,16 @@
 
 ;;; Variables
 
-(define (access-varrec cg varrec insn addr reg)
-  (set! reg (reg-asm-operand reg))
+(define (access-global cg insn reg name tempreg)
+  (set! tempreg (reg-asm-operand tempreg))
+  (emiti cg "ldr ~A, =~A" tempreg
+         (if (string? name) name (subject-language-symbol-name name)))
+  (emiti cg "~A ~A, [~A]" insn (reg-asm-operand reg) tempreg))
+
+(define (access-varrec cg varrec insn reg tempreg)
   (let* ((mode (varrec-mode varrec)))
     (cond ((eq? mode 'top-level)
-           (set! addr (reg-asm-operand addr))
-           (emiti cg "ldr ~A, =~A" addr (varrec-index varrec))
-           (emiti cg "~A ~A, [~A]" insn reg addr))
+           (access-global cg insn reg (varrec-index varrec) tempreg))
           ((not (eq? mode 'self))
            (let* ((base-reg %sp)
                   (offset
@@ -462,11 +465,12 @@
                          ((eq? mode 'local)
                           (stack-local-offset cg (varrec-index varrec)))
                          (true (error "strange variable mode ~S" mode)))))
-             (emiti cg "~A ~A, [~A, #~D]" insn reg
+             (emiti cg "~A ~A, [~A, #~D]" insn (reg-asm-operand reg)
                    (reg-asm-operand base-reg) offset)))
           (true ; (eq? mode 'self)
            ;; we only need to read such variables
-           (emiti cg "mov ~A, ~A" reg (reg-asm-operand %closure))))))
+           (emiti cg "mov ~A, ~A" (reg-asm-operand reg)
+                  (reg-asm-operand %closure))))))
 
 (define-operator (define val) ()
   (emit-frame-push cg val)
@@ -474,7 +478,7 @@
   val)
 
 (define-operator (set! val) ((temp-regs temp))
-  (access-varrec cg (attr-ref attrs 'varrec) "str" temp val)
+  (access-varrec cg (attr-ref attrs 'varrec) "str" val temp)
   val)
 
 (define-operator (ref) ()
@@ -775,11 +779,6 @@
 (define-operator (raw-label) ()
   (emiti cg "ldr ~A, =~A" (reg-asm-operand result) (attr-ref attrs 'name))
   result)
-
-(define (access-global cg insn reg name temp)
-  (set! temp (reg-asm-operand temp))
-  (emiti cg "ldr ~A, =~A" temp (subject-language-symbol-name name))
-  (emiti cg "~A ~A, [~A]" insn (reg-asm-operand reg) temp))
 
 (define-operator (raw-global-set! val) ((temp-regs temp))
   (let* ((name (attr-ref attrs 'name))
