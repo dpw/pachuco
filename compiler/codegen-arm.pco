@@ -633,7 +633,7 @@
 ;;; Boxes
 
 (define-operator (raw-make-box val) ()
-  (emit-alloc cg symbol-tag-bits value-size value-scale spare-regs)
+  (emit-alloc cg box-tag-bits value-size value-scale spare-regs)
   (emiti cg "str ~A, [~A]" (reg-asm-operand val) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) box-tag)
