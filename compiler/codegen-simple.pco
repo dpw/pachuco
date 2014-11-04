@@ -122,7 +122,7 @@
         (define-codegen ((unquote name) attrs . (unquote param-names))
           (codegen-operator-args cg (cddr form) (unquote registers-name))
           (bind ((unquote-splicing param-names)
-                 (unquote-splicing temp-fixed-regs)
+                 (unquote-splicing (mapfor (r temp-fixed-regs) (gensym)))
                  (unquote-splicing temp-regs)
                  . spare-regs)
                 (unquote registers-name)
