@@ -228,6 +228,12 @@
                                 (make-vector-from-list '(1 2 3)))
                  #t)
 
+  ;; This tests that the constant index optimizations for ARM work correctly.
+  (assert-result (begin
+                   (define v (make-vector 2000 42))
+                   (raw-vector-ref v 1500))
+                 42)
+
   (begin
     (define (assert-uniform-format a expect)
       (assert-result (format "~S" a) expect)

@@ -678,71 +678,77 @@
           (reg-asm-operand %alloc) tag))
   result)
 
-(define (emit-vec-op cg attrs insn valreg vecreg index)
-  (let* ((scale (attr-ref attrs 'scale))
-         (header-size (attr-ref attrs 'header-size))
-         (tag (attr-ref attrs 'tag))
-         (vec (reg-asm-operand vecreg))
-         (val (reg-asm-operand valreg)))
-    (if (number? index)
-        (begin
-          (unless (and (= 0 header-size) (= 0 tag))
-            (error "vector op with immediate index has strange attrs"))
-          (if insn
-              (emiti cg "~A ~A, [~A, #~D]" (vector-ref insn scale) val vec
-                     index)
-              (emiti cg "add ~A, ~A, #~D" val vec index)))
-        (begin
-          (unless (= header-size tag)
-            (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))
-          (if insn
-              (emiti cg "~A ~A, [~A, ~A~A]"
-                     (vector-ref insn scale) val vec
-                     (reg-asm-operand index)
-                     (shift-expr (- number-tag-bits scale)))
-              (emiti cg "add ~A, ~A, ~A~A" val vec (reg-asm-operand index)
-                     (shift-expr (- number-tag-bits scale))))))))
-
 (define (vec-offset attrs index)
   (+ (ash index (attr-ref attrs 'scale))
      (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag))))
 
-(define immediate-vec-op-attrs '((tag . 0)
-                                 (tag-bits . 0)
-                                 (header-size . 0)))
-
-;; Due to the limitations of the offsets on ldr/str instructions, it's
-;; a good idea to fully calculate constant offsets before
-;; reg-imm12-operand-constraint gets to run.
-(define (simplify-vec-op form index)
+;; We fully calculate constant offsets during codegen-simplify, so
+;; that the operand constraints can accurately decide whether they fit
+;; into the relevant immediate fields.
+(define (identify-const-index-vec-op form attrs index)
   (when (eq? 'quote (car index))
     (let* ((indexval (second index)))
       (when (number? indexval)
-        (let* ((attrs (second form)))
-          (rplaca (cdr form)
-                  (acons 'scale (attr-ref attrs 'scale) immediate-vec-op-attrs))
-          (overwrite-form index (list 'raw (acons 'value
-                                                  (vec-offset attrs indexval)
-                                                  ()))))))))
+        (rplaca form (compound-symbol (car form) "-const-index"))
+        (overwrite-form index (list 'raw
+                                    (acons 'value (vec-offset attrs indexval)
+                                           ())))))))
 
 (define-codegen-simplify (raw-vec-set! attrs vec index val)
   (codegen-simplify-recurse form)
-  (simplify-vec-op form index))
+  (identify-const-index-vec-op form attrs index))
 
 (define-codegen-simplify ((raw-vec-ref vec-address) attrs vec index)
   (codegen-simplify-recurse form)
-  (simplify-vec-op form index))
+  (identify-const-index-vec-op form attrs index))
 
-(define-operator (raw-vec-set! vec (index reg-imm12) val) ()
-  (emit-vec-op cg attrs str-variants val vec index)
+(define (emit-vec-const-index-op cg insn valreg ob vecreg index cb)
+  (let* ((vec (reg-asm-operand vecreg))
+         (val (reg-asm-operand valreg)))
+    (if (number? index)
+        (emiti cg "~A ~A, ~A~A, #~D~A" insn val ob vec index cb)
+        (emiti cg "~A ~A, ~A~A, ~A~A" insn val ob vec (reg-asm-operand index)
+               cb))))
+
+(define-operator (raw-vec-set!-const-index vec (index reg-imm12) val) ()
+  (emit-vec-const-index-op cg
+                           (vector-ref str-variants (attr-ref attrs 'scale))
+                           val "[" vec index "]")
   val)
 
-(define-operator (raw-vec-ref vec (index reg-imm12)) ()
-  (emit-vec-op cg attrs ldr-variants result vec index)
+(define-operator (raw-vec-ref-const-index vec (index reg-imm12)) ()
+  (emit-vec-const-index-op cg
+                           (vector-ref ldr-variants (attr-ref attrs 'scale))
+                           result "[" vec index "]")
   result)
 
-(define-operator (vec-address vec (index reg-imm12)) ()
-  (emit-vec-op cg attrs false result vec index)
+(define-operator (vec-address-const-index vec (index reg-imm8)) ()
+  (emit-vec-const-index-op cg "add" result "" vec index "")
+  result)
+
+(define (emit-vec-op cg attrs insn val ob vecreg index cb)
+  (let* ((header-size (attr-ref attrs 'header-size))
+         (tag (attr-ref attrs 'tag))
+         (vec (reg-asm-operand vecreg)))
+    (unless (= header-size tag)
+      (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))
+    (emiti cg "~A ~A, ~A~A, ~A~A~A" insn (reg-asm-operand val) ob
+           vec (reg-asm-operand index)
+           (shift-expr (- number-tag-bits (attr-ref attrs 'scale)))
+           cb)))
+
+(define-operator (raw-vec-set! vec index val) ()
+  (emit-vec-op cg attrs (vector-ref str-variants (attr-ref attrs 'scale))
+               val "[" vec index "]")
+  val)
+
+(define-operator (raw-vec-ref vec index) ()
+  (emit-vec-op cg attrs (vector-ref ldr-variants (attr-ref attrs 'scale))
+               result "[" vec index "]")
+  result)
+
+(define-operator (vec-address vec index) ()
+  (emit-vec-op cg attrs "add" result "" vec index "")
   result)
 
 (define-operator (vec-length vec) ()
