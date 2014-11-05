@@ -22,7 +22,13 @@
 (define (register? x) (vector? x))
 (define (immediate? x) (or (number? x) (string? x)))
 (define (immediate8? x) (and (number? x) (= 0 (logand x -256))))
-(define (immediate12? x) (and (number? x) (= 0 (logand (abs x) -4096))))
+
+;; The offset_12 field also has a sign bit
+(define (offset12? x) (and (number? x) (= 0 (logand (abs x) -4096))))
+
+;; In some contexts we can handle something that fits into the immed_8
+;; field whether positive or negative (e.g. by turning an add into a sub)
+(define (immediate8abs? x) (and (number? x) (= 0 (logand (abs x) -256))))
 
 (defmacro (reg-asm-operand reg)
   (list 'register-variant reg 0))
@@ -43,8 +49,15 @@
         (emit-mov-maybe cg operand reg)
         reg)))
 
-(define (reg-imm12-operand-constraint cg operand reg)
-  (if (immediate12? operand)
+(define (reg-offset12-operand-constraint cg operand reg)
+  (if (offset12? operand)
+      operand
+      (begin
+        (emit-mov-maybe cg operand reg)
+        reg)))
+
+(define (reg-imm8abs-operand-constraint cg operand reg)
+  (if (immediate8abs? operand)
       operand
       (begin
         (emit-mov-maybe cg operand reg)
@@ -710,19 +723,19 @@
         (emiti cg "~A ~A, ~A~A, ~A~A" insn val ob vec (reg-asm-operand index)
                cb))))
 
-(define-operator (raw-vec-set!-const-index vec (index reg-imm12) val) ()
+(define-operator (raw-vec-set!-const-index vec (index reg-offset12) val) ()
   (emit-vec-const-index-op cg
                            (vector-ref str-variants (attr-ref attrs 'scale))
                            val "[" vec index "]")
   val)
 
-(define-operator (raw-vec-ref-const-index vec (index reg-imm12)) ()
+(define-operator (raw-vec-ref-const-index vec (index reg-offset12)) ()
   (emit-vec-const-index-op cg
                            (vector-ref ldr-variants (attr-ref attrs 'scale))
                            result "[" vec index "]")
   result)
 
-(define-operator (vec-address-const-index vec (index reg-imm8)) ()
+(define-operator (vec-address-const-index vec (index reg-imm8abs)) ()
   (emit-vec-const-index-op cg "add" result "" vec index "")
   result)
 
