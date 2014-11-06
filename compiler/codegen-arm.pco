@@ -715,53 +715,51 @@
   (codegen-simplify-recurse form)
   (identify-const-index-vec-op form attrs index))
 
-(define (emit-vec-const-index-op cg insn valreg ob vecreg index cb)
-  (let* ((vec (reg-asm-operand vecreg))
-         (val (reg-asm-operand valreg)))
-    (if (number? index)
-        (emiti cg "~A ~A, ~A~A, #~D~A" insn val ob vec index cb)
-        (emiti cg "~A ~A, ~A~A, ~A~A" insn val ob vec (reg-asm-operand index)
-               cb))))
+(define (emit-raw-vec-set!-ref-const-index cg attrs instrs vec index val)
+  (emiti cg "~A ~A, [~A, ~A]"
+         (vector-ref instrs (attr-ref attrs 'scale))
+         (reg-asm-operand val) (reg-asm-operand vec) (asm-operand index)))
 
 (define-operator (raw-vec-set!-const-index vec (index reg-offset12) val) ()
-  (emit-vec-const-index-op cg
-                           (vector-ref str-variants (attr-ref attrs 'scale))
-                           val "[" vec index "]")
+  (emit-raw-vec-set!-ref-const-index cg attrs str-variants vec index val)
   val)
 
 (define-operator (raw-vec-ref-const-index vec (index reg-offset12)) ()
-  (emit-vec-const-index-op cg
-                           (vector-ref ldr-variants (attr-ref attrs 'scale))
-                           result "[" vec index "]")
+  (emit-raw-vec-set!-ref-const-index cg attrs ldr-variants vec index result)
   result)
 
 (define-operator (vec-address-const-index vec (index reg-imm8abs)) ()
-  (emit-vec-const-index-op cg "add" result "" vec index "")
+  (emiti cg "add ~A, ~A, ~A" (reg-asm-operand result) (reg-asm-operand vec)
+         (asm-operand index))
   result)
 
-(define (emit-vec-op cg attrs insn val ob vecreg index cb)
+(define (emit-skip-vec-header cg attrs vec)
   (let* ((header-size (attr-ref attrs 'header-size))
-         (tag (attr-ref attrs 'tag))
-         (vec (reg-asm-operand vecreg)))
+         (tag (attr-ref attrs 'tag)))
     (unless (= header-size tag)
-      (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))
-    (emiti cg "~A ~A, ~A~A, ~A~A~A" insn (reg-asm-operand val) ob
-           vec (reg-asm-operand index)
-           (shift-expr (- number-tag-bits (attr-ref attrs 'scale)))
-           cb)))
+      (set! vec (reg-asm-operand vec))
+      (emiti cg "add ~A, ~A, #~D" vec vec (- header-size tag)))))
+
+(define (emit-raw-vec-set!-ref cg attrs instrs vec index val)
+  (emit-skip-vec-header cg attrs vec)
+  (emiti cg "~A ~A, [~A, ~A~A]"
+         (vector-ref instrs (attr-ref attrs 'scale))
+         (reg-asm-operand val) (reg-asm-operand vec) (reg-asm-operand index)
+         (shift-expr (- number-tag-bits (attr-ref attrs 'scale)))))
 
 (define-operator (raw-vec-set! vec index val) ()
-  (emit-vec-op cg attrs (vector-ref str-variants (attr-ref attrs 'scale))
-               val "[" vec index "]")
+  (emit-raw-vec-set!-ref cg attrs str-variants vec index val)
   val)
 
 (define-operator (raw-vec-ref vec index) ()
-  (emit-vec-op cg attrs (vector-ref ldr-variants (attr-ref attrs 'scale))
-               result "[" vec index "]")
+  (emit-raw-vec-set!-ref cg attrs ldr-variants vec index result)
   result)
 
 (define-operator (vec-address vec index) ()
-  (emit-vec-op cg attrs "add" result "" vec index "")
+  (emit-skip-vec-header cg attrs vec)
+  (emiti cg "add ~A, ~A, ~A~A" (reg-asm-operand result) (reg-asm-operand vec)
+         (reg-asm-operand index)
+         (shift-expr (- number-tag-bits (attr-ref attrs 'scale))))
   result)
 
 (define-operator (vec-length vec) ()
