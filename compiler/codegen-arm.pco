@@ -125,17 +125,16 @@
   (emiti cg "ldr ~A, [sp], #4" (reg-asm-operand reg)))
 
 (define (emit-mov cg src dest)
-  (emiti cg "mov ~A, ~A" (reg-asm-operand dest) (reg-asm-operand src)))
-
-;;; Used by codegen strategies
+  (set! dest (reg-asm-operand dest))
+  (cond ((register? src)
+         (emiti cg "mov ~A, ~A" dest (reg-asm-operand src)))
+        ((immediate8? src)
+         (emiti cg "mov ~A, #~D" dest src))
+        (true
+         (emiti cg "ldr ~A, =~A" dest src))))
 
 (define (emit-mov-maybe cg src dest)
-  (cond ((register? src)
-         (unless (eq? src dest) (emit-mov cg src dest)))
-        ((immediate8? src)
-         (emiti cg "mov ~A, #~D" (reg-asm-operand dest) src))
-        (true
-         (emiti cg "ldr ~A, =~A" (reg-asm-operand dest) src))))
+  (unless (eq? src dest) (emit-mov cg src dest)))
 
 (define (emit-branch cg cc label)
   (emit-without-flushing "b~A ~A" (cc-insn-suffix cc) label))
@@ -154,22 +153,6 @@
 (define (emit-branch-on-operand cg reg out-frame-base tlabel flabel)
   (emiti cg "cmp ~A, #~A" (reg-asm-operand reg) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
-
-(define (prepare-for-call cg func nargs)
-  (let* ((attrs (func-lambda-attrs func)))
-    (if attrs
-        (let* ((labels (attr-ref attrs 'labels)))
-          (check-call-nargs attrs nargs)
-          (if (null? (cdr labels))
-              (begin
-                (emiti cg "mov ~A, #~A" (reg-asm-operand %nargs)
-                       (fixnum-representation nargs))
-                (first labels))
-              (second labels)))
-        (begin
-          (emiti cg "mov ~A, #~A" (reg-asm-operand %nargs)
-                 (fixnum-representation nargs))
-          false))))
 
 (define (emit-function-call cg func nargs)
   (let* ((label (prepare-for-call cg func nargs)))
@@ -352,8 +335,6 @@
   (emiti cg "cmp ~A, #~A" (reg-asm-operand %nargs)
          (fixnum-representation nparams))
   (emit-branch cg cc-ne bad-nargs-label))
-
-(define-operator (arg-count) () %nargs)
 
 (define-operator (raw-args-base) ()
   (emiti cg "add ~A, sp, #~D" (reg-asm-operand result)

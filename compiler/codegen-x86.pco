@@ -350,23 +350,13 @@
   val)
 
 (define (emit-call-or-jump cg insn func nargs)
-  (let* ((comment (comment-form func))
-         (attrs (func-lambda-attrs func)))
-    (if attrs
-        (begin
-          (check-call-nargs attrs nargs)
-          (let* ((labels (attr-ref attrs 'labels))
-                 (label (if (null? (cdr labels))
-                            (begin
-                              (emit-mov cg (fixnum-representation nargs) %nargs)
-                              (first labels))
-                            (second labels))))
-            (emit cg "~A ~A # ~S" insn label comment)))
-        (begin
-          (emit-mov cg (fixnum-representation nargs) %nargs)
-          (emit cg "~A *~A # ~S" insn
-                (value-sized (tagged-operand closure-tag %closure 0))
-                comment)))))
+  (let* ((label (prepare-for-call cg func nargs))
+         (comment (comment-form func)))
+    (if label
+        (emit cg "~A ~A # ~S" insn label comment)
+        (emit cg "~A *~A # ~S" insn
+              (value-sized (tagged-operand closure-tag %closure 0))
+              comment))))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
@@ -408,8 +398,6 @@
 (define (emit-check-nargs cg nparams bad-nargs-label)
   (emit-cmp cg (fixnum-representation nparams) %nargs)
   (emit-branch cg "ne" bad-nargs-label))
-
-(define-operator (arg-count) () %nargs)
 
 (define-operator (raw-args-base) ()
   (emit-lea cg (param-slot cg 0) result)

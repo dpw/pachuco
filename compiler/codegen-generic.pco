@@ -504,6 +504,28 @@
                (if varrec (car varrec) "anonymous function")
                at-least expected nargs)))))
 
+;; prepare-for-call does all the work to make calls to
+;; statically-known functions fast:
+;;
+;; - Checking the number of arguments at compile time.
+;;
+;; - Storing the number of arguments in %nargs
+;;
+;; - Working out which label to branch to.
+(define (prepare-for-call cg func nargs)
+  (let* ((attrs (func-lambda-attrs func)))
+    (if attrs
+        (let* ((labels (attr-ref attrs 'labels)))
+          (check-call-nargs attrs nargs)
+          (if (null? (cdr labels))
+              (begin
+                (emit-mov cg (fixnum-representation nargs) %nargs)
+                (first labels))
+              (second labels)))
+        (begin
+          (emit-mov cg (fixnum-representation nargs) %nargs)
+          false))))
+
 (define (codegen-call-args cg func args)
   (dolist (arg (reverse args))
     (emit-frame-spill cg (trashy-codegen arg cg false)
@@ -523,6 +545,8 @@
 (define-codegen-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))
   (codegen-simplify-recurse form))
+
+(define-operator (arg-count) () %nargs)
 
 ;;; Misc runtime support
 
