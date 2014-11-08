@@ -290,14 +290,6 @@
               (* value-size (- in-frame-base out-frame-base)))
         (codegen-set-frame-base! cg out-frame-base)))))
 
-(define (emit-frame-push cg reg)
-  (emit-push cg reg)
-  (codegen-set-frame-base! cg (1+ (codegen-frame-base cg))))
-
-(define (emit-frame-pop cg reg)
-  (emit-pop cg reg)
-  (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
-
 (define (emit-frame-spill cg operand reg)
   (unless (register? operand)
     (emit-mov-maybe cg operand reg)

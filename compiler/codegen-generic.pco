@@ -396,6 +396,16 @@
   (emit cg "symbols_end:")
   (emit cg ".global symbols_end"))
 
+;;; Stack handling
+
+(define (emit-frame-push cg reg)
+  (emit-push cg reg)
+  (codegen-set-frame-base! cg (1+ (codegen-frame-base cg))))
+
+(define (emit-frame-pop cg reg)
+  (emit-pop cg reg)
+  (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
+
 ;;; Variables
 
 (define-codegen-simplify (define varrec val)
