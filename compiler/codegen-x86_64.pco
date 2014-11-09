@@ -26,6 +26,8 @@
 
 ;;; C calls
 
+(define c-call-arg-regs (list %di %si %d %c %r8 %r9))
+
 (define-trashy-codegen (c-call attrs . args)
   (trashy-codegen-into-regs cg args c-call-arg-regs)
 

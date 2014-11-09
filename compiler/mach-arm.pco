@@ -18,6 +18,3 @@
 
 (define register-globals (list (cons 'heap_alloc %alloc)
                                (cons 'heap_threshold %threshold)))
-
-(define c-callee-saved-regs (list %r4 %r5 %r6 %r7 %r8 %r9 %r10 %r11))
-(define c-call-arg-regs (list %r0 %r1 %r2 %r3))
