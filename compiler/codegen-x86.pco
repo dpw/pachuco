@@ -259,10 +259,6 @@
 
 ;;; Heap allocation
 
-(define (register-bitset regs)
-  (reduce (register-bit (car regs)) (cdr regs)
-          (lambda (bits reg) (logior bits (register-bit reg)))))
-
 (define (emit-alloc cg tag-bits size allocreg spare-regs . scale)
   (let* ((again-label (gen-label))
          (exhausted-label (gen-label)))

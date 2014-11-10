@@ -49,6 +49,10 @@
                       (cons r (fill-template (cdr template))))))))
     (fill-template template)))
 
+(define (register-bitset regs)
+  (reduce (register-bit (car regs)) (cdr regs)
+          (lambda (bits reg) (logior bits (register-bit reg)))))
+
 ;; Assembly utility functions
 
 (define label-counter 0)
