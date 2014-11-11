@@ -13,10 +13,6 @@
   ;; Push can take any operand
   (emit-frame-push cg operand))
 
-(define (emit-reset-frame-base cg out-frame-base)
-  (when out-frame-base
-    (let* ((in-frame-base (codegen-frame-base cg)))
-      (unless (= in-frame-base out-frame-base)
-        ;; Use lea here to avoid trashing condition codes
-        (emit-lea cg (indexed-operand %sp (- in-frame-base out-frame-base)) %sp)
-        (codegen-set-frame-base! cg out-frame-base)))))
+(define (emit-offset-sp cg offset)
+  ;; Use lea here to avoid trashing condition codes
+  (emit-lea cg (indexed-operand %sp offset) %sp))

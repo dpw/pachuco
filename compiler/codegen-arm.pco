@@ -287,13 +287,8 @@
 (define (closure-slot-offset index)
   (- (* value-size (1+ index)) closure-tag))
 
-(define (emit-reset-frame-base cg out-frame-base)
-  (when out-frame-base
-    (let* ((in-frame-base (codegen-frame-base cg)))
-      (unless (= in-frame-base out-frame-base)
-        (emiti cg "add sp, sp, #~D"
-              (* value-size (- in-frame-base out-frame-base)))
-        (codegen-set-frame-base! cg out-frame-base)))))
+(define (emit-offset-sp cg offset)
+  (emiti cg "add sp, sp, #~D" (* value-size offset)))
 
 (define (emit-frame-spill cg operand reg)
   (unless (register? operand)

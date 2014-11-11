@@ -410,6 +410,13 @@
   (emit-pop cg reg)
   (codegen-set-frame-base! cg (1- (codegen-frame-base cg))))
 
+(define (emit-reset-frame-base cg out-frame-base)
+  (when out-frame-base
+    (let* ((in-frame-base (codegen-frame-base cg)))
+      (unless (= in-frame-base out-frame-base)
+        (emit-offset-sp cg (- in-frame-base out-frame-base))
+        (codegen-set-frame-base! cg out-frame-base)))))
+
 ;;; Variables
 
 (define-codegen-simplify (define varrec val)
