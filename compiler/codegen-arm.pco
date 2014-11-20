@@ -455,8 +455,7 @@
                    (reg-asm-operand base-reg) offset)))
           (true ; (eq? mode 'self)
            ;; we only need to read such variables
-           (emiti cg "mov ~A, ~A" (reg-asm-operand reg)
-                  (reg-asm-operand %closure))))))
+           (emit-mov-maybe cg %closure reg)))))
 
 (define-operator (define val) ()
   (emit-frame-push cg val)
