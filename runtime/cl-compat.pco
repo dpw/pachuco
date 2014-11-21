@@ -21,7 +21,7 @@
 (defmacro (funcall . form) form)
 (defmacro (function f) f)
 
-(defmacro subject-language true)
+(defmacro subject-language #t)
 
 (defmacro (subject-language-boolean bool) bool)
 (define (subject-language-symbol-name sym) (symbol-name sym))

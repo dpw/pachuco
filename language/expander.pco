@@ -73,7 +73,9 @@
                            (lambda (form keyword args dual-env)
                              (expand-form (funcall macro-lambda args)
                                           dual-env))))
-      (add-symbol-expansion (car dual-env) (first args) (second args)))
+      (add-symbol-expansion (car dual-env) (first args)
+                            (eval-form (expand-form (second args) dual-env)
+                                       (cdr dual-env))))
   '(definitions))
 
 (define (expand-body-form form dual-env)

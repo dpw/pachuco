@@ -43,19 +43,27 @@
   (assert-result (length '(1 2 3)) 3)
 
   (begin
+    (define foo 3)
+    (assert-result foo 3))
+  (begin
+    (define x (cons 1 2))
+    (assert-result (rplaca x 3) '(3 . 2))
+    (assert-result (rplacd x 4) '(3 . 4)))
+
+  (begin
     (defmacro (foo) 1)
     (assert-result (foo) 1))
   (begin
     (defmacro foo 2)
     (assert-result foo 2))
   (begin
-    (define foo 3)
+    (defmacro foo 'bar)
+    (define bar 3)
     (assert-result foo 3))
-
   (begin
-    (define x (cons 1 2))
-    (assert-result (rplaca x 3) '(3 . 2))
-    (assert-result (rplacd x 4) '(3 . 4)))
+    (defmacro foo 4)
+    (defmacro bar foo)
+    (assert-result bar 4))
 
   (assert-result (list 1 2 3) '(1 2 3))
   (assert-result (append '(1 2) '(3 4)) '(1 2 3 4))

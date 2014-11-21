@@ -43,7 +43,7 @@
 (defconstant true-representation #b1100)
 (defconstant unspecified-representation #b10100)
 
-(defconstant simple-representations
+(define simple-representations
   (list (cons #f false-representation)
         (cons #t true-representation)
         (cons #u unspecified-representation)
