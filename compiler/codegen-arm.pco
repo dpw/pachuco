@@ -154,23 +154,6 @@
   (emiti cg "cmp ~A, #~A" (reg-asm-operand reg) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
-(define (emit-function-call cg func nargs)
-  (let* ((label (prepare-for-call cg func nargs)))
-    (if label
-        (emiti cg "bl ~A @ ~S" label (comment-form func))
-        (begin
-          (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
-                 closure-tag)
-          (emiti cg "mov lr, pc")
-          (emiti cg "mov pc, r0")))))
-
-(define (emit-function-jump cg func nargs)
-  (let* ((label (prepare-for-call cg func nargs)))
-    (if label
-        (emiti cg "b ~A @ ~S" label (comment-form func))
-        (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag))
-    (emit-ltorg cg)))
-
 (defmacro (define-tag-check name tag tag-bits)
   (quasiquote
     (define-cc-operator ((unquote name) val) ()
@@ -296,6 +279,11 @@
     (set! operand reg))
   (emit-frame-push cg operand))
 
+(define (emit-restore-%closure cg)
+  (when (codegen-have-closure cg)
+    (emiti cg "ldr ~A, [sp, #~D]" (reg-asm-operand %closure)
+          (stack-closure-offset cg))))
+
 ;;; Function and closure bits
 
 (define-tag-check function? closure-tag closure-tag-bits)
@@ -324,7 +312,7 @@
   cc-eq)
 
 (define (emit-check-nargs cg nparams bad-nargs-label)
-  (emiti cg "cmp ~A, #~A" (reg-asm-operand %nargs)
+  (emiti cg "cmp ~A, #~D" (reg-asm-operand %nargs)
          (fixnum-representation nparams))
   (emit-branch cg cc-ne bad-nargs-label))
 
@@ -332,6 +320,16 @@
   (emiti cg "add ~A, sp, #~D" (reg-asm-operand result)
         (stack-param-offset cg 0))
   result)
+
+(define (emit-function-call cg func nargs)
+  (let* ((label (prepare-for-call cg func nargs)))
+    (if label
+        (emiti cg "bl ~A @ ~S" label (comment-form func))
+        (begin
+          (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
+                 closure-tag)
+          (emiti cg "mov lr, pc")
+          (emiti cg "mov pc, r0")))))
 
 (define-codegen (call attrs func . args)
   (with-saved-frame-base cg
@@ -357,7 +355,14 @@
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
-(define (codegen-copy-stack cg dest-offset count regs)
+(define (emit-function-jump cg func nargs)
+  (let* ((label (prepare-for-call cg func nargs)))
+    (if label
+        (emiti cg "b ~A @ ~S" label (comment-form func))
+        (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag))
+    (emit-ltorg cg)))
+
+(define (copy-tail-call-args cg dest-offset count regs)
   (cond ((= count 0)
          (emiti cg "add sp, sp, ~A" dest-offset))
         ((< count (length regs))
@@ -370,8 +375,9 @@
 
 (define (codegen-tail-call cg func args out-arg-count out-param-offset regs)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
-  (codegen-copy-stack cg out-param-offset out-arg-count regs)
-  (emit-function-jump cg func out-arg-count))
+  (copy-tail-call-args cg out-param-offset out-arg-count regs)
+  (emit-function-jump cg func out-arg-count)
+  (emit-ltorg cg))
 
 (define-codegen-discarding (tail-call attrs func . args)
   (codegen-call-args cg func args)
@@ -379,9 +385,8 @@
          (out-arg-count (length args)))
     (codegen-tail-call cg func args out-arg-count
                        (asm-operand (stack-param-offset cg (- in-arg-count
-                                                               out-arg-count)))
+                                                              out-arg-count)))
                        general-registers)
-    (emit-ltorg cg)
     (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
@@ -396,13 +401,7 @@
           (stack-param-offset cg (- out-arg-count)))
     (codegen-tail-call cg func args out-arg-count out-param-offset
                        (cdr general-registers))
-    (emit-ltorg cg)
     (codegen-function-tail cg out-frame-base)))
-
-(define (emit-restore-%closure cg)
-  (when (codegen-have-closure cg)
-    (emiti cg "ldr ~A, [sp, #~D]" (reg-asm-operand %closure)
-          (stack-closure-offset cg))))
 
 ;;; Apply support
 
@@ -845,12 +844,12 @@
         (emiti cg "b ~A" again-label)
         (emit-ltorg cg)))))
 
-(define gc-label (make-label-for 'gc direct-function-label-prefix))
-
 (define (codegen-helpers cg)
   (codegen-heap-exhausted cg)
   (codegen-init-mem cg 0)
   (codegen-init-mem cg 2))
+
+(define gc-label (make-label-for 'gc direct-function-label-prefix))
 
 (define (codegen-heap-exhausted cg)
   (labels ((for-live-registers (regs insn-template)
