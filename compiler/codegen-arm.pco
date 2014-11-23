@@ -172,9 +172,9 @@
 (define str-variants (vector "strb" false "str"))
 (define ldr-variants (vector "ldrb" false "ldr"))
 
-(defconstant %init-mem-count (first general-registers))
-(defconstant %init-mem-val (second general-registers))
-(defconstant %init-mem-ptr (third general-registers))
+(define %init-mem-count (first general-registers))
+(define %init-mem-val (second general-registers))
+(define %init-mem-ptr (third general-registers))
 
 (define (codegen-init-mem cg scale)
   (let* ((loop-label (gen-label))
