@@ -5,7 +5,9 @@ CODEGEN=old
 COMPILEOPTS=-s
 
 MACH_SOURCES=compiler/mach.pco
+CODEGEN_SOURCES=
 
+# Code generation stratey selection
 ifeq ($(CODEGEN),old)
 CODEGEN_SOURCES+=compiler/codegen-old.pco
 else ifeq ($(CODEGEN),simple)
@@ -16,13 +18,13 @@ else
 $(error unknown codegen strategy $(CODEGEN))
 endif
 
-CODEGEN_SOURCES+=compiler/codegen-generic.pco
-
 ifeq ($(TARGET),arm)
+# ARM
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
 CODEGEN_SOURCES+=compiler/codegen-arm.pco
 else
 
+# x86
 STACK_REGIME=no-fp
 
 ifeq ($(STACK_REGIME),no-fp)
@@ -33,12 +35,13 @@ else
 $(error unknown stack regime $(STACK_REGIME))
 endif
 
+CODEGEN_SOURCES+=compiler/codegen-x86.pco
 ifeq ($(TARGET),i386)
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-i386.pco
-CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-i386.pco
+CODEGEN_SOURCES+=compiler/codegen-i386.pco
 else ifeq ($(TARGET),x86_64)
 MACH_SOURCES+=compiler/mach-64bit.pco compiler/mach-x86_64.pco
-CODEGEN_SOURCES+=compiler/codegen-x86.pco compiler/codegen-x86_64.pco
+CODEGEN_SOURCES+=compiler/codegen-x86_64.pco
 else
 $(error unknown target $(TARGET))
 endif
@@ -48,7 +51,7 @@ endif
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
     compiler/walker.pco $(MACH_SOURCES) compiler/compiler.pco \
-    $(CODEGEN_SOURCES) compiler/driver.pco
+    $(CODEGEN_SOURCES) compiler/codegen-generic.pco compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
     bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)

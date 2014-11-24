@@ -26,8 +26,6 @@
       (codegen-function cg (car todo))
       (codegen-do-todos cg))))
 
-(define-trivial-walker codegen-simplify ())
-
 (define (fixnum-representation n) (ash n number-tag-bits))
 (define (low-bits-mask bits) (1- (ash 1 bits)))
 
@@ -35,44 +33,11 @@
   (unless (eq? 'begin (car form))
     (emit-comment cg "~S" (comment-form form))))
 
-(define (make-registers-from-template template regs)
-  (set! regs (copy-list regs))
-  (dolist (reg template) (when reg (set! regs (delete reg regs))))
-  (labels ((fill-template (template)
-             (cond ((null? template)
-                    regs)
-                   ((car template)
-                    (cons (car template) (fill-template (cdr template))))
-                   (true
-                    (let* ((r (car regs)))
-                      (set! regs (cdr regs))
-                      (cons r (fill-template (cdr template))))))))
-    (fill-template template)))
-
 (define (register-bitset regs)
   (reduce (register-bit (car regs)) (cdr regs)
           (lambda (bits reg) (logior bits (register-bit reg)))))
 
 ;; Assembly utility functions
-
-(define label-counter 0)
-
-(define (gen-label)
-  (format ".L~D" (set! label-counter (1+ label-counter))))
-
-(define (label-name-ok? name i)
-  (or (= i (string-length name))
-      (let* ((ch (string-ref name i)))
-        (and (or (character-alphanumeric? ch) (eq? ch #\-))
-             (label-name-ok? name (1+ i))))))
-
-(define (make-label-for sym prefix)
-  ;; map a lisp symbol to an assembly label, returning a gen-labelled
-  ;; label if necessary
-  (let* ((name (subject-language-symbol-name sym)))
-    (if (label-name-ok? name 0)
-        (format "~A_~A" prefix (string-replace name "-" "_"))
-        (format "~A~D" prefix (set! label-counter (1+ label-counter))))))
 
 (define (emit-data cg label scale)
   (emit cg ".section .rodata")
