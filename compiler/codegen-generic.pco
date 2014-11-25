@@ -534,6 +534,15 @@
 
 (define-operator (arg-count) () %nargs)
 
+;;; Type check operators
+
+(define-tag-check function? closure-tag closure-tag-bits)
+(define-tag-check pair? pair-tag pair-tag-bits)
+(define-tag-check symbol? symbol-tag symbol-tag-bits)
+(define-tag-check number? number-tag number-tag-bits)
+(define-tag-check string? string-tag string-tag-bits)
+(define-tag-check vector? vector-tag vector-tag-bits)
+
 ;;; Misc runtime support
 
 (define-codegen-simplify ((raw-label raw-global-ref) name)

@@ -45,6 +45,7 @@ CODEGEN_SOURCES+=compiler/codegen-x86_64.pco
 else
 $(error unknown target $(TARGET))
 endif
+MACH_SOURCES+=compiler/mach-x86.pco
 
 endif
 

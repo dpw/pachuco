@@ -1,0 +1,9 @@
+;;; x86-64/i386 machine definition
+
+(defmacro (define-tag-check name tag tag-bits)
+  (quasiquote
+    (define-cc-operator ((unquote name) val) ()
+      ;; just check the low-order byte
+      (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
+      (emit-cmp cg (unquote tag) val 0)
+      "e")))

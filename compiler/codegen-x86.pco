@@ -249,14 +249,6 @@
   (emit-shl cg special-tag-bits reg 0)
   (emit-or cg special-tag reg 0))
 
-(defmacro (define-tag-check name tag tag-bits)
-  (quasiquote
-    (define-cc-operator ((unquote name) val) ()
-      ;; just check the low-order byte
-      (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
-      (emit-cmp cg (unquote tag) val 0)
-      "e")))
-
 ;;; Heap allocation
 
 (define (emit-alloc cg tag-bits size allocreg spare-regs . scale)
@@ -389,8 +381,6 @@
 
 ;;; Function call-related internals
 
-(define-tag-check function? closure-tag closure-tag-bits)
-
 (define (emit-check-nargs cg nparams bad-nargs-label)
   (emit-cmp cg (fixnum-representation nparams) %nargs)
   (emit-branch cg "ne" bad-nargs-label))
@@ -415,8 +405,6 @@
 (define-cmp-operator <= "le")
 
 ;;; Conses
-
-(define-tag-check pair? pair-tag pair-tag-bits)
 
 (define-operator (cons (a reg-imm) (d reg-imm)) ((temp-regs alloc))
   (emit-alloc cg pair-tag-bits (* 2 value-size) alloc spare-regs)
@@ -453,8 +441,6 @@
 
 ;;; Symbols
 
-(define-tag-check symbol? symbol-tag symbol-tag-bits)
-
 (define-operator (symbol-name sym) ()
   (tagged-operand symbol-tag sym 0))
 
@@ -470,8 +456,6 @@
   result)
 
 ;;;  Numbers
-
-(define-tag-check number? number-tag number-tag-bits)
 
 (define-operator (+ a (b reg-mem-imm)) ()
   (emit-add cg b a)
@@ -568,9 +552,6 @@
   a)
 
 ;;; Strings and vectors
-
-(define-tag-check string? string-tag string-tag-bits)
-(define-tag-check vector? vector-tag vector-tag-bits)
 
 (define-operator (make-vec len (init fixed-reg %a))
                  ((temp-regs alloc) (temp-fixed-regs %c %di))

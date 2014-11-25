@@ -154,15 +154,6 @@
   (emiti cg "cmp ~A, #~A" (reg-asm-operand reg) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
-(defmacro (define-tag-check name tag tag-bits)
-  (quasiquote
-    (define-cc-operator ((unquote name) val) ()
-      (let* ((valreg (reg-asm-operand val)))
-        (emiti cg "and ~A, ~A, #~D" valreg valreg
-               (low-bits-mask (unquote tag-bits)))
-        (emiti cg "cmp ~A, #~D" valreg (unquote tag)))
-      cc-eq)))
-
 ;;; Helper init-mem function
 ;;;
 ;;; Init-mem functions are used by make-vec to clear the allocated
@@ -285,8 +276,6 @@
           (stack-closure-offset cg))))
 
 ;;; Function and closure bits
-
-(define-tag-check function? closure-tag closure-tag-bits)
 
 ;; alloc-closure simply allocates space for the closure, it does not
 ;; initialize its contents.  This is because it will always be
@@ -486,8 +475,6 @@
 
 ;;; Numbers
 
-(define-tag-check number? number-tag number-tag-bits)
-
 (defmacro (define-simple-number-operator name insn)
   (quasiquote
     (define-operator ((unquote name) a (b reg-imm8)) ()
@@ -562,8 +549,6 @@
 
 ;;; Conses
 
-(define-tag-check pair? pair-tag pair-tag-bits)
-
 (define-operator (cons a d) ()
   (emit-alloc cg pair-tag-bits (* 2 value-size) value-scale spare-regs)
   (emiti cg "str ~A, [~A]" (reg-asm-operand a) (reg-asm-operand %alloc))
@@ -593,8 +578,6 @@
   c)
 
 ;;; Symbols
-
-(define-tag-check symbol? symbol-tag symbol-tag-bits)
 
 (define-operator (raw-make-symbol str id) ()
   (emit-alloc cg symbol-tag-bits (* 2 value-size) value-scale spare-regs)
@@ -636,9 +619,6 @@
 ;;; Strings and vectors
 
 ;;; We only support word and unsigned byte loads currently
-
-(define-tag-check string? string-tag string-tag-bits)
-(define-tag-check vector? vector-tag vector-tag-bits)
 
 (define-operator (make-vec len (init fixed-reg %init-mem-val))
                  ((temp-fixed-regs %init-mem-count %init-mem-ptr))
