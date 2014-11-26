@@ -91,23 +91,27 @@
 ;;; Operator argument constraints
 
 (define (reg-mem-operand-constraint cg operand reg)
-  (if (or (immediate? operand)
-          (and (register? operand) (not (eq? operand reg))))
+  (if (and (not (mem? operand))
+           (not (eq? operand reg)))
       (begin
         (emit-mov cg operand reg)
         reg)
       operand))
 
 (define (reg-mem-imm-operand-constraint cg operand reg)
-  (if (and (register? operand) (not (eq? operand reg)))
+  (if (and (not (string? operand))
+           (not (immediate32? operand))
+           (not (mem? operand))
+           (not (eq? operand reg)))
       (begin
         (emit-mov cg operand reg)
         reg)
       operand))
 
 (define (reg-imm-operand-constraint cg operand reg)
-  (if (or (mem? operand)
-          (and (register? operand) (not (eq? operand reg))))
+  (if (and (not (string? operand))
+           (not (immediate32? operand))
+           (not (eq? operand reg)))
       (begin
         (emit-mov cg operand reg)
         reg)
@@ -669,13 +673,13 @@
 ;;; Misc runtime support
 
 (define-operator (fixnum->raw (val reg-imm)) ()
-  (if (immediate? val)
+  (if (number? val)
       (set! val (ash val (- number-tag-bits)))
       (emit-sar cg number-tag-bits val))
   val)
 
 (define-operator (raw->fixnum (val reg-imm)) ()
-  (if (immediate? val)
+  (if (number? val)
       (set! val (fixnum-representation val))
       (emit-shl cg number-tag-bits val))
   val)

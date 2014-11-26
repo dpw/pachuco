@@ -729,7 +729,7 @@
 ;;; Misc runtime support
 
 (define-operator (fixnum->raw (val reg-imm)) ()
-  (if (immediate? val)
+  (if (number? val)
       (ash val (- number-tag-bits))
       (begin
         (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
@@ -737,7 +737,7 @@
         result)))
 
 (define-operator (raw->fixnum (val reg-imm)) ()
-  (if (immediate? val)
+  (if (number? val)
       (fixnum-representation val)
       (begin
         (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)

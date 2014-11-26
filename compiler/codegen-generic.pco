@@ -300,9 +300,20 @@
     (unless (number? val) (emit cg ".text"))
     val))
 
+(defconstant positive-number-mask (1- (ash 1 (- value-bits number-tag-bits))))
+(defconstant negative-number-mask (ash -1 (- value-bits number-tag-bits 1)))
+
+;;; Normalize a number to fit in value-bits.  It's useful that this
+;;; preserves the sign of the number, so that -1 remains -1 in the
+;;; generated assembly.
+(define (normalize-number n)
+  (if (>= n 0)
+      (logand n positive-number-mask)
+      (logior n negative-number-mask)))
+
 (define (codegen-quoted quoted cg)
   (cond ((pair? quoted) (codegen-quoted-pair quoted cg))
-        ((number? quoted) (fixnum-representation quoted))
+        ((number? quoted) (fixnum-representation (normalize-number quoted)))
         ((character? quoted) (fixnum-representation (character-code quoted)))
         ((string? quoted) (codegen-quoted-string quoted cg))
         (true (let* ((c (assoc quoted simple-representations)))

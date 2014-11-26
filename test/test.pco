@@ -90,6 +90,10 @@
 
   (assert-result (truncate -5 2) -2)
 
+  ;; Test large immediates
+  (assert-result 12345678901 (1+ 12345678900))
+  (assert-result 184467440737095516161 (1+ 184467440737095516160))
+
   (begin
     (defmacro (ash-tests)
       '(begin
