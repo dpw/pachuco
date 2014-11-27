@@ -114,9 +114,16 @@
                 (assert-result (ashx 1 64) 0)
                 (assert-result (ashx -1 -64) -1))))))
 
-    ;; Test the immediate shift forms of ash
+    ;; Test constant folding of ash
     (begin
       (defmacro (ashx n shift) (list 'ash n shift))
+      (ash-tests))
+
+    ;; Test constant shift forms of ash
+    (begin
+      (defmacro (ashx n shift) (quasiquote (begin
+                                             (define n (unquote n))
+                                             (ash n (unquote shift)))))
       (ash-tests))
 
     ;; Test the variable shift forms of ash

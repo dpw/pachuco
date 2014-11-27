@@ -456,17 +456,21 @@
   (codegen-simplify-recurse form)
   (when (eq? 'quote (car shift))
     (let* ((shiftval (second shift)))
-      (when (number? shiftval)
-        (overwrite-form form
-          (cond ((= shiftval 0) n)
-                ((<= shiftval (- value-bits))
-                 (list 'ash-imm (acons 'shift (- 1 value-bits) attrs) n))
-                ((< shiftval value-bits)
-                 (list 'ash-imm (acons 'shift shiftval attrs) n))
-                (true
-                 (quasiquote (begin ()
-                                    (unquote n)
-                                    (quote 0))))))))))
+      (unless (number? shiftval) (error "ash with non-number"))
+
+      (overwrite-form form
+        (cond ((eq? 'quote (car n))
+               (let* ((nval (second n)))
+                 (unless (number? nval) (error "ash with non-number"))
+                 (list 'quote (ash nval shiftval))))
+              ((= shiftval 0)
+               n)
+              ((<= shiftval (- value-bits))
+               (list 'ash-imm (acons 'shift (- 1 value-bits) attrs) n))
+              ((< shiftval value-bits)
+               (list 'ash-imm (acons 'shift shiftval attrs) n))
+              (true
+               (quasiquote (begin () (unquote n) (quote 0)))))))))
 
 ;;; Function calls
 
