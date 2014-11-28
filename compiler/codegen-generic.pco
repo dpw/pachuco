@@ -411,19 +411,25 @@
 
 ;;; Simplifications of arithmetic operators
 
-(define (simplify-binary-op form args identity)
+(define (simplify-binary-op form args identity op)
   (codegen-simplify-recurse form)
   (cond ((null? args)
          (overwrite-form form (list 'quote identity)))
         ((null? (cdr args))
          (overwrite-form form (car args)))
         ((null? (cddr args))
-         ;; always move a quoted arg to the second position, for
-         ;; better code generation
-         (when (eq? 'quote (caar args))
-           (let* ((tmp (first args)))
-             (rplaca args (second args))
-             (rplaca (cdr args) tmp))))
+         (let* ((a (first args)))
+           (when (eq? 'quote (car a))
+             (let* ((b (second args)))
+               (if (eq? 'quote (car b))
+                   ;; constant folding
+                   (overwrite-form form
+                           (list 'quote (funcall op (second a) (second b))))
+                   ;; move a quoted arg to the second position, for
+                   ;; better code generation
+                   (begin
+                    (rplaca args b)
+                    (rplaca (cdr args) a)))))))
         (true
          (overwrite-form form (reduce (car args) (cdr args)
                                 (lambda (a b)
@@ -432,8 +438,10 @@
                                              (list b a)
                                              (list a b)))))))))
 
-(define-codegen-simplify (+ attrs . args) (simplify-binary-op form args 0))
-(define-codegen-simplify (* attrs . args) (simplify-binary-op form args 1))
+(define-codegen-simplify (+ attrs . args)
+    (simplify-binary-op form args 0 (function +)))
+(define-codegen-simplify (* attrs . args)
+    (simplify-binary-op form args 1 (function *)))
 
 (define-codegen-simplify (- attrs a . args)
   (codegen-simplify-recurse form)
