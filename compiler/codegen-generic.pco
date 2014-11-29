@@ -413,30 +413,31 @@
 
 (define (simplify-binary-op form args identity op)
   (codegen-simplify-recurse form)
-  (cond ((null? args)
-         (overwrite-form form (list 'quote identity)))
-        ((null? (cdr args))
-         (overwrite-form form (car args)))
-        ((null? (cddr args))
-         (let* ((a (first args)))
-           (when (eq? 'quote (car a))
-             (let* ((b (second args)))
-               (if (eq? 'quote (car b))
-                   ;; constant folding
-                   (overwrite-form form
-                           (list 'quote (funcall op (second a) (second b))))
-                   ;; move a quoted arg to the second position, for
-                   ;; better code generation
-                   (begin
-                    (rplaca args b)
-                    (rplaca (cdr args) a)))))))
-        (true
-         (overwrite-form form (reduce (car args) (cdr args)
-                                (lambda (a b)
-                                  (list* (car form) ()
-                                         (if (eq? 'quote (car a))
-                                             (list b a)
-                                             (list a b)))))))))
+
+  ;; scan the arguments, separating them into constants and
+  ;; non-constants.  Fold the constants, and construct an expression
+  ;; for the non-constants from simple two-argument operations,
+  (let* ((res false)
+         (const false))
+    (labels ((push-operand (a)
+               (set! res (if res
+                             (list (car form) () res a)
+                             a)))
+             (for-args (args)
+               (unless (null? args)
+                 (let* ((a (car args)))
+                   (if (eq? 'quote (car a))
+                       (set! const (if const
+                                       (funcall op const (second a))
+                                       (second a)))
+                       (push-operand a)))
+                 (for-args (cdr args)))))
+      (for-args args)
+        ;; always put the quoted arg in the second position, for
+        ;; better code generation
+      (when const (push-operand (list 'quote const)))
+      (unless res (set! res (list 'quote identity)))
+      (overwrite-form form res))))
 
 (define-codegen-simplify (+ attrs . args)
     (simplify-binary-op form args 0 (function +)))
