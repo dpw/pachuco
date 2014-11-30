@@ -417,27 +417,23 @@
   ;; scan the arguments, separating them into constants and
   ;; non-constants.  Fold the constants, and construct an expression
   ;; for the non-constants from simple two-argument operations,
-  (let* ((res false)
-         (const false))
-    (labels ((push-operand (a)
-               (set! res (if res
-                             (list (car form) () res a)
-                             a)))
-             (for-args (args)
-               (unless (null? args)
+  (labels ((make-bin-expr (expr a)
+             (if expr (list (car form) () expr a) a))
+           (for-args (args expr const)
+             (if (not (null? args))
                  (let* ((a (car args)))
                    (if (eq? 'quote (car a))
-                       (set! const (if const
-                                       (funcall op const (second a))
-                                       (second a)))
-                       (push-operand a)))
-                 (for-args (cdr args)))))
-      (for-args args)
-        ;; always put the quoted arg in the second position, for
-        ;; better code generation
-      (when const (push-operand (list 'quote const)))
-      (unless res (set! res (list 'quote identity)))
-      (overwrite-form form res))))
+                       (for-args (cdr args) expr
+                                 (funcall op const (second a)))
+                       (for-args (cdr args) (make-bin-expr expr a)
+                                 const)))
+                 (if (= const identity)
+                     expr
+                     ;; always put the quoted arg in the second
+                     ;; position, for better code generation
+                     (make-bin-expr expr (list 'quote const))))))
+    (overwrite-form form (or (for-args args false identity)
+                             (list 'quote identity)))))
 
 (define-codegen-simplify (+ attrs . args)
     (simplify-binary-op form args 0 (function +)))
