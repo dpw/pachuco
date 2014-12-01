@@ -411,41 +411,65 @@
 
 ;;; Simplifications of arithmetic operators
 
-(define (simplify-binary-op form args identity op)
-  (codegen-simplify-recurse form)
+(define (make-bin-op-expr op expr a)
+  (if expr (list op () expr a) a))
 
-  ;; scan the arguments, separating them into constants and
-  ;; non-constants.  Fold the constants, and construct an expression
-  ;; for the non-constants from simple two-argument operations,
-  (labels ((make-bin-expr (expr a)
-             (if expr (list (car form) () expr a) a))
-           (for-args (args expr const)
-             (if (not (null? args))
-                 (let* ((a (car args)))
-                   (if (eq? 'quote (car a))
-                       (for-args (cdr args) expr
-                                 (funcall op const (second a)))
-                       (for-args (cdr args) (make-bin-expr expr a)
-                                 const)))
-                 (if (= const identity)
-                     expr
-                     ;; always put the quoted arg in the second
-                     ;; position, for better code generation
-                     (make-bin-expr expr (list 'quote const))))))
-    (overwrite-form form (or (for-args args false identity)
-                             (list 'quote identity)))))
+(define (numberish-value n)
+  (cond ((number? n) n)
+        ((character? n) (character-code n))
+        (true (error "expected number in arithmetic expression, got ~A" n))))
+
+;; scan the arguments, separating them into constants and
+;; non-constants.  Fold the constants, and construct an expression for
+;; the non-constants from simple two-argument operations,
+(define (simplify-binary-op args op f expr const)
+  (if (not (null? args))
+      (let* ((a (car args)))
+        (if (eq? 'quote (car a))
+            (simplify-binary-op (cdr args) op f expr
+                                (funcall f const (numberish-value (second a))))
+            (simplify-binary-op (cdr args) op f
+                                (make-bin-op-expr op expr a) const)))
+      (cons expr const)))
+
+(define (simplify-comm-binary-op form args f identity)
+  (codegen-simplify-recurse form)
+  (let* ((expr-const (simplify-binary-op args (car form) f false identity))
+         (expr (car expr-const))
+         (const (cdr expr-const)))
+    (overwrite-form form
+      (or (if (= const identity)
+              expr
+              ;; always put the quoted arg in the second
+              ;; position, for better code generation
+              (make-bin-op-expr (car form) expr (list 'quote const)))
+          (list 'quote identity)))))
 
 (define-codegen-simplify (+ attrs . args)
-    (simplify-binary-op form args 0 (function +)))
+  (simplify-comm-binary-op form args (function +) 0))
+
 (define-codegen-simplify (* attrs . args)
-    (simplify-binary-op form args 1 (function *)))
+  (simplify-comm-binary-op form args (function *) 1))
 
 (define-codegen-simplify (- attrs a . args)
   (codegen-simplify-recurse form)
-  (cond ((null? args) (rplaca form 'negate))
-        ((not (null? (cdr args)))
-         (overwrite-form form
-                         (reduce a args (lambda (a b) (list '- () a b)))))))
+  (cond ((null? args)
+         (rplaca form 'negate))
+        ((eq? 'quote (car a))
+         ;; If the left-hand argument is a constant, we can't constant
+         ;; fold it away.  Instead, fold any other constants into it.
+         (let* ((expr-const (simplify-binary-op args '- (function -) a
+                                              (numberish-value (second a)))))
+           (rplaca (cdr a) (cdr expr-const))
+           (overwrite-form form (car expr-const))))
+        (true
+         (let* ((expr-const (simplify-binary-op args '- (function -) a 0))
+                (expr (car expr-const))
+                (const (cdr expr-const)))
+           (overwrite-form form
+             (if (= const 0)
+                 expr
+                 (make-bin-op-expr '- expr (list 'quote (- const)))))))))
 
 (define-codegen-simplify ((eq? = /=) attrs a b)
   (codegen-simplify-recurse form)
