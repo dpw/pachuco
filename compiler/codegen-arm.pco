@@ -483,10 +483,21 @@
       result)))
 
 (define-simple-number-operator + "add")
-(define-simple-number-operator - "sub")
 (define-simple-number-operator logand "and")
 (define-simple-number-operator logior "orr")
 (define-simple-number-operator logxor "eor")
+
+(define-operator (- (a reg-imm8) (b reg-imm8)) ()
+  (let* ((instr "sub"))
+    (when (number? a)
+      ;; Due to constant folding, a and b cannot both be immediates
+      (set! instr "rsb")
+      (let* ((tmp a))
+        (set! a b)
+        (set! b tmp)))
+    (emiti cg "~A ~A, ~A, ~A" instr (reg-asm-operand result)
+           (reg-asm-operand a) (asm-operand b)))
+  result)
 
 (define-operator (negate a) ()
   (emiti cg "rsb ~A, ~A, #0" (reg-asm-operand result) (reg-asm-operand a))
