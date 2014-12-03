@@ -9,6 +9,39 @@
         (error "Evaluation of ~S gave ~S, expected ~S" (quote (unquote expr))
                res expected)))))
 
+;;; Test a binary operator, defeating constant folding
+(defmacro (test-binary-operator op alias . body)
+  (quasiquote (definitions
+    ;; Test the operator directly
+    (begin
+      (defmacro ((unquote alias) a b) (list (quote (unquote op)) a b))
+      (unquote-splicing body))
+
+    ;; Test with a in a variable
+    (begin
+      (defmacro ((unquote alias) a b)
+        (quasiquote (begin
+                      (define avar (unquote a))
+                      ((unquote (unquote op)) avar (unquote b)))))
+      (unquote-splicing body))
+
+    ;; Test with b in a variable
+    (begin
+      (defmacro ((unquote alias) a b)
+        (quasiquote (begin
+                      (define bvar (unquote b))
+                      ((unquote (unquote op)) (unquote a) bvar))))
+      (unquote-splicing body))
+
+    ;; Test with both in variables in a variable
+    (begin
+      (defmacro ((unquote alias) a b)
+        (quasiquote (begin
+                      (define avar (unquote a))
+                      (define bvar (unquote b))
+                      ((unquote (unquote op)) avar bvar))))
+      (unquote-splicing body)))))
+
 (define (tests)
   ;; This test assumes the intended behaviour compiler behaviour.  The
   ;; interpreter does something different, in the name of simplicity.
@@ -85,53 +118,47 @@
   (assert-result (eq? (intern "foo") 'foo) #t)
   (assert-result (symbol-name (intern "bar")) "bar")
 
+  (test-binary-operator + +x
+    (assert-result (+x 1 10) 11)
+    (assert-result (+x 0 10) 10)
+    (assert-result (+x 10 0) 10))
+
+  (test-binary-operator * *x
+    (assert-result (*x 3 5) 15)
+    (assert-result (*x 1 5) 5)
+    (assert-result (*x 5 1) 5))
+
+  (test-binary-operator - -x
+    (assert-result (-x 10 1) 9)
+    (assert-result (-x 10 0) 10)
+    (assert-result (-x 0 10) -10))
+
   (assert-result (1+ 1) 2)
   (assert-result (1- 1) 0)
 
   (assert-result (truncate -5 2) -2)
 
+  (test-binary-operator ash ashx
+    (assert-result (ashx 48 2) 192)
+    (assert-result (ashx 48 -2) 12)
+    (assert-result (ashx -5 -1) -3)
+
+    (when compiled
+      (assert-result (ashx 1 1000) 0)
+      (assert-result (ashx 1 -1000) 0)
+      (assert-result (ashx -1 -1000) -1)
+
+      (if (= (compiler-constant value-size) 4)
+          (begin
+            (assert-result (ashx 1 32) 0)
+            (assert-result (ashx -1 -32) -1))
+          (begin
+            (assert-result (ashx 1 64) 0)
+            (assert-result (ashx -1 -64) -1)))))
+
   ;; Test large immediates
   (assert-result 12345678901 (1+ 12345678900))
   (assert-result 184467440737095516161 (1+ 184467440737095516160))
-
-  (begin
-    (defmacro (ash-tests)
-      '(begin
-         (assert-result (ashx 48 2) 192)
-         (assert-result (ashx 48 -2) 12)
-         (assert-result (ashx -5 -1) -3)
-
-         (when compiled
-           (assert-result (ashx 1 1000) 0)
-           (assert-result (ashx 1 -1000) 0)
-           (assert-result (ashx -1 -1000) -1)
-
-           (if (= (compiler-constant value-size) 4)
-               (begin
-                (assert-result (ashx 1 32) 0)
-                (assert-result (ashx -1 -32) -1))
-               (begin
-                (assert-result (ashx 1 64) 0)
-                (assert-result (ashx -1 -64) -1))))))
-
-    ;; Test constant folding of ash
-    (begin
-      (defmacro (ashx n shift) (list 'ash n shift))
-      (ash-tests))
-
-    ;; Test constant shift forms of ash
-    (begin
-      (defmacro (ashx n shift) (quasiquote (begin
-                                             (define n (unquote n))
-                                             (ash n (unquote shift)))))
-      (ash-tests))
-
-    ;; Test the variable shift forms of ash
-    (begin
-      (defmacro (ashx n shift) (quasiquote (begin
-                                             (define sh (unquote shift))
-                                             (ash (unquote n) sh))))
-      (ash-tests)))
 
   (assert-result (copy-tree '((1 . 2) 3)) '((1 . 2) 3))
 
