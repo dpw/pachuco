@@ -453,23 +453,24 @@
 
 (define-codegen-simplify (- attrs a . args)
   (codegen-simplify-recurse form)
-  (cond ((null? args)
-         (rplaca form 'negate))
-        ((eq? 'quote (car a))
-         ;; If the left-hand argument is a constant, we can't constant
-         ;; fold it away.  Instead, fold any other constants into it.
-         (let* ((expr-const (simplify-binary-op args '- (function -) a
-                                              (numberish-value (second a)))))
-           (rplaca (cdr a) (cdr expr-const))
-           (overwrite-form form (car expr-const))))
-        (true
-         (let* ((expr-const (simplify-binary-op args '- (function -) a 0))
-                (expr (car expr-const))
-                (const (cdr expr-const)))
-           (overwrite-form form
-             (if (= const 0)
-                 expr
-                 (make-bin-op-expr '- expr (list 'quote (- const)))))))))
+  (if (null? args)
+      (if (eq? 'quote (car a))
+          (overwrite-form form (list 'quote (- (second a))))
+          (rplaca form 'negate))
+      (if (eq? 'quote (car a))
+          ;; If the left-hand argument is a constant, we can't constant
+          ;; fold it away.  Instead, fold any other constants into it.
+          (let* ((expr-const (simplify-binary-op args '- (function -) a
+                                                 (numberish-value (second a)))))
+            (rplaca (cdr a) (cdr expr-const))
+            (overwrite-form form (car expr-const)))
+          (let* ((expr-const (simplify-binary-op args '- (function -) a 0))
+                 (expr (car expr-const))
+                 (const (cdr expr-const)))
+            (overwrite-form form
+              (if (= const 0)
+                  expr
+                  (make-bin-op-expr '- expr (list 'quote (- const)))))))))
 
 (define-codegen-simplify ((eq? = /=) attrs a b)
   (codegen-simplify-recurse form)
