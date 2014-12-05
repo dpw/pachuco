@@ -9,6 +9,22 @@
         (error "Evaluation of ~S gave ~S, expected ~S" (quote (unquote expr))
                res expected)))))
 
+;;; Test a unary operator, defeating constant folding
+(defmacro (test-unary-operator op alias . body)
+  (quasiquote (definitions
+    ;; Test the operator directly
+    (begin
+      (defmacro ((unquote alias) a) (list (quote (unquote op)) a))
+      (unquote-splicing body))
+
+    ;; Test with a variable argument
+    (begin
+      (defmacro ((unquote alias) a)
+        (quasiquote (begin
+                      (define avar (unquote a))
+                      ((unquote (unquote op)) avar))))
+      (unquote-splicing body)))))
+
 ;;; Test a binary operator, defeating constant folding
 (defmacro (test-binary-operator op alias . body)
   (quasiquote (definitions
@@ -118,15 +134,24 @@
   (assert-result (eq? (intern "foo") 'foo) #t)
   (assert-result (symbol-name (intern "bar")) "bar")
 
+  (test-unary-operator + +x
+    (assert-result (+x 10) 10))
+
   (test-binary-operator + +x
     (assert-result (+x 1 10) 11)
     (assert-result (+x 0 10) 10)
     (assert-result (+x 10 0) 10))
 
+  (test-unary-operator * *x
+    (assert-result (*x 10) 10))
+
   (test-binary-operator * *x
     (assert-result (*x 3 5) 15)
     (assert-result (*x 1 5) 5)
     (assert-result (*x 5 1) 5))
+
+  (test-unary-operator - -x
+    (assert-result (-x 10) -10))
 
   (test-binary-operator - -x
     (assert-result (-x 10 1) 9)
@@ -155,6 +180,35 @@
           (begin
             (assert-result (ashx 1 64) 0)
             (assert-result (ashx -1 -64) -1)))))
+
+  (begin
+    (defmacro (assert-applied-result expr expect)
+      (quasiquote (begin
+                    (assert-result (unquote expr) (unquote expect))
+                    (assert-result (apply (unquote (car expr))
+                                          (quote (unquote (cdr expr))))
+                                   (unquote expect)))))
+    (assert-applied-result (+) 0)
+    (assert-applied-result (+ 1) 1)
+    (assert-applied-result (+ 1 2) 3)
+    (assert-applied-result (+ 1 2 3) 6)
+
+    (assert-applied-result (*) 1)
+    (assert-applied-result (* 1) 1)
+    (assert-applied-result (* 1 2) 2)
+    (assert-applied-result (* 1 2 3) 6)
+
+    (assert-applied-result (- 1) -1)
+    (assert-applied-result (- 1 2) -1)
+    (assert-applied-result (- 1 2 3) -4)
+
+    (assert-applied-result (list 1 2 3) '(1 2 3)))
+
+  (begin
+    (define (fac n)
+        (if (< n 2) 1
+            (* n (fac (- n 1)))))
+    (assert-result (fac 6) 720))
 
   ;; Test large immediates
   (assert-result 12345678901 (1+ 12345678900))
@@ -202,35 +256,6 @@
     (assert-result (quasiquote ((unquote-splicing x) b c)) '(1 2 b c))
     (assert-result (quasiquote (a (unquote-splicing x) c)) '(a 1 2 c))
     (assert-result (quasiquote (a b (unquote-splicing x))) '(a b 1 2)))
-
-  (begin
-    (defmacro (assert-applied-result expr expect)
-      (quasiquote (begin
-                    (assert-result (unquote expr) (unquote expect))
-                    (assert-result (apply (unquote (car expr))
-                                          (quote (unquote (cdr expr))))
-                                   (unquote expect)))))
-    (assert-applied-result (+) 0)
-    (assert-applied-result (+ 1) 1)
-    (assert-applied-result (+ 1 2) 3)
-    (assert-applied-result (+ 1 2 3) 6)
-
-    (assert-applied-result (*) 1)
-    (assert-applied-result (* 1) 1)
-    (assert-applied-result (* 1 2) 2)
-    (assert-applied-result (* 1 2 3) 6)
-
-    (assert-applied-result (- 1) -1)
-    (assert-applied-result (- 1 2) -1)
-    (assert-applied-result (- 1 2 3) -4)
-
-    (assert-applied-result (list 1 2 3) '(1 2 3)))
-
-  (begin
-    (define (fac n)
-        (if (< n 2) 1
-            (* n (fac (- n 1)))))
-    (assert-result (fac 6) 720))
 
   ;; Test string ref, string copy
   (assert-result (string-equal? "foo" "foo") #t)
