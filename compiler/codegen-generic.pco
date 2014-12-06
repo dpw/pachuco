@@ -496,6 +496,9 @@
               ((= shiftval 0)
                n)
               ((<= shiftval (- value-bits))
+               ;; Large right shifts result in 0 or -1, depending on
+               ;; the sign of the operand.  So we turn them all into
+               ;; a {31,63}-bit right shift.
                (list 'ash-imm (acons 'shift (- 1 value-bits) attrs) n))
               ((< shiftval value-bits)
                (list 'ash-imm (acons 'shift shiftval attrs) n))

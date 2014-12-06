@@ -541,14 +541,14 @@
          (resreg (reg-asm-operand result)))
     (emiti cg "movs ~A, ~A, asr #~D" shiftreg shiftreg number-tag-bits)
     (emiti cg "bmi ~A" l1)
-    ;; n >= 0
+    ;; shift >= 0
     (emiti cg "cmp ~A, #31" shiftreg)
     (emiti cg "mov ~A, ~A, asl ~A" resreg nreg shiftreg)
     (emiti cg "movhi ~A, #0" resreg)
     (emit-jump cg l2)
 
     (emit-raw-label cg l1)
-    ;; n < 0
+    ;; shift < 0
     (emiti cg "rsb ~A, ~A, #0" shiftreg shiftreg)
     (emiti cg "cmp ~A, #31" shiftreg)
     (emiti cg "movhi ~A, #31" shiftreg)
