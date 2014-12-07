@@ -538,6 +538,10 @@
                (if varrec (car varrec) "anonymous function")
                at-least expected nargs)))))
 
+(define-operator (set-closure! closure val) ()
+  (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
+  val)
+
 ;; prepare-for-call does all the work to make calls to
 ;; statically-known functions fast:
 ;;

@@ -337,10 +337,6 @@
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
 
-(define-operator (set-closure! closure (val reg-imm)) ()
-  (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
-  val)
-
 (define (emit-call-or-jump cg insn func nargs)
   (let* ((label (prepare-for-call cg func nargs))
          (comment (comment-form func)))

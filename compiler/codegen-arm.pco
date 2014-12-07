@@ -293,10 +293,6 @@
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand val)
         (reg-asm-operand closure) (closure-slot-offset index)))
 
-(define-operator (set-closure! closure val) ()
-  (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
-  val)
-
 (define-cc-operator (check-arg-count) ()
   cc-eq)
 
