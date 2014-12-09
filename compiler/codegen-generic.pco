@@ -432,7 +432,7 @@
                                 (make-bin-op-expr op expr a) const)))
       (cons expr const)))
 
-(define (simplify-comm-binary-op form args f identity)
+(define (simplify-comm-binary-op form args f identity make-const-expr)
   (codegen-simplify-recurse form)
   (let* ((expr-const (simplify-binary-op args (car form) f false identity))
          (expr (car expr-const))
@@ -442,14 +442,28 @@
               expr
               ;; always put the quoted arg in the second
               ;; position, for better code generation
-              (make-bin-op-expr (car form) expr (list 'quote const)))
+              (funcall make-const-expr expr const))
           (list 'quote identity)))))
 
 (define-codegen-simplify (+ attrs . args)
-  (simplify-comm-binary-op form args (function +) 0))
+  (simplify-comm-binary-op form args (function +) 0
+    (lambda (expr const) (make-bin-op-expr '+ expr (list 'quote const)))))
+
+;; This only handles positive numbers with a single bit set
+(define (log2 n)
+  (+ (if (= 0 (logand n #x00000000ffffffff)) 32 0)
+     (if (= 0 (logand n #x0000ffff0000ffff)) 16 0)
+     (if (= 0 (logand n #x00ff00ff00ff00ff)) 8 0)
+     (if (= 0 (logand n #x0f0f0f0f0f0f0f0f)) 4 0)
+     (if (= 0 (logand n #x3333333333333333)) 2 0)
+     (if (= 0 (logand n #x5555555555555555)) 1 0)))
 
 (define-codegen-simplify (* attrs . args)
-  (simplify-comm-binary-op form args (function *) 1))
+  (simplify-comm-binary-op form args (function *) 1
+    (lambda (expr const)
+      (if (or (not expr) (<= const 0) (/= 0 (logand const (1- const))))
+          (make-bin-op-expr '* expr (list 'quote const))
+          (list 'ash-imm (acons 'shift (log2 const) ()) expr)))))
 
 (define-codegen-simplify (- attrs a . args)
   (codegen-simplify-recurse form)
