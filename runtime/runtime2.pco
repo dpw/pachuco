@@ -158,7 +158,8 @@
         (begin
           (hashtable-set-size! ht (1+ (hashtable-size ht)))
           (raw-vector-set! buckets index
-                           (make-ht-entry key value keyhash bucket))))))
+                           (make-ht-entry key value keyhash bucket))
+          value))))
 
 (define (hashtable-grow ht)
   (let* ((buckets (hashtable-buckets ht))

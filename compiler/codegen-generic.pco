@@ -330,12 +330,17 @@
     (emit-literal cg d)
     (format "~A+~D" label pair-tag)))
 
+(define emitted-strings (make-hashtable (function string-hash)
+                                        (function string-equal?)))
+
 (define (codegen-quoted-string str cg)
-  (let* ((label (gen-label)))
-    (emit-data cg label string-tag-bits)
-    (emit-literal cg (fixnum-representation (string-length str)))
-    (emit cg ".ascii \"~A\"" (escape-string-literal str))
-    (format "~A+~D" label string-tag)))
+  (or (hashtable-ref emitted-strings str)
+      (let* ((label (gen-label)))
+        (emit-data cg label string-tag-bits)
+        (emit-literal cg (fixnum-representation (string-length str)))
+        (emit cg ".ascii \"~A\"" (escape-string-literal str))
+        (hashtable-set! emitted-strings  str
+                        (format "~A+~D" label string-tag)))))
 
 (define (escape-string-literal str)
   (string-replace (string-replace (string-replace str "\\" "\\\\")
