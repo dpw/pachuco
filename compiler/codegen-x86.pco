@@ -90,32 +90,17 @@
 
 ;;; Operator argument constraints
 
-(define (reg-mem-operand-constraint cg operand reg)
-  (if (and (not (mem? operand))
-           (not (eq? operand reg)))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
+(define (reg-mem-operand-constraint operand)
+  (mem? operand))
 
-(define (reg-mem-imm-operand-constraint cg operand reg)
-  (if (and (not (string? operand))
-           (not (immediate32? operand))
-           (not (mem? operand))
-           (not (eq? operand reg)))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
+(define (reg-mem-imm-operand-constraint operand)
+  (not (and (not (string? operand))
+            (not (immediate32? operand))
+            (not (mem? operand)))))
 
-(define (reg-imm-operand-constraint cg operand reg)
-  (if (and (not (string? operand))
-           (not (immediate32? operand))
-           (not (eq? operand reg)))
-      (begin
-        (emit-mov cg operand reg)
-        reg)
-      operand))
+(define (reg-imm-operand-constraint operand)
+  (not (and (not (string? operand))
+            (not (immediate32? operand)))))
 
 ;;; Condition codes
 

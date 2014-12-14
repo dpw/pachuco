@@ -248,17 +248,23 @@
 
                      ;; Now generate code for non-trashy args.
                      (let* ((c (nthcdr arg output-operands))
-                            (operand (funcall (elt operand-constraints arg) cg
-                                              (codegen (elt args arg) cg false
-                                                       available-regs (car c))
-                                              (car c))))
+                            (reg (car c))
+                            (operand (codegen (elt args arg) cg false
+                                              available-regs reg)))
+                       ;; If the result of evaluating the argument
+                       ;; doesn't meet the operand constraint, move it
+                       ;; into the allocated register.
+                       (unless (funcall (elt operand-constraints arg) operand)
+                         (emit-mov-maybe cg operand reg)
+                         (set! operand reg))
+
                        ;; Results are not necessaily produced as
                        ;; register operands (e.g. an arg can produce
                        ;; memory or immediate operands).  If the
                        ;; operand register didn't actually get used,
                        ;; put it aside.
-                       (unless (operand-using-reg? operand (car c))
-                         (push (car c) unused-operand-regs))
+                       (unless (operand-using-reg? operand reg)
+                         (push reg unused-operand-regs))
 
                        ;; Replace the corresponding entry in
                        ;; output-operands with the actual operand.
@@ -299,13 +305,13 @@
                        output-operands)))))
       (for-trashy-args (form-attr form 'trashy-args)))))
 
-(define (reg-operand-constraint cg operand reg)
-  (emit-mov-maybe cg operand reg)
-  reg)
+;; For a "reg" operand, need to ensure that the operand is in the
+;; allocated register.
+(define (reg-operand-constraint operand) false)
 
-(define (fixed-reg-operand-constraint cg operand reg)
-  (emit-mov-maybe cg operand reg)
-  reg)
+;; For a "fixed-reg" operand, need to ensure the the operand is in the
+;; allocated register, which will always be the specified register.
+(define (fixed-reg-operand-constraint operand) false)
 
 (define (move-to-position l index item)
    (if (= 0 index)

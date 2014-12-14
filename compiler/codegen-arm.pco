@@ -49,35 +49,20 @@
 (define (operand-using-reg? o r)
   (eq? o r))
 
-(define (reg-imm8-operand-constraint cg operand reg)
-  (if (immediate8? operand)
-      operand
-      (begin
-        (emit-mov-maybe cg operand reg)
-        reg)))
+(define (reg-imm8-operand-constraint operand)
+  (immediate8? operand))
 
-(define (reg-offset12-operand-constraint cg operand reg)
-  (if (offset12? operand)
-      operand
-      (begin
-        (emit-mov-maybe cg operand reg)
-        reg)))
+(define (reg-offset12-operand-constraint operand)
+  (offset12? operand))
 
 ;; In some contexts we can handle something that fits into the immed_8
 ;; field whether positive or negative (e.g. by turning an add into a sub)
-(define (reg-imm8abs-operand-constraint cg operand reg)
-  (if (immediate8? (abs operand))
-      operand
-      (begin
-        (emit-mov-maybe cg operand reg)
-        reg)))
+(define (reg-imm8abs-operand-constraint operand)
+  (immediate8? (abs operand)))
 
-(define (reg-imm-operand-constraint cg operand reg)
-  (if (immediate? operand)
-      operand
-      (begin
-        (emit-mov-maybe cg operand reg)
-        reg)))
+;; A fake operand constraint used with fixnum->raw and raw->fixnum
+(define (reg-imm-operand-constraint operand)
+  (immediate? operand))
 
 (define (shift-expr shift)
   (cond ((= shift 0) "")
