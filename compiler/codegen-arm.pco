@@ -727,79 +727,6 @@
   (emit-c-call cg "memmove")
   unspecified-representation)
 
-;;; Misc runtime support
-
-(define-operator (fixnum->raw (val reg-imm)) ()
-  (if (number? val)
-      (ash val (- number-tag-bits))
-      (begin
-        (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
-               (reg-asm-operand val) number-tag-bits)
-        result)))
-
-(define-operator (raw->fixnum (val reg-imm)) ()
-  (if (number? val)
-      (fixnum-representation val)
-      (begin
-        (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
-               (reg-asm-operand val) number-tag-bits)
-        result)))
-
-(define-operator (raw-label) ()
-  (emiti cg "ldr ~A, =~A" (reg-asm-operand result) (attr-ref attrs 'name))
-  result)
-
-(define-operator (raw-global-set! val) ((temp-regs temp))
-  (let* ((name (attr-ref attrs 'name))
-         (rglob (assoc name register-globals)))
-    (if rglob
-        (emiti cg "mov ~A, ~A"
-               (reg-asm-operand (cdr rglob)) (reg-asm-operand val))
-        (access-global cg "str" val name temp)))
-  val)
-
-(define-operator (raw-global-ref) ((temp-regs temp))
-  (let* ((name (attr-ref attrs 'name))
-         (rglob (assoc name register-globals)))
-    (if rglob
-        (emiti cg "mov ~A, ~A"
-                (reg-asm-operand result) (reg-asm-operand (cdr rglob)))
-        (access-global cg "ldr" result name temp)))
-  result)
-
-(define-operator (raw-ref addr) ()
-  (emiti cg "~A ~A, [~A]" (vector-ref ldr-variants (attr-ref attrs 'scale))
-         (reg-asm-operand result) (reg-asm-operand addr))
-  result)
-
-(define-operator (raw-set! addr val) ()
-  (emiti cg "~A ~A, [~A]" (vector-ref str-variants (attr-ref attrs 'scale))
-         (reg-asm-operand val) (reg-asm-operand addr))
-  val)
-
-(define (emit-c-call cg label)
-  ;; EABI says that the stack should be aligned to 8 bytes when
-  ;; calling a public interface
-  (let* ((saved-sp (reg-asm-operand (first c-callee-saved-regs))))
-    (emiti cg "mov ~A, sp" saved-sp)
-    (emiti cg "and sp, sp, #-8")
-    (emiti cg "bl ~A" label)
-    (emiti cg "mov sp, ~A" saved-sp)))
-
-(define-trashy-codegen (c-call attrs . args)
-  (trashy-codegen-into-regs cg args c-call-arg-regs)
-  (emit-c-call cg (attr-ref attrs 'c-function-name))
-  %r0)
-
-;; the gc uses the raw-alloc operation
-
-(define-operator (raw-alloc size) ()
-  (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
-              (string-concat (reg-asm-operand size)
-                             (scale-number-expr value-scale))
-              value-scale spare-regs)
-  %alloc)
-
 ;;; Heap allocation
 
 (define (emit-alloc cg tag-bits size scale spare-regs)
@@ -867,8 +794,77 @@
     (emiti cg "ldr lr, [sp], #4")
     (emiti cg "mov pc, lr")))
 
-;;; Raw ops for the GC
+;;; Misc runtime support
+
+(define-operator (fixnum->raw (val reg-imm)) ()
+  (if (number? val)
+      (ash val (- number-tag-bits))
+      (begin
+        (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand result)
+               (reg-asm-operand val) number-tag-bits)
+        result)))
+
+(define-operator (raw->fixnum (val reg-imm)) ()
+  (if (number? val)
+      (fixnum-representation val)
+      (begin
+        (emiti cg "mov ~A, ~A, asl #~D" (reg-asm-operand result)
+               (reg-asm-operand val) number-tag-bits)
+        result)))
+
+(define-operator (raw-label) ()
+  (emiti cg "ldr ~A, =~A" (reg-asm-operand result) (attr-ref attrs 'name))
+  result)
+
+(define-operator (raw-global-set! val) ((temp-regs temp))
+  (let* ((name (attr-ref attrs 'name))
+         (rglob (assoc name register-globals)))
+    (if rglob
+        (emiti cg "mov ~A, ~A"
+               (reg-asm-operand (cdr rglob)) (reg-asm-operand val))
+        (access-global cg "str" val name temp)))
+  val)
+
+(define-operator (raw-global-ref) ((temp-regs temp))
+  (let* ((name (attr-ref attrs 'name))
+         (rglob (assoc name register-globals)))
+    (if rglob
+        (emiti cg "mov ~A, ~A"
+                (reg-asm-operand result) (reg-asm-operand (cdr rglob)))
+        (access-global cg "ldr" result name temp)))
+  result)
+
+(define-operator (raw-ref addr) ()
+  (emiti cg "~A ~A, [~A]" (vector-ref ldr-variants (attr-ref attrs 'scale))
+         (reg-asm-operand result) (reg-asm-operand addr))
+  result)
+
+(define-operator (raw-set! addr val) ()
+  (emiti cg "~A ~A, [~A]" (vector-ref str-variants (attr-ref attrs 'scale))
+         (reg-asm-operand val) (reg-asm-operand addr))
+  val)
+
+(define (emit-c-call cg label)
+  ;; EABI says that the stack should be aligned to 8 bytes when
+  ;; calling a public interface
+  (let* ((saved-sp (reg-asm-operand (first c-callee-saved-regs))))
+    (emiti cg "mov ~A, sp" saved-sp)
+    (emiti cg "and sp, sp, #-8")
+    (emiti cg "bl ~A" label)
+    (emiti cg "mov sp, ~A" saved-sp)))
+
+(define-trashy-codegen (c-call attrs . args)
+  (trashy-codegen-into-regs cg args c-call-arg-regs)
+  (emit-c-call cg (attr-ref attrs 'c-function-name))
+  %r0)
 
 (define-simple-number-operator raw-+ "add")
 (define-simple-number-operator raw-- "sub")
 (define-simple-number-operator raw-logand "and")
+
+(define-operator (raw-alloc size) ()
+  (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
+              (string-concat (reg-asm-operand size)
+                             (scale-number-expr value-scale))
+              value-scale spare-regs)
+  %alloc)
