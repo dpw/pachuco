@@ -387,7 +387,7 @@
 (define-operator (raw-jump-with-arg-space before-arg-count after-arg-count
                                           bodyfunc)
                  (tail-form (temp-regs retaddr))
-  (unless (eq? bodyfunc %closure) (emit-mov cg bodyfunc %closure))
+  (emit-mov-maybe cg bodyfunc %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "add sp, sp, ~A~A" (reg-asm-operand before-arg-count)
@@ -399,7 +399,7 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
-  (unless (eq? func %closure) (emit-mov cg func %closure))
+  (emit-mov-maybe cg func %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag)
@@ -820,8 +820,7 @@
   (let* ((name (attr-ref attrs 'name))
          (rglob (assoc name register-globals)))
     (if rglob
-        (emiti cg "mov ~A, ~A"
-               (reg-asm-operand (cdr rglob)) (reg-asm-operand val))
+        (emit-mov cg val (cdr rglob))
         (access-global cg "str" val name temp)))
   val)
 
@@ -829,8 +828,7 @@
   (let* ((name (attr-ref attrs 'name))
          (rglob (assoc name register-globals)))
     (if rglob
-        (emiti cg "mov ~A, ~A"
-                (reg-asm-operand result) (reg-asm-operand (cdr rglob)))
+        (emit-mov cg (cdr rglob) result)
         (access-global cg "ldr" result name temp)))
   result)
 
