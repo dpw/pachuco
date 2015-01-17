@@ -386,7 +386,7 @@
 
 (define-operator (raw-jump-with-arg-space before-arg-count after-arg-count
                                           bodyfunc)
-                 (tail-form (temp-regs retaddr))
+                 (tail-form)
   (emit-mov-maybe cg bodyfunc %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
