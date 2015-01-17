@@ -89,6 +89,10 @@
 (define (emit-align cg scale)
   (emit cg ".align ~D" scale))
 
+(define (emit-function-label cg label)
+  (emit cg ".globl ~A" label)
+  (emit cg "~A:" label))
+
 ;; Ok, ARM requires us to do a .ltorg every so often to tell the
 ;; assembler to flush the literal pool.  So we handle that here.
 
@@ -166,9 +170,7 @@
          (name (vector-ref init-mem-variants scale))
          (count (reg-asm-operand %init-mem-count))
          (ptr (reg-asm-operand %init-mem-ptr)))
-    (emit cg ".text")
-    (emit cg ".globl ~A" name)
-    (emit cg "~A:" name)
+    (emit-function-label cg name)
 
     ;; If %init-mem-count is zero, return straight away
     (emiti cg "cmp ~A, #0" count)
@@ -197,8 +199,7 @@
     (codegen-program-start cg program)
 
     (emit cg ".text")
-    (emit cg ".globl lisp")
-    (emit cg "lisp:")
+    (emit-function-label cg "lisp")
     (emiti cg "stmfd sp!, ~A" saved-regs)
 
     ;; load register globals from the variables assigned by the C setup
@@ -753,6 +754,7 @@
         (emit-ltorg cg)))))
 
 (define (codegen-helpers cg)
+  (emit cg ".text")
   (codegen-heap-exhausted cg)
   (codegen-init-mem cg 0)
   (codegen-init-mem cg 2))
@@ -765,10 +767,7 @@
                (emiti cg "tst ~A, #~D" (reg-asm-operand %closure)
                      (register-bit reg))
                (emiti cg insn-template "eq" (reg-asm-operand reg)))))
-    (emit cg ".text")
-    (emit cg ".globl heap_exhausted")
-    (emit cg "heap_exhausted:")
-
+    (emit-function-label cg "heap_exhausted")
     (emiti cg "str lr, [sp, #-4]!")
 
     ;; Push live registers onto the stack, guided by the bitset in

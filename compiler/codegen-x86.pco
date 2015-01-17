@@ -216,6 +216,10 @@
         (true
          (error "emit-scale-number on operand ~A" oper))))
 
+(define (emit-function-label cg label)
+  (emit cg ".globl ~A" label)
+  (emit cg "~A:" label))
+
 (define (emit-branch cg cc label)
   (emit-without-flushing "j~A ~A" cc label))
 
@@ -272,8 +276,7 @@
                  (funcall op cg reg)
                  (emit-raw-label cg l)))))
     (emit cg ".text")
-    (emit cg ".globl heap_exhausted")
-    (emit cg "heap_exhausted:")
+    (emit-function-label cg "heap_exhausted")
 
     ;; Push live registers onto the stack, guided by the bitset in
     ;; %closure.  This preserves their values, and also means that

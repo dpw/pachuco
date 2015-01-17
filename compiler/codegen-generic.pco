@@ -93,8 +93,7 @@
     (emit cg ".text")
     (emit-align cg value-scale)
     (emit-literal cg (fixnum-representation (1+ (length closure))))
-    (emit cg ".globl ~A" (first labels))
-    (emit-smart-label cg (first labels))
+    (emit-function-label cg (first labels))
 
     (let* ((self-varrec (attr-ref attrs 'self)))
       (when self-varrec
@@ -114,8 +113,7 @@
                  (quote (unquote nparams))
                  (arg-count ())))
                                        cg false)))
-        (emit cg ".globl ~A" (second labels))
-        (emit-smart-label cg (second labels))))
+        (emit-function-label cg (second labels))))
 
     (emit-function-prologue cg)
     (codegen-set-have-closure! cg (if (null? closure)

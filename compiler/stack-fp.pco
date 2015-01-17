@@ -135,8 +135,7 @@
     (codegen-program-start cg program)
 
     (emit cg ".text")
-    (emit cg ".globl lisp")
-    (emit cg "lisp:")
+    (emit-function-label cg "lisp")
     (emit-push cg %bp)
     (emit-mov cg %sp %bp)
     (emit-set-ac-flag cg true)
