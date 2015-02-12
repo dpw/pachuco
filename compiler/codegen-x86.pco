@@ -244,7 +244,16 @@
 
 ;;; Heap allocation
 
-(define (emit-alloc cg size size-align post-align allocreg spare-regs)
+(define (heap-exhausted-bitset spare-regs protect-regs)
+  (let* ((prot-bits (register-bitset protect-regs)))
+    ;; Protected registers are distinct from live registers for the
+    ;; purposes of heap_exhausted, so we include them in the spare
+    ;; register set.
+    (logior (logior (register-bitset spare-regs) prot-bits)
+            (ash prot-bits general-register-count))))
+
+(define (emit-alloc cg size size-align post-align allocreg spare-regs
+                    protect-regs)
   (let* ((again-label (gen-label))
          (exhausted-label (gen-label)))
     (flush-labels-and-jumps cg)
@@ -260,7 +269,8 @@
     (codegen-push-out-of-line cg
       (lambda ()
         (emit-raw-label cg exhausted-label)
-        (emit-mov cg (register-bitset (cons allocreg spare-regs)) %closure)
+        (emit-mov cg (heap-exhausted-bitset (cons allocreg spare-regs)
+                                            protect-regs) %closure)
         (emit cg "call heap_exhausted")
         (emit-restore-%closure cg)
         (emit-jump cg again-label)))))
@@ -268,11 +278,11 @@
 (define gc-label (make-label-for 'gc direct-function-label-prefix))
 
 (define (codegen-helpers cg)
-  (labels ((for-live-registers (regs op)
+  (labels ((for-registers (regs bit-offset negated-cond op)
              (dolist (reg regs)
                (let* ((l (gen-label)))
-                 (emit-test cg (register-bit reg) %closure)
-                 (emit-branch cg "nz" l)
+                 (emit-test cg (ash (register-bit reg) bit-offset) %closure)
+                 (emit-branch cg negated-cond l)
                  (funcall op cg reg)
                  (emit-raw-label cg l)))))
     (emit cg ".text")
@@ -281,18 +291,34 @@
     ;; Push live registers onto the stack, guided by the bitset in
     ;; %closure.  This preserves their values, and also means that
     ;; they get treated as part of the root set by the GC.
-    (for-live-registers general-registers (function emit-push))
+    (for-registers general-registers 0 "nz" (function emit-push))
+
+    ;; Push protected registers onto the stack.  These are preserved,
+    ;; but not seen or touched by the GC.
+    (for-registers general-registers general-register-count "z"
+                   (function emit-push))
+
+    ;; Preserve the register bitset
     (emit-push cg %closure)
 
-    ;; The stack-bottom argument skips the live reg bitset, so that it
-    ;; doesn't get exposed to the GC.
-    (emit-lea cg (indexed-operand %sp 1) %closure)
-    (emit-push cg %closure)
+    ;; Work out the stack-bottom argument, skipping the live reg
+    ;; bitset and any protected register values
+    (emit-lea cg (indexed-operand %sp 1) %a)
+    (for-registers general-registers general-register-count "z"
+                   (lambda (cg reg) (emit-add cg value-size %a)))
+    (emit-push cg %a)
     (emit cg "call ~A" gc-label)
 
-    ;; Restore live registers
+    ;; Restore register bitset
     (emit-pop cg %closure)
-    (for-live-registers (reverse general-registers) (function emit-pop))
+
+    (let* ((rev-gen-regs (reverse general-registers)))
+      ;; Restore protected registers
+      (for-registers rev-gen-regs general-register-count "z"
+                     (function emit-pop))
+
+      ;; Restore live registers
+      (for-registers rev-gen-regs 0 "nz" (function emit-pop)))
 
     (emit cg "ret")))
 
@@ -301,7 +327,7 @@
 (define-operator (raw-alloc (size reg-imm)) ((temp-regs alloc))
   (emit-alloc cg (emit-scale-number cg value-scale size) value-scale
               (compiler-constant-value (attr-ref attrs 'tag-bits))
-              alloc spare-regs)
+              alloc spare-regs (if (number? size) () (list size)))
   (emit-mov cg alloc result)
   result)
 
@@ -312,7 +338,7 @@
 ;; enclosed by a lambda that does the initialization.
 (define-operator (alloc-closure) ()
   (emit-alloc cg (* value-size (1+ (attr-ref attrs 'length)))
-              value-scale closure-tag-bits result spare-regs)
+              value-scale closure-tag-bits result spare-regs ())
   (emit-mov cg (attr-ref attrs 'label) (mem-operand result))
   (emit-add cg closure-tag result)
   result)
@@ -393,7 +419,7 @@
 ;;; Conses
 
 (define-operator (cons (a reg-imm) (d reg-imm)) ((temp-regs alloc))
-  (emit-alloc cg (* 2 value-size) value-scale pair-tag-bits alloc spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale pair-tag-bits alloc spare-regs ())
   (emit-mov cg a (mem-operand alloc))
   (emit-mov cg d (indexed-operand alloc 1))
   (emit-lea cg (offset-operand alloc pair-tag) result)
@@ -413,7 +439,7 @@
 ;;; Boxes
 
 (define-operator (raw-make-box (val reg-imm)) ((temp-regs alloc))
-  (emit-alloc cg value-size value-scale box-tag-bits alloc spare-regs)
+  (emit-alloc cg value-size value-scale box-tag-bits alloc spare-regs ())
   (emit-mov cg val (mem-operand alloc))
   (emit-lea cg (offset-operand alloc box-tag) result)
   result)
@@ -435,7 +461,8 @@
 
 (define-operator (raw-make-symbol (str reg-imm) (id reg-imm))
     ((temp-regs alloc))
-  (emit-alloc cg (* 2 value-size) value-scale symbol-tag-bits alloc spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale symbol-tag-bits alloc spare-regs
+              ())
   (emit-mov cg str (mem-operand alloc))
   (emit-mov cg id (indexed-operand alloc 1))
   (emit-lea cg (offset-operand alloc symbol-tag) result)
@@ -547,7 +574,7 @@
     (emit-mov cg len %c)
     (emit-scale-number cg scale len)
     (emit-add cg value-size len)
-    (emit-alloc cg len scale tag-bits alloc (list* %di spare-regs))
+    (emit-alloc cg len scale tag-bits alloc (list* %di spare-regs) (list len))
     (emit-mov cg alloc %di)
     (emit-mov cg %c (mem-operand alloc))
     (emit-add cg value-size %di)

@@ -34,7 +34,7 @@
     (emit-comment cg "~S" (comment-form form))))
 
 (define (register-bitset regs)
-  (reduce (register-bit (car regs)) (cdr regs)
+  (reduce 0 regs
           (lambda (bits reg) (logior bits (register-bit reg)))))
 
 ;; Assembly utility functions
