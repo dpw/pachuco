@@ -551,8 +551,8 @@
                 (< nargs expected))
               (/= nargs expected))
       (let* ((varrec (attr-ref-defaulting lambda-attrs 'self false)))
-        (error "bad number of arguments in call to ~A (expected ~A~D, got ~D)"
-               (if varrec (car varrec) "anonymous function")
+        (error "wrong number of arguments in call to ~A (expected ~A~D, got ~D)"
+               (if varrec (varrec-name varrec) "anonymous function")
                at-least expected nargs)))))
 
 (define-operator (set-closure! closure val) ()
