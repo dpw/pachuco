@@ -282,19 +282,16 @@
     ;; %closure.  This preserves their values, and also means that
     ;; they get treated as part of the root set by the GC.
     (for-live-registers general-registers (function emit-push))
+    (emit-push cg %closure)
 
-    ;; We need to save the live reg bitset from %closure, in order to
-    ;; restore the live registers after the GC.  But if we put it on
-    ;; the stack it it's original form, the GC will see it and try to
-    ;; interpret it as an object reference.  So we disguise it as a
-    ;; fixnum first.
-    (emit-shl cg number-tag-bits %closure)
+    ;; The stack-bottom argument skips the live reg bitset, so that it
+    ;; doesn't get exposed to the GC.
+    (emit-lea cg (indexed-operand %sp 1) %closure)
     (emit-push cg %closure)
     (emit cg "call ~A" gc-label)
-    (emit-pop cg %closure)
-    (emit-sar cg number-tag-bits %closure)
 
     ;; Restore live registers
+    (emit-pop cg %closure)
     (for-live-registers (reverse general-registers) (function emit-pop))
 
     (emit cg "ret")))

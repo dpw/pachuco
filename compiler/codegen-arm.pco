@@ -776,16 +776,13 @@
     (for-live-registers general-registers "str~A ~A, [sp, #-4]!")
 
     (let* ((reg (reg-asm-operand %closure)))
-      ;; We need to save the live reg bitset from %closure, in order to
-      ;; restore the live registers after the GC.  But if we put it on
-      ;; the stack it it's original form, the GC will see it and try to
-      ;; interpret it as an object reference.  So we disguise it as a
-      ;; fixnum first.
-      (emiti cg "mov ~A, ~A, asl #~D" reg reg number-tag-bits)
+      (emiti cg "str ~A, [sp, #-4]!" reg)
+      ;; The stack-bottom argument skips the live reg bitset, so that it
+      ;; doesn't get exposed to the GC.
+      (emiti cg "add ~A, sp, #4" reg)
       (emiti cg "str ~A, [sp, #-4]!" reg)
       (emiti cg "bl ~A" gc-label)
-      (emiti cg "ldr ~A, [sp], #4" reg)
-      (emiti cg "mov ~A, ~A, asr #~D" reg reg number-tag-bits))
+      (emiti cg "ldr ~A, [sp], #4" reg))
 
     ;; Restore live registers
     (for-live-registers (reverse general-registers) "ldr~A ~A, [sp], #4")

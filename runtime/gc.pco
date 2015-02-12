@@ -37,7 +37,7 @@
                         (fixnum->raw (compiler-constant value-size)))
                  end-addr)))
 
-(define (gc)
+(define (gc stack-bottom)
   ;; Record the extent of the old heap
   (set! gc-from-space (raw-global-ref heap_start))
   (set! gc-from-space-end (raw-global-ref heap_end))
@@ -63,7 +63,7 @@
 
   ;; copy all live data
   (gc-root-set (raw-label "top_level_start") (raw-label "top_level_end"))
-  (gc-root-set (raw-args-base) gc-stack-top)
+  (gc-root-set stack-bottom gc-stack-top)
 
   (define live-bytes
           (raw->fixnum (raw-- gc-to-space-end (raw-global-ref heap_alloc))))
@@ -81,6 +81,9 @@
 
   (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
     (formout stderr "done, ~D bytes live~%" live-bytes)))
+
+(define (gc-now)
+  (gc (raw-args-base)))
 
 (define (gc-test-copy val)
   ;; a test function that uses the GC machinery to destructively
