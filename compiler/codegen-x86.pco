@@ -566,15 +566,22 @@
 
 ;;; Strings and vectors
 
-(define-operator (make-vec len (init fixed-reg %a))
+(define-operator (make-vec (size reg-imm) (init fixed-reg %a))
                  ((temp-regs alloc) (temp-fixed-regs %c %di))
+  (emit-mov cg size %c)
   (let* ((tag (attr-ref attrs 'tag))
          (tag-bits (attr-ref attrs 'tag-bits))
-         (scale (attr-ref attrs 'scale)))
-    (emit-mov cg len %c)
-    (emit-scale-number cg scale len)
-    (emit-add cg value-size len)
-    (emit-alloc cg len scale tag-bits alloc (list* %di spare-regs) (list len))
+         (scale (attr-ref attrs 'scale))
+         (protect (if (number? size)
+                      (begin
+                        (set! size (+ (ash size (- scale number-tag-bits))
+                                      value-size))
+                        ())
+                      (begin
+                        (emit-scale-number cg scale size)
+                        (emit-add cg value-size size)
+                        (list size)))))
+    (emit-alloc cg size scale tag-bits alloc (list* %di spare-regs) protect)
     (emit-mov cg alloc %di)
     (emit-mov cg %c (mem-operand alloc))
     (emit-add cg value-size %di)
