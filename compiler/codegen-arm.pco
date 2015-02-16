@@ -276,8 +276,8 @@
 ;; initialize its contents.  This is because it will always be
 ;; enclosed by a lambda that does the initialization.
 (define-operator (alloc-closure) ((temp-regs labelreg))
-  (emit-alloc cg closure-tag-bits (* value-size (1+ (attr-ref attrs 'length)))
-              value-scale (cons labelreg spare-regs))
+  (emit-alloc cg  (* value-size (1+ (attr-ref attrs 'length)))
+              value-scale closure-tag-bits (cons labelreg spare-regs))
   (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg) (attr-ref attrs 'label))
   (emiti cg "str ~A, [~A]" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -552,7 +552,7 @@
 ;;; Conses
 
 (define-operator (cons a d) ()
-  (emit-alloc cg pair-tag-bits (* 2 value-size) value-scale spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale pair-tag-bits spare-regs)
   (emiti cg "str ~A, [~A]" (reg-asm-operand a) (reg-asm-operand %alloc))
   (emiti cg "str ~A, [~A, #4]" (reg-asm-operand d) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -582,7 +582,7 @@
 ;;; Symbols
 
 (define-operator (raw-make-symbol str id) ()
-  (emit-alloc cg symbol-tag-bits (* 2 value-size) value-scale spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale symbol-tag-bits spare-regs)
   (emiti cg "str ~A, [~A]" (reg-asm-operand str) (reg-asm-operand %alloc))
   (emiti cg "str ~A, [~A, #4]" (reg-asm-operand id) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -602,7 +602,7 @@
 ;;; Boxes
 
 (define-operator (raw-make-box val) ()
-  (emit-alloc cg box-tag-bits value-size value-scale spare-regs)
+  (emit-alloc cg value-size value-scale box-tag-bits spare-regs)
   (emiti cg "str ~A, [~A]" (reg-asm-operand val) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) box-tag)
@@ -631,7 +631,7 @@
     (emiti cg "add ~A, ~A, ~A~A" (reg-asm-operand %init-mem-count)
            (reg-asm-operand %init-mem-count) (reg-asm-operand len)
            (scale-number-expr scale))
-    (emit-alloc cg tag-bits %init-mem-count scale
+    (emit-alloc cg %init-mem-count scale tag-bits
                 (list* %init-mem-ptr spare-regs))
     (emiti cg "str ~A, [~A]" (reg-asm-operand len) (reg-asm-operand %alloc))
 
@@ -730,7 +730,7 @@
 
 ;;; Heap allocation
 
-(define (emit-alloc cg tag-bits size scale spare-regs)
+(define (emit-alloc cg size size-align post-align spare-regs)
   (let* ((again-label (gen-label))
          (exhausted-label (gen-label))
          (alloc (reg-asm-operand %alloc))
@@ -738,8 +738,8 @@
     (flush-labels-and-jumps cg)
     (emit-raw-label cg again-label)
     (emiti cg "sub ~A, ~A, ~A" alloc alloc (asm-operand size))
-    (unless (= tag-bits scale)
-      (emiti cg "and ~A, ~A, #~D" alloc alloc (- (ash 1 tag-bits))))
+    (when (> post-align size-align)
+      (emiti cg "and ~A, ~A, #~D" alloc alloc (- (ash 1 post-align))))
     (emiti cg "cmp ~A, ~A" alloc threshold)
     (emiti cg "blo ~A" exhausted-label)
 
@@ -857,8 +857,8 @@
 (define-simple-number-operator raw-logand "and")
 
 (define-operator (raw-alloc size) ()
-  (emit-alloc cg (compiler-constant-value (attr-ref attrs 'tag-bits))
-              (string-concat (reg-asm-operand size)
-                             (scale-number-expr value-scale))
-              value-scale spare-regs)
+  (emit-alloc cg (string-concat (reg-asm-operand size)
+                                (scale-number-expr value-scale))
+              value-scale (compiler-constant-value (attr-ref attrs 'tag-bits))
+              spare-regs)
   %alloc)
