@@ -277,7 +277,7 @@
 ;; enclosed by a lambda that does the initialization.
 (define-operator (alloc-closure) ((temp-regs labelreg))
   (emit-alloc cg  (* value-size (1+ (attr-ref attrs 'length)))
-              value-scale closure-tag-bits (cons labelreg spare-regs))
+              value-scale closure-tag-bits (cons labelreg spare-regs) ())
   (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg) (attr-ref attrs 'label))
   (emiti cg "str ~A, [~A]" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -552,7 +552,7 @@
 ;;; Conses
 
 (define-operator (cons a d) ()
-  (emit-alloc cg (* 2 value-size) value-scale pair-tag-bits spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale pair-tag-bits spare-regs ())
   (emiti cg "str ~A, [~A]" (reg-asm-operand a) (reg-asm-operand %alloc))
   (emiti cg "str ~A, [~A, #4]" (reg-asm-operand d) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -582,7 +582,7 @@
 ;;; Symbols
 
 (define-operator (raw-make-symbol str id) ()
-  (emit-alloc cg (* 2 value-size) value-scale symbol-tag-bits spare-regs)
+  (emit-alloc cg (* 2 value-size) value-scale symbol-tag-bits spare-regs ())
   (emiti cg "str ~A, [~A]" (reg-asm-operand str) (reg-asm-operand %alloc))
   (emiti cg "str ~A, [~A, #4]" (reg-asm-operand id) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
@@ -602,7 +602,7 @@
 ;;; Boxes
 
 (define-operator (raw-make-box val) ()
-  (emit-alloc cg value-size value-scale box-tag-bits spare-regs)
+  (emit-alloc cg value-size value-scale box-tag-bits spare-regs ())
   (emiti cg "str ~A, [~A]" (reg-asm-operand val) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) box-tag)
@@ -632,7 +632,7 @@
            (reg-asm-operand %init-mem-count) (reg-asm-operand len)
            (scale-number-expr scale))
     (emit-alloc cg %init-mem-count scale tag-bits
-                (list* %init-mem-ptr spare-regs))
+                (list* %init-mem-ptr spare-regs) (list %init-mem-count))
     (emiti cg "str ~A, [~A]" (reg-asm-operand len) (reg-asm-operand %alloc))
 
     ;; Call the helper routine to clear the vector
@@ -730,7 +730,15 @@
 
 ;;; Heap allocation
 
-(define (emit-alloc cg size size-align post-align spare-regs)
+(define (heap-exhausted-bitset spare-regs protect-regs)
+  (let* ((prot-bits (register-bitset protect-regs)))
+    ;; Protected registers are distinct from live registers for the
+    ;; purposes of heap_exhausted, so we include them in the spare
+    ;; register set.
+    (logior (logior (register-bitset spare-regs) prot-bits)
+            (ash prot-bits general-register-count))))
+
+(define (emit-alloc cg size size-align post-align spare-regs protect-regs)
   (let* ((again-label (gen-label))
          (exhausted-label (gen-label))
          (alloc (reg-asm-operand %alloc))
@@ -746,8 +754,8 @@
     (codegen-push-out-of-line cg
       (lambda ()
         (emit-raw-label cg exhausted-label)
-        (emiti cg "ldr ~A,=~D" (reg-asm-operand %closure)
-               (register-bitset spare-regs))
+        (emiti cg "ldr ~A, =~D" (reg-asm-operand %closure)
+               (heap-exhausted-bitset spare-regs protect-regs))
         (emiti cg "bl heap_exhausted")
         (emit-restore-%closure cg)
         (emiti cg "b ~A" again-label)
@@ -762,30 +770,49 @@
 (define gc-label (make-label-for 'gc direct-function-label-prefix))
 
 (define (codegen-heap-exhausted cg)
-  (labels ((for-live-registers (regs insn-template)
+  (labels ((for-registers (regs bit-offset op)
              (dolist (reg regs)
                (emiti cg "tst ~A, #~D" (reg-asm-operand %closure)
-                     (register-bit reg))
-               (emiti cg insn-template "eq" (reg-asm-operand reg)))))
+                     (ash (register-bit reg) bit-offset))
+               (funcall op (reg-asm-operand reg)))))
     (emit-function-label cg "heap_exhausted")
     (emiti cg "str lr, [sp, #-4]!")
 
     ;; Push live registers onto the stack, guided by the bitset in
     ;; %closure.  This preserves their values, and also means that
     ;; they get treated as part of the root set by the GC.
-    (for-live-registers general-registers "str~A ~A, [sp, #-4]!")
+    (for-registers general-registers 0
+                   (lambda (reg) (emiti cg "streq ~A, [sp, #-4]!" reg)))
+
+    ;; Push protected registers onto the stack.  These are preserved,
+    ;; but not seen or touched by the GC.
+    (for-registers general-registers general-register-count
+                   (lambda (reg) (emiti cg "strne ~A, [sp, #-4]!" reg)))
 
     (let* ((reg (reg-asm-operand %closure)))
+      ;; Preserve the register bitset
       (emiti cg "str ~A, [sp, #-4]!" reg)
-      ;; The stack-bottom argument skips the live reg bitset, so that it
-      ;; doesn't get exposed to the GC.
-      (emiti cg "add ~A, sp, #4" reg)
-      (emiti cg "str ~A, [sp, #-4]!" reg)
+
+      ;; Work out the stack-bottom argument, skipping the live reg
+      ;; bitset and any protected register values
+      (emiti cg "add r0, sp, #4")
+      (for-registers general-registers general-register-count
+                     (lambda (r) (emiti cg "addne r0, r0, #4")))
+
+      (emiti cg "str r0, [sp, #-4]!")
       (emiti cg "bl ~A" gc-label)
+
+      ;; Restore register bitset
       (emiti cg "ldr ~A, [sp], #4" reg))
 
-    ;; Restore live registers
-    (for-live-registers (reverse general-registers) "ldr~A ~A, [sp], #4")
+    (let* ((rev-gen-regs (reverse general-registers)))
+      ;; Restore protected registers
+      (for-registers rev-gen-regs general-register-count
+                     (lambda (reg) (emiti cg "ldrne ~A, [sp], #4" reg)))
+
+      ;; Restore live registers
+      (for-registers rev-gen-regs 0
+                     (lambda (reg) (emiti cg "ldreq ~A, [sp], #4" reg))))
 
     (emiti cg "ldr lr, [sp], #4")
     (emiti cg "mov pc, lr")))
@@ -860,5 +887,5 @@
   (emit-alloc cg (string-concat (reg-asm-operand size)
                                 (scale-number-expr value-scale))
               value-scale (compiler-constant-value (attr-ref attrs 'tag-bits))
-              spare-regs)
+              spare-regs ())
   %alloc)
