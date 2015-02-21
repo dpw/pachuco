@@ -632,7 +632,10 @@
            (reg-asm-operand %init-mem-count) (reg-asm-operand len)
            (scale-number-expr scale))
     (emit-alloc cg %init-mem-count scale tag-bits
-                (list* %init-mem-ptr spare-regs) (list %init-mem-count))
+                (list* %init-mem-ptr spare-regs)
+                (if (attr-ref attrs 'protect)
+                    (list %init-mem-count %init-mem-val)
+                    (list %init-mem-count)))
     (emiti cg "str ~A, [~A]" (reg-asm-operand len) (reg-asm-operand %alloc))
 
     ;; Call the helper routine to clear the vector

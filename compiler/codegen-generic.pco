@@ -658,7 +658,8 @@
               (vec-address (unquote attrs) (unquote dest) (unquote dest-index))
               (unquote len))))
 
-(defmacro (define-vector-type name tag tag-bits scale from-vec-rep to-vec-rep)
+(defmacro (define-vector-type name tag tag-bits scale protect
+                              from-vec-rep to-vec-rep)
   (let* ((type-attrs (compound-symbol name "-type-attrs")))
     ;; define how to convert from the operators on a specific vector
     ;; type into generic vec operators
@@ -667,7 +668,8 @@
         (list (cons 'tag (unquote tag))
               (cons 'tag-bits (unquote tag-bits))
               (cons 'scale (unquote scale))
-              (cons 'header-size value-size)))
+              (cons 'header-size value-size)
+              (cons 'protect (unquote protect))))
 
       (define-codegen-simplify ((unquote (compound-symbol "make-" name))
                                 attrs len init)
@@ -698,10 +700,10 @@
                                                  len (unquote type-attrs)))
         (codegen-simplify-recurse form))))))
 
-(define-vector-type string string-tag string-tag-bits 0
+(define-vector-type string string-tag string-tag-bits 0 true
                     (lambda (form) (list 'raw->fixnum () form))
                     (lambda (form) (list 'fixnum->raw () form)))
-(define-vector-type vector vector-tag vector-tag-bits value-scale
+(define-vector-type vector vector-tag vector-tag-bits value-scale false
                     identity identity)
 
 ;;; Raw accesss to memory
