@@ -12,12 +12,12 @@ shift
 tar czf - $(echo "$*" | sed 's|no-interp!||g') $CL_COMPILER_SOURCES | ssh $BOOTSTRAP_HOST "
   CL_COMPILER_SOURCES=\"$CL_COMPILER_SOURCES\"
   export CL_COMPILER_SOURCES
-  cd /tmp
+  cd /var/tmp
   rm -rf pachuco-bootstrap
   mkdir pachuco-bootstrap
   cd pachuco-bootstrap
   tar xzf -
   $BOOTSTRAP_COMPILER_REMOTE $func $*
-  cd /tmp
+  cd /var/tmp
   rm -rf pachuco-bootstrap
 "

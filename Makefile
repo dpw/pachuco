@@ -22,8 +22,12 @@ ifeq ($(TARGET),arm)
 # ARM
 MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-arm.pco
 CODEGEN_SOURCES+=compiler/codegen-arm.pco
-else
 
+else ifeq ($(TARGET),mips)
+MACH_SOURCES+=compiler/mach-32bit.pco compiler/mach-mips32.pco
+CODEGEN_SOURCES+=compiler/codegen-mips32.pco
+
+else
 # x86
 STACK_REGIME=no-fp
 

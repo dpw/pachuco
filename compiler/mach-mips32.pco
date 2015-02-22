@@ -1,0 +1,30 @@
+;;; MIPS32 o32 machine definition
+
+;;; Registers
+
+(define-numbered-registers "%~D" 0 25 "$~D")
+(define-register %sp "$sp")
+(define-register %ra "$ra")
+
+(add-general-registers (list %2 %3 %4 %5 %6 %7 %8 %9 %10))
+
+;; By using a c-callee-saves reg for closure, we avoid having to
+;; restore it after calling C funcs.
+(define %closure %16)
+(define %funcres (first general-registers))
+
+(define %alloc %17)
+(define %threshold %18)
+
+(define register-globals (list (cons 'heap_alloc %alloc)
+                               (cons 'heap_threshold %threshold)))
+
+(defmacro (define-tag-check name tag tag-bits)
+  (quasiquote
+    (define-cc-operator ((unquote name) val) ()
+      (let* ((valreg (reg-asm-operand val)))
+        (emit cg "andi ~A, ~A, ~D" valreg valreg
+               (low-bits-mask (unquote tag-bits)))
+        (unless (= 0 (unquote tag))
+          (emit cg "xori ~A, ~A, ~D" valreg valreg (unquote tag))))
+      (eq-cc val %0 false))))
