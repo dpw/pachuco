@@ -774,6 +774,9 @@
   (identify-const-index-vec-op form attrs index))
 
 (define (emit-raw-vec-set!-ref-const-index cg attrs instrs vec index val)
+  (unless (number? index)
+    (emit-add cg vec index vec)
+    (set! index 0))
   (emit cg "~A ~A, ~D(~A)"
         (vector-ref instrs (attr-ref attrs 'scale))
         (reg-asm-operand val) index (reg-asm-operand vec)))
