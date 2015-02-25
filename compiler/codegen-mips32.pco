@@ -410,7 +410,7 @@
 ;; enclosed by a lambda that does the initialization.
 (define-operator (alloc-closure) ((temp-regs labelreg))
   (emit-alloc cg (* value-size (1+ (attr-ref attrs 'length))) value-scale
-              closure-tag-bits labelreg (cons labelreg spare-regs) ())
+              closure-tag-bits labelreg spare-regs ())
   (emit-mov cg (attr-ref attrs 'label) labelreg)
   (emit cg "sw ~A, (~A)" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emit-addu cg %alloc closure-tag result)
