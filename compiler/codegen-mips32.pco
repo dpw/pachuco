@@ -421,12 +421,13 @@
         (closure-slot-offset index) (reg-asm-operand closure)))
 
 (define (emit-check-nargs cg nparams bad-nargs-label)
-    ;; We trash %nargs here.  Which should be ok in any function taking a
-    ;; fixed number of arguments.
   (let* ((nargs (reg-asm-operand %nargs)))
-    (unless (= 0 nparams)
-      (emit cg "addiu ~A, ~A, -~D" nargs nargs (fixnum-representation nparams)))
-    (emit cg "bnez ~A, ~A" nargs bad-nargs-label)
+    (if (= 0 nparams)
+        (emit cg "bnez ~A, ~A" nargs bad-nargs-label)
+        (let* ((temp (reg-asm-operand (first general-registers))))
+          (emit cg "addiu ~A, ~A, -~D" temp nargs
+                (fixnum-representation nparams))
+          (emit cg "bnez ~A, ~A" temp bad-nargs-label)))
     (emit-nop cg)))
 
 (define-operator (raw-args-base) ()
