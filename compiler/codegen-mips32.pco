@@ -5,11 +5,17 @@
 
 ;; Is it an immediate that fits within a sign-extended 16-bit field?
 (define (immediate16? x)
-  (and (number? x)
-       (= 0 (logand (+ x 32768) -65536))))
+  (and (number? x) (= 0 (logand (+ x 32768) -65536))))
 
 (define (reg-imm16-operand-constraint operand)
   (immediate16? operand))
+
+;; Is it an immediate that fits within a zero-extended 16-bit field?
+(define (immediate16z? x)
+  (and (number? x) (= 0 (logand x -65536))))
+
+(define (reg-imm16z-operand-constraint operand)
+  (immediate16z? operand))
 
 ;; A fake operand constraint used with fixnum->raw and raw->fixnum
 (define (reg-imm-operand-constraint operand)
@@ -577,17 +583,17 @@
 
 ;;; Numbers
 
-(defmacro (define-simple-number-operator name fun)
+(defmacro (define-simple-number-operator name fun b-constraint)
   (quasiquote
-    (define-operator ((unquote name) a b) ()
+    (define-operator ((unquote name) a (b (unquote b-constraint))) ()
       ((unquote fun) cg a b result)
       result)))
 
-(define-simple-number-operator + emit-add)
-(define-simple-number-operator - emit-sub)
-(define-simple-number-operator logand emit-and)
-(define-simple-number-operator logior emit-or)
-(define-simple-number-operator logxor emit-xor)
+(define-simple-number-operator + emit-add reg-imm16)
+(define-simple-number-operator - emit-sub reg-imm16)
+(define-simple-number-operator logand emit-and reg-imm16z)
+(define-simple-number-operator logior emit-or reg-imm16z)
+(define-simple-number-operator logxor emit-xor reg-imm16z)
 
 (define-operator (* a b) ()
   (emit cg "sra ~A, ~A, ~D" (reg-asm-operand a) (reg-asm-operand a)
@@ -879,9 +885,9 @@
         (access-global cg "lw" result name temp)))
   result)
 
-(define-simple-number-operator raw-+ emit-addu)
-(define-simple-number-operator raw-- emit-subu)
-(define-simple-number-operator raw-logand emit-and)
+(define-simple-number-operator raw-+ emit-addu reg-imm16)
+(define-simple-number-operator raw-- emit-subu reg-imm16)
+(define-simple-number-operator raw-logand emit-and reg-imm16z)
 
 (define-operator (raw-alloc size) ((temp-regs tempreg))
   (emit-scale-number cg size value-scale size)
