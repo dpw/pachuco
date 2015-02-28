@@ -472,7 +472,9 @@
   (codegen-simplify-recurse form)
   (if (null? args)
       (if (eq? 'quote (car a))
+          ;; (- (quote x)) => (quote -x)
           (overwrite-form form (list 'quote (- (second a))))
+          ;; (- x) => (negate x)
           (rplaca form 'negate))
       (if (eq? 'quote (car a))
           ;; If the left-hand argument is a constant, we can't constant
@@ -487,7 +489,7 @@
             (overwrite-form form
               (if (= const 0)
                   expr
-                  (make-bin-op-expr '- expr (list 'quote (- const)))))))))
+                  (make-bin-op-expr '+ expr (list 'quote const))))))))
 
 (define-codegen-simplify ((eq? = /=) attrs a b)
   (codegen-simplify-recurse form)

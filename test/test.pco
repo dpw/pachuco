@@ -158,7 +158,8 @@
   (test-binary-operator - -x
     (assert-result (-x 10 1) 9)
     (assert-result (-x 10 0) 10)
-    (assert-result (-x 0 10) -10))
+    (assert-result (-x 0 10) -10)
+    (assert-result (-x 10 -4096) 4106))
 
   (assert-result (1+ 1) 2)
   (assert-result (1- 1) 0)

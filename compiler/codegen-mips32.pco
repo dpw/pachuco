@@ -80,15 +80,21 @@
 
 (define (emit-subu cg a b dest)
   (if (number? b)
-      (emit cg "addiu ~A, ~A, ~D" (reg-asm-operand dest)
-            (reg-asm-operand a) (- b))
+      (begin
+        (set! b (- b))
+        (unless (immediate16? b) (error "cannot convert emit-subu into addiu"))
+        (emit cg "addiu ~A, ~A, ~D" (reg-asm-operand dest) (reg-asm-operand a)
+              b))
       (emit cg "subu ~A, ~A, ~A" (reg-asm-operand dest)
             (reg-asm-operand a) (reg-asm-operand b))))
 
 (define (emit-sub cg a b dest)
   (if (number? b)
-      (emit cg "addi ~A, ~A, ~D" (reg-asm-operand dest)
-            (reg-asm-operand a) (- b))
+      (begin
+        (set! b (- b))
+        (unless (immediate16? b) (error "cannot convert emit-sub into addi"))
+        (emit cg "addi ~A, ~A, ~D" (reg-asm-operand dest) (reg-asm-operand a)
+              b))
       (emit cg "sub ~A, ~A, ~A" (reg-asm-operand dest)
             (reg-asm-operand a) (reg-asm-operand b))))
 
@@ -590,7 +596,7 @@
       result)))
 
 (define-simple-number-operator + emit-add reg-imm16)
-(define-simple-number-operator - emit-sub reg-imm16)
+(define-simple-number-operator - emit-sub reg)
 (define-simple-number-operator logand emit-and reg-imm16z)
 (define-simple-number-operator logior emit-or reg-imm16z)
 (define-simple-number-operator logxor emit-xor reg-imm16z)
@@ -886,7 +892,7 @@
   result)
 
 (define-simple-number-operator raw-+ emit-addu reg-imm16)
-(define-simple-number-operator raw-- emit-subu reg-imm16)
+(define-simple-number-operator raw-- emit-subu reg)
 (define-simple-number-operator raw-logand emit-and reg-imm16z)
 
 (define-operator (raw-alloc size) ((temp-regs tempreg))
