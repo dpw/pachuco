@@ -689,10 +689,8 @@
 
 ;;; Misc runtime support
 
-(define-operator (fixnum->raw (val reg-imm)) ()
-  (if (number? val)
-      (set! val (ash val (- number-tag-bits)))
-      (emit-sar cg number-tag-bits val))
+(define-operator (fixnum->raw val) ()
+  (emit-sar cg number-tag-bits val)
   val)
 
 (define-operator (raw->fixnum (val reg-imm)) ()

@@ -855,13 +855,10 @@
 
 ;;; Misc runtime support
 
-(define-operator (fixnum->raw (val reg-imm)) ()
-  (if (number? val)
-      (ash val (- number-tag-bits))
-      (begin
-        (emit cg "sra ~A, ~A, ~D" (reg-asm-operand result) (reg-asm-operand val)
-              number-tag-bits)
-        result)))
+(define-operator (fixnum->raw val) ()
+  (emit cg "sra ~A, ~A, ~D" (reg-asm-operand result) (reg-asm-operand val)
+        number-tag-bits)
+  result)
 
 (define-operator (raw->fixnum (val reg-imm)) ()
   (if (number? val)

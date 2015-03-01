@@ -417,20 +417,22 @@
 (define (make-bin-op-expr op expr a)
   (if expr (list op () expr a) a))
 
-(define (numberish-value n)
-  (cond ((number? n) n)
-        ((character? n) (character-code n))
-        (true (error "expected number in arithmetic expression, got ~A" n))))
+(define (numberish-value expr)
+  (and (eq? 'quote (car expr))
+       (let* ((n (second expr)))
+         (cond ((number? n) n)
+               ((character? n) (character-code n))
+               (true (error "expected number, got ~A" n))))))
 
 ;; scan the arguments, separating them into constants and
 ;; non-constants.  Fold the constants, and construct an expression for
 ;; the non-constants from simple two-argument operations,
 (define (simplify-binary-op args op f expr const)
   (if (not (null? args))
-      (let* ((a (car args)))
-        (if (eq? 'quote (car a))
-            (simplify-binary-op (cdr args) op f expr
-                                (funcall f const (numberish-value (second a))))
+      (let* ((a (car args))
+             (aval (numberish-value a)))
+        (if aval
+            (simplify-binary-op (cdr args) op f expr (funcall f const aval))
             (simplify-binary-op (cdr args) op f
                                 (make-bin-op-expr op expr a) const)))
       (cons expr const)))
@@ -476,20 +478,22 @@
           (overwrite-form form (list 'quote (- (second a))))
           ;; (- x) => (negate x)
           (rplaca form 'negate))
-      (if (eq? 'quote (car a))
-          ;; If the left-hand argument is a constant, we can't constant
-          ;; fold it away.  Instead, fold any other constants into it.
-          (let* ((expr-const (simplify-binary-op args '- (function -) a
-                                                 (numberish-value (second a)))))
-            (rplaca (cdr a) (cdr expr-const))
-            (overwrite-form form (car expr-const)))
-          (let* ((expr-const (simplify-binary-op args '- (function -) a 0))
-                 (expr (car expr-const))
-                 (const (cdr expr-const)))
-            (overwrite-form form
-              (if (= const 0)
-                  expr
-                  (make-bin-op-expr '+ expr (list 'quote const))))))))
+      (let* ((aval (numberish-value a)))
+        (if aval
+            ;; If the left-hand argument is a constant, we can't
+            ;; constant fold it away.  Instead, fold any other
+            ;; constants into it.
+            (let* ((expr-const
+                     (simplify-binary-op args '- (function -) a aval)))
+              (rplaca (cdr a) (cdr expr-const))
+              (overwrite-form form (car expr-const)))
+            (let* ((expr-const (simplify-binary-op args '- (function -) a 0))
+                   (expr (car expr-const))
+                   (const (cdr expr-const)))
+              (overwrite-form form
+                (if (= const 0)
+                    expr
+                    (make-bin-op-expr '+ expr (list 'quote const)))))))))
 
 (define-codegen-simplify ((eq? = /=) attrs a b)
   (codegen-simplify-recurse form)
@@ -776,6 +780,11 @@
 
 (define-codegen-simplify (compiler-constant ccsym)
   (overwrite-form form (list 'quote (compiler-constant-value ccsym))))
+
+(define-codegen-simplify (fixnum->raw attrs val)
+  (codegen-simplify val)
+  (let* ((n (numberish-value val)))
+    (when n (overwrite-form form (list 'raw (acons 'value n ()))))))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:
