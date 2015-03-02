@@ -17,10 +17,6 @@
 (define (reg-imm16z-operand-constraint operand)
   (immediate16z? operand))
 
-;; A fake operand constraint used with fixnum->raw and raw->fixnum
-(define (reg-imm-operand-constraint operand)
-  (immediate? operand))
-
 (defmacro (reg-asm-operand reg)
   (list 'register-variant reg 0))
 
@@ -860,13 +856,10 @@
         number-tag-bits)
   result)
 
-(define-operator (raw->fixnum (val reg-imm)) ()
-  (if (number? val)
-      (fixnum-representation val)
-      (begin
-        (emit cg "sll ~A, ~A, ~D" (reg-asm-operand result) (reg-asm-operand val)
-              number-tag-bits)
-        result)))
+(define-operator (raw->fixnum val) ()
+  (emit cg "sll ~A, ~A, ~D" (reg-asm-operand result) (reg-asm-operand val)
+        number-tag-bits)
+  result)
 
 (define-operator (raw-label) ()
   (emit-mov cg (attr-ref attrs 'name) result)

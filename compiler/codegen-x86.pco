@@ -694,9 +694,7 @@
   val)
 
 (define-operator (raw->fixnum (val reg-imm)) ()
-  (if (number? val)
-      (set! val (fixnum-representation val))
-      (emit-shl cg number-tag-bits val))
+  (emit-shl cg number-tag-bits val)
   val)
 
 (define-operator (raw-label) () (attr-ref attrs 'name))
