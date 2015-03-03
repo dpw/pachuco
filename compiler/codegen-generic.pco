@@ -756,6 +756,7 @@
 (define compiler-constants
   (list (cons 'value-size value-size)
         (cons 'value-scale value-scale)
+        (cons 'max-tag-bits max-tag-bits)
         (cons 'number-tag number-tag)
         (cons 'number-tag-bits number-tag-bits)
         (cons 'special-tag special-tag)

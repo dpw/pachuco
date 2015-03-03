@@ -6,6 +6,8 @@
 
 ;;; Value representation
 
+(defconstant max-tag-bits 4)
+
 ;;; number-tag must be all zeros
 (defconstant number-tag #b0000)
 (defconstant number-tag-bits 4)

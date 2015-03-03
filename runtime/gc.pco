@@ -2,9 +2,6 @@
 ;; to the appropriate type-specific GC routine
 (define gc-type-table #f)
 
-;; the mask to apply to a value to get an index into gc-type-table
-(define gc-raw-tag-mask #f)
-
 ;; are we inside the GC?
 (define gc-active #f)
 
@@ -17,13 +14,17 @@
 ;; the top address of the stack.  This is set in compiled-runtime-main.
 (define gc-stack-top)
 
+;; the mask to apply to a value to get an index into gc-type-table
+(defmacro gc-raw-tag-mask
+  '(fixnum->raw (1- (ash 1 (compiler-constant max-tag-bits)))))
+
 (define (gc-live val)
   ;; handle a live value
   (if (and (<= gc-from-space val) (< val gc-from-space-end))
       ;; value could be a reference into from-space; dispatch to a
       ;; type-specific GC routine
       (funcall (raw-vector-ref gc-type-table
-                               (raw->fixnum (raw-logand gc-raw-tag-mask val)))
+                               (raw->fixnum (raw-logand val gc-raw-tag-mask)))
                val)
       ;; not a reference to from-space, therefore a reference into
       ;; to-space, to quoted data, or a fixnum.  we don't need to do
@@ -77,7 +78,7 @@
   ;; all done
   (set! gc-active (set! gc-from-space (set! gc-from-space-end
     (set! gc-to-space (set! gc-to-space-end
-      (set! gc-type-table (set! gc-raw-tag-mask #f)))))))
+      (set! gc-type-table #f))))))
 
   (when (/= 0 (raw->fixnum (raw-global-ref verbose_gc)))
     (formout stderr "done, ~D bytes live~%" live-bytes)))
@@ -101,7 +102,7 @@
 
   (set! gc-from-space (set! gc-from-space-end
     (set! gc-to-space (set! gc-to-space-end
-      (set! gc-type-table (set! gc-raw-tag-mask #f))))))
+      (set! gc-type-table #f)))))
 
   res)
 
@@ -110,7 +111,7 @@
   ;; declarations, and produces a construct-gc-type-table definition
 
   ;; first, produce the code to generate tags-bits-funcs.  This is a
-  ;; list of triples, each one giving a type tag, it tag-bits, and
+  ;; list of triples, each one giving a type tag, it's tag-bits, and
   ;; the copier function.
   (define tbf-form
     (mapfor (type-gc type-gcs)
@@ -128,12 +129,10 @@
       (define tag-bits-funcs (list
         (list 0 0 (lambda (val)
                     (error "unknown type with tag ~D"
-                           (raw->fixnum (raw-logand gc-raw-tag-mask val)))))
+                           (raw->fixnum (raw-logand val gc-raw-tag-mask)))))
         . (unquote tbf-form)))
-      (define max-bits (max$ 0 (mapfor (tbf tag-bits-funcs) (second tbf))))
-      (define table-size (ash 1 max-bits))
+      (define table-size (ash 1 (compiler-constant max-tag-bits)))
       (set! gc-type-table (make-vector table-size #f))
-      (set! gc-raw-tag-mask (fixnum->raw (1- table-size)))
 
       ;; fill in the table
       (dolist (tbf tag-bits-funcs)
