@@ -769,20 +769,22 @@
 
 (define (lambda-assign-genlabel form)
   (let* ((indirect-label (gen-label)))
-    (form-attr-set! form 'labels
-                    (cons indirect-label (if (form-attr form 'vararg)
-                                             ()
-                                             (list (gen-label)))))
+    (form-attr-set! form 'indirect-label indirect-label)
+    (form-attr-set! form 'direct-label
+                    (if (form-attr form 'vararg)
+                        indirect-label
+                        (gen-label)))
     indirect-label))
 
 (define (lambda-assign-label varrec form)
   (let* ((indirect-label (make-label-for (varrec-name varrec)
                                          indirect-function-label-prefix)))
-    (form-attr-set! form 'labels
-      (cons indirect-label (if (form-attr form 'vararg)
-                               ()
-                               (list (make-label-for (varrec-name varrec)
-                                             direct-function-label-prefix)))))
+    (form-attr-set! form 'indirect-label indirect-label)
+    (form-attr-set! form 'direct-label
+                    (if (form-attr form 'vararg)
+                        indirect-label
+                        (make-label-for (varrec-name varrec)
+                                      direct-function-label-prefix)))
     indirect-label))
 
 ;;; Produce a debug form
