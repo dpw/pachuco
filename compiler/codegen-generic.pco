@@ -530,23 +530,13 @@
 
 ;;; Function calls
 
-(define (func-lambda-attrs func)
+(define (func-lambda func)
   (cond ((eq? 'ref (first func))
-         (let* ((l (varrec-lambda (varrec-origin (form-attr func 'varrec)))))
-           (and l (second l))))
+         (varrec-lambda (varrec-origin (form-attr func 'varrec))))
         ((member? (first func) '(lambda static-lambda))
-         (second func))
+         func)
         (true
          false)))
-
-(define (func-lambda-attr func attr if-not-resolved)
-  (let* ((attrs (func-lambda-attrs func)))
-    (if attrs
-        (attr-ref-defaulting attrs attr if-not-resolved)
-        if-not-resolved)))
-
-(define (func-needs-closure? func)
-  (not (null? (func-lambda-attr func 'closure true))))
 
 (define (check-call-nargs lambda-attrs nargs)
   (let* ((expected (length (attr-ref lambda-attrs 'params)))
@@ -574,12 +564,12 @@
 ;;
 ;; - Working out which label to branch to.
 (define (prepare-for-call cg func nargs)
-  (let* ((attrs (func-lambda-attrs func)))
-    (if attrs
+  (let* ((l (func-lambda func)))
+    (if l
         (begin
-          (when (attr-ref attrs 'vararg)
+          (when (form-attr l 'vararg)
             (emit-mov cg (fixnum-representation nargs) %nargs))
-          (attr-ref attrs 'direct-label))
+          (form-attr l 'direct-label))
         (begin
           (emit-mov cg (fixnum-representation nargs) %nargs)
           false))))
@@ -588,9 +578,14 @@
   (dolist (arg (reverse args))
     (emit-frame-spill cg (trashy-codegen arg cg false)
                       (first general-registers)))
-  (if (func-needs-closure? func)
-      (trashy-codegen-into-reg func cg false %closure)
-      (trashy-codegen-discarding func cg false)))
+  ;; static-lambdas don't need a closure.  But if the function is a
+  ;; static-lambda, not merely a reference to one, then we still need
+  ;; to ensure we codegen its body.
+  (if (eq? 'static-lambda (first func))
+      (trashy-codegen-discarding func cg false)
+      (let* ((l (func-lambda func)))
+        (unless (and l (eq? 'static-lambda (first l)))
+          (trashy-codegen-into-reg func cg false %closure)))))
 
 (define-operator (static-lambda) ()
   (codegen-lambda-todo cg form)
