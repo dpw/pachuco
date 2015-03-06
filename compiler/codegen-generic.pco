@@ -538,15 +538,15 @@
         (true
          false)))
 
-(define (check-call-nargs lambda-attrs nargs)
-  (let* ((expected (length (attr-ref lambda-attrs 'params)))
+(define (check-call-nargs l nargs)
+  (let* ((expected (length (form-attr l 'params)))
          (at-least ""))
-    (when (if (attr-ref lambda-attrs 'vararg)
+    (when (if (form-attr l 'vararg)
               (begin
                 (set! at-least "at least ")
                 (< nargs expected))
               (/= nargs expected))
-      (let* ((varrec (attr-ref-defaulting lambda-attrs 'self false)))
+      (let* ((varrec (form-attr-defaulting l 'self false)))
         (error "wrong number of arguments in call to ~A (expected ~A~D, got ~D)"
                (if varrec (varrec-name varrec) "anonymous function")
                at-least expected nargs)))))
@@ -567,6 +567,7 @@
   (let* ((l (func-lambda func)))
     (if l
         (begin
+          (check-call-nargs l nargs)
           (when (form-attr l 'vararg)
             (emit-mov cg (fixnum-representation nargs) %nargs))
           (form-attr l 'direct-label))

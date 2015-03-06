@@ -133,6 +133,9 @@
 (define (form-attr form attr)
   (attr-ref (second form) attr))
 
+(define (form-attr-defaulting form attr default)
+  (attr-ref-defaulting (second form) attr default))
+
 (define (form-attr-set! form attr val)
   (rplaca (cdr form) (attr-set! (second form) attr val))
   val)
