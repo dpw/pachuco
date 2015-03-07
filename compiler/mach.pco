@@ -64,8 +64,11 @@
 
 (define label-counter 0)
 
+(define (gen-prefixed-label prefix)
+  (format "~A~D" prefix (set! label-counter (1+ label-counter))))
+
 (define (gen-label)
-  (format ".L~D" (set! label-counter (1+ label-counter))))
+  (gen-prefixed-label ".L"))
 
 (define (label-name-ok? name i)
   (or (= i (string-length name))
@@ -76,10 +79,12 @@
 (define (make-label-for sym prefix)
   ;; map a lisp symbol to an assembly label, returning a gen-labelled
   ;; label if necessary
-  (let* ((name (subject-language-symbol-name sym)))
-    (if (label-name-ok? name 0)
-        (format "~A_~A" prefix (string-replace name "-" "_"))
-        (format "~A~D" prefix (set! label-counter (1+ label-counter))))))
+  (if sym
+      (let* ((name (subject-language-symbol-name sym)))
+        (if (label-name-ok? name 0)
+            (format "~A_~A" prefix (string-replace name "-" "_"))
+            (gen-prefixed-label prefix)))
+      (gen-prefixed-label prefix)))
 
 ;;; General codegen bits
 

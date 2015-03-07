@@ -726,7 +726,7 @@
          (vals (mapfor (cvarrec (form-attr form 'closure))
                  (set! len (1+ len))
                  (list 'ref (varrec-source cvarrec)))))
-    (decompose-lambda form len (lambda-assign-genlabel form) vals)))
+    (decompose-lambda form len false vals)))
 
 (define (fill-closures-define-lambda varrec form)
   (let* ((body (third form))
@@ -736,14 +736,19 @@
                         (val (closure-slot-value varrec index source)))
                    (set! index (1+ index))
                    val))))
-    (decompose-lambda form index (if (varrec-top-level? varrec)
-                                     (lambda-assign-label varrec form)
-                                     (lambda-assign-genlabel form))
+    (decompose-lambda form index (and (varrec-top-level? varrec)
+                                      (varrec-name varrec))
                       vals)))
 
-(define (decompose-lambda form len indirect-label closure-vals)
-  (let* ((body (third form)))
+(define (decompose-lambda form len name closure-vals)
+  (let* ((body (third form))
+         (indirect-label (make-label-for name indirect-function-label-prefix)))
     (form-attr-set! form 'body body)
+    (form-attr-set! form 'indirect-label indirect-label)
+    (form-attr-set! form 'direct-label
+                    (if (form-attr form 'vararg)
+                        indirect-label
+                        (make-label-for name direct-function-label-prefix)))
     (if (= len 0)
         (begin
           (rplaca form 'static-lambda)
@@ -766,26 +771,6 @@
 
           (varrec-set-misc! source (acons varrec index fixups))
           (quoted-unspecified)))))
-
-(define (lambda-assign-genlabel form)
-  (let* ((indirect-label (gen-label)))
-    (form-attr-set! form 'indirect-label indirect-label)
-    (form-attr-set! form 'direct-label
-                    (if (form-attr form 'vararg)
-                        indirect-label
-                        (gen-label)))
-    indirect-label))
-
-(define (lambda-assign-label varrec form)
-  (let* ((indirect-label (make-label-for (varrec-name varrec)
-                                         indirect-function-label-prefix)))
-    (form-attr-set! form 'indirect-label indirect-label)
-    (form-attr-set! form 'direct-label
-                    (if (form-attr form 'vararg)
-                        indirect-label
-                        (make-label-for (varrec-name varrec)
-                                      direct-function-label-prefix)))
-    indirect-label))
 
 ;;; Produce a debug form
 
