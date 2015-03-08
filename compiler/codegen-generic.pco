@@ -588,13 +588,27 @@
         (unless (and l (eq? 'static-lambda (first l)))
           (trashy-codegen-into-reg func cg false %closure)))))
 
+(define (static-lambda-closure-label l)
+  (let* ((cl (form-attr-defaulting l 'closure-label false)))
+    (if (string? cl)
+        cl
+        (begin
+          (set! cl (make-label-for cl closure-label-prefix))
+          (form-attr-set! l 'closure-label cl)))))
+
 (define-operator (static-lambda) ()
   (codegen-lambda-todo cg form)
-  (let* ((label (gen-label)))
+  (let* ((label (static-lambda-closure-label form)))
     (emit-data cg label closure-tag-bits)
     (emit-literal cg (attr-ref attrs 'indirect-label))
     (emit cg ".text")
     (format "~A+~D" label closure-tag)))
+
+(define (varrec-const-operand varrec)
+  (let* ((l (varrec-lambda varrec)))
+    (and l
+         (eq? 'static-lambda (first l))
+         (format "~A+~D" (static-lambda-closure-label l) closure-tag))))
 
 (define-codegen-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))

@@ -389,7 +389,10 @@
   (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg))
   val)
 
-(define-operator (ref) () (varrec-operand (attr-ref attrs 'varrec) cg))
+(define-operator (ref) ()
+  (let* ((varrec (attr-ref attrs 'varrec)))
+    (or (varrec-const-operand varrec)
+        (varrec-operand varrec cg))))
 
 ;;; Function call-related internals
 

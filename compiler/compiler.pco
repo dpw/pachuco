@@ -755,6 +755,7 @@
     (if (= len 0)
         (begin
           (rplaca form 'static-lambda)
+          (when name (form-attr-set! form 'closure-label name))
           (rplacd (cdr form) ()))
         (rplacd (cdr form) (cons (make-alloc-closure len indirect-label)
                                  closure-vals)))

@@ -131,5 +131,6 @@
 
 (define indirect-function-label-prefix "li")
 (define direct-function-label-prefix "ld")
+(define closure-label-prefix "lc")
 (define variable-label-prefix "lv")
 (define symbol-label-prefix "ls")

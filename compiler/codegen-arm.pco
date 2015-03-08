@@ -442,7 +442,11 @@
   val)
 
 (define-operator (ref) ()
-  (access-varrec cg (attr-ref attrs 'varrec) "ldr" result result)
+  (let* ((varrec (attr-ref attrs 'varrec))
+         (const (varrec-const-operand varrec)))
+    (if const
+        (emit-mov cg const result)
+        (access-varrec cg varrec "ldr" result result)))
   result)
 
 ;;; Comparisons
