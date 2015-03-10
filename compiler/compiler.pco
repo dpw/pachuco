@@ -646,11 +646,14 @@
 
 (define-fill-closures (begin varrecs . body)
   (dolist (varrec varrecs)
-    ;; A varrec can have no fixups, or it can be that fixups are not
-    ;; applicable to the varrec.  We need to distinguish these two
-    ;; cases.  The obvious way would be to use nil for no fixups, and
-    ;; false for not applicable.  But CL conflates nil and false.  So
-    ;; the no-fixups symbol is used to indicate no fixups.
+    ;; The "misc" field in a varrec is used to store the list of
+    ;; dependent fixups.  We also need a distinguished value to mean
+    ;; that dependent fixups have already been processed (i.e. the
+    ;; "define" was encountered).  And at the end of the phase, we
+    ;; want to leave the "misc" field set to falsey.  Furthermore, CL
+    ;; conflates nil and false.  So the no-fixups symbol is used to
+    ;; indicate no fixups, and nil/false indicates that the fixups
+    ;; have been processed.
     (varrec-set-misc! varrec 'no-fixups))
 
   ;; Move the define-lambdas to the front of the begin body.  This is

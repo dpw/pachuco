@@ -399,12 +399,16 @@
 ;;; Variables
 
 (define-codegen-simplify (define varrec val)
-  ;; convert define for top-level variables to set!
-  (when (varrec-top-level? varrec) (rplaca form 'set!))
-  ;; make the varrec into a normal attribute, in order to use
-  ;; define-operator
-  (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-simplify val))
+  (codegen-simplify val)
+  (if (varrec-const? varrec)
+      ;; don't need the define for a constant varrec
+      (overwrite-form form val)
+      (begin
+        ;; convert define for top-level variables to set!
+         (when (varrec-top-level? varrec) (rplaca form 'set!))
+         ;; make the varrec into a normal attribute, in order to use
+         ;; define-operator
+         (rplaca (cdr form) (acons 'varrec varrec ())))))
 
 (define-codegen-simplify ((set! ref) varrec . rest)
   ;; make the varrec into a normal attribute, in order to use
@@ -603,6 +607,10 @@
     (emit-literal cg (attr-ref attrs 'indirect-label))
     (emit cg ".text")
     (format "~A+~D" label closure-tag)))
+
+(define (varrec-const? varrec)
+  (let* ((l (varrec-lambda varrec)))
+    (and l (eq? 'static-lambda (first l)))))
 
 (define (varrec-const-operand varrec)
   (let* ((l (varrec-lambda varrec)))
