@@ -57,12 +57,13 @@
       (when (eq? 'arity-mismatch (varrec-name varrec))
         (codegen-set-arity-mismatch-varrec! cg varrec))
 
-      (let* ((label (make-label-for (varrec-name varrec)
-                                    variable-label-prefix)))
-        (varrec-set-index! varrec label)
-        (emit-comment cg "top-level ~S" (varrec-name varrec))
-        (emit-label label)
-        (emit-literal cg unspecified-representation)))
+      (unless (varrec-const? varrec)
+        (let* ((label (make-label-for (varrec-name varrec)
+                                      variable-label-prefix)))
+          (varrec-set-index! varrec label)
+          (emit-comment cg "top-level ~S" (varrec-name varrec))
+          (emit-label label)
+          (emit-literal cg unspecified-representation))))
 
     (emit-label "top_level_end"))
 
