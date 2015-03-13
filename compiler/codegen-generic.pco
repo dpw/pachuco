@@ -264,15 +264,15 @@
 (define (flush-labels-and-jumps cg)
   (let* ((jump-func (codegen-deferred-jump cg)))
     (when jump-func
+      (codegen-set-deferred-jump! cg false)
       (funcall jump-func)
       (let* ((here-labels (codegen-here-labels cg)))
         (if (null? here-labels)
             (emit-comment cg "unreachable")
-            (dolist (l here-labels)
-              (emit-without-flushing "~A:" l))))
-
-      (codegen-set-deferred-jump! cg false)
-      (codegen-set-here-labels! cg ()))))
+            (begin
+              (codegen-set-here-labels! cg ())
+              (dolist (l here-labels)
+                (emit-without-flushing "~A:" l))))))))
 
 (define (codegen-function-tail cg out-frame-base)
   ;; signals unreachable code after the tail form of a function,

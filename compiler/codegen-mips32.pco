@@ -10,10 +10,6 @@
 (define (reg-imm16-operand-constraint operand)
   (immediate16? operand))
 
-;; Is it a register or zero, so that $0 can be used
-(define (reg-zero-operand-constraint operand)
-  (eq? 0 operand))
-
 ;; Is it an immediate that fits within a zero-extended 16-bit field?
 (define (immediate16z? x)
   (and (number? x) (= 0 (logand x -65536))))
@@ -112,35 +108,23 @@
   (make-cc (cc-branch cc) (cc-value cc) (not (cc-negate cc))))
 
 (define (eq-cc a b negate)
-  (if (not (eq? 0 b))
-      (make-cc
-        (lambda (cg label negate)
-          (emit-without-flushing "~A ~A, ~A, ~A" (if negate "bne" "beq")
-                                 (reg-asm-operand a) (reg-asm-operand b) label)
-          (emit-without-flushing "nop"))
-        (lambda (cg reg negate)
-          (let* ((aa a) (bb b))
-            ;; aa must not overlap with reg, but bb can
-            (when (eq? aa reg) (set! aa bb) (set! bb reg))
-            (emit-xor cg aa bb aa)
-            (emit-mov cg true-representation reg)
-            (emit cg "~A ~A, $0, ~A" (if negate "movz" "movn")
-                  (reg-asm-operand reg) (reg-asm-operand aa))
-            (emit-or cg reg false-representation reg)))
-        negate)
-      (make-cc
-        (lambda (cg label negate)
-          (emit-without-flushing "~A ~A, ~A" (if negate "bnez" "beqz")
-                                  (reg-asm-operand a) label)
-          (emit-without-flushing "nop"))
-        (lambda (cg reg negate)
-          (if negate
-              (emit-without-flushing "sltu ~A, $0, ~A"
-                                     (reg-asm-operand reg) (reg-asm-operand a))
-              (emit-without-flushing "sltiu ~A, ~A, 1"
-                                     (reg-asm-operand reg) (reg-asm-operand a)))
-          (emit-or cg reg false-representation reg))
-        negate)))
+  (make-cc
+    (lambda (cg label negate)
+      (when (number? b)
+        (unless (eq? b 0) (emit-xor cg a b a))
+        (set! b %0))
+      (emit-without-flushing "~A ~A, ~A, ~A" (if negate "bne" "beq")
+                             (reg-asm-operand a) (reg-asm-operand b) label)
+      (emit-without-flushing "nop"))
+    (lambda (cg reg negate)
+      (unless (eq? b 0) (emit-xor cg a b a))
+      (let* ((rego (reg-asm-operand reg)))
+      (if negate
+          (emit-without-flushing "sltu ~A, $0, ~A" rego (reg-asm-operand a))
+          (emit-without-flushing "sltiu ~A, ~A, 1" rego (reg-asm-operand a)))
+      (emit-without-flushing "sll ~A, ~A, ~D" rego rego special-tag-bits)
+      (emit-or cg reg false-representation reg)))
+    negate))
 
 ;; The subu below should really be a sub, but that breaks some of the
 ;; gc address comparisons.  They should be fixed.
@@ -176,9 +160,9 @@
   (emit-xor cg reg false-representation reg)
   (emit-smart-branch cg (eq-cc reg %0 true) out-frame-base tlabel flabel))
 
-(define-cc-operator (eq? a (b reg-zero)) () (eq-cc a b false))
-(define-cc-operator (= a (b reg-zero)) () (eq-cc a b false))
-(define-cc-operator (/= a (b reg-zero)) () (eq-cc a b true))
+(define-cc-operator (eq? a (b reg-imm16z)) () (eq-cc a b false))
+(define-cc-operator (= a (b reg-imm16z)) () (eq-cc a b false))
+(define-cc-operator (/= a (b reg-imm16z)) () (eq-cc a b true))
 
 (define-cc-operator (< a b) () (lt-cc a b false))
 (define-cc-operator (> a b) () (lt-cc b a false))

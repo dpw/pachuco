@@ -22,9 +22,5 @@
 (defmacro (define-tag-check name tag tag-bits)
   (quasiquote
     (define-cc-operator ((unquote name) val) ()
-      (let* ((valreg (reg-asm-operand val)))
-        (emit cg "andi ~A, ~A, ~D" valreg valreg
-               (low-bits-mask (unquote tag-bits)))
-        (unless (= 0 (unquote tag))
-          (emit cg "xori ~A, ~A, ~D" valreg valreg (unquote tag))))
-      (eq-cc val %0 false))))
+      (emit-and cg val (low-bits-mask (unquote tag-bits)) val)
+      (eq-cc val (unquote tag) false))))
