@@ -507,6 +507,18 @@
   (when (eq? 'quote (car a))
     (overwrite-form form (list (car form) attrs b a))))
 
+;; This reorders inequalities for better code generation.  But it turns
+;; out we don't have any that need reordering.
+;;
+;;(define-codegen-simplify ((> < >= <=) attrs a b)
+;;  (codegen-simplify-recurse form)
+;;  ;; always move a quoted arg to the second position, for better code
+;;  ;; generation
+;;  (when (eq? 'quote (car a))
+;;    (overwrite-form form (list (car (assoc (car form)
+;;                                      '((> . <) (< . >) (<= . >=) (>= . <=))))
+;;                               attrs b a))))
+
 ;; Distinguish the constant-bit-count for of ash from the
 ;; variable-bit-count form, because they lead to significantly
 ;; different code.
