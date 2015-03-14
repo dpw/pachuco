@@ -130,10 +130,10 @@
 (define (lt-cc a b negate)
   (make-cc negate
     (lambda (cg label negate)
-      (let* ((areg (reg-asm-operand a)))
-        (emit-without-flushing "slt ~A, ~A, ~A" areg areg (reg-asm-operand b))
-        (emit-without-flushing "~A ~A, ~A" (if negate "beqz" "bnez") areg label)
-        (emit-without-flushing "nop")))
+      (emit-slt cg a b a)
+      (emit-without-flushing "~A ~A, ~A" (if negate "beqz" "bnez")
+                             (reg-asm-operand a) label)
+      (emit-without-flushing "nop"))
     (lambda (cg reg negate)
       (emit-slt cg a b reg)
       (let* ((rego (reg-asm-operand reg)))
@@ -162,10 +162,10 @@
 (define-cc-operator (= a (b reg-imm16z)) () (eq-cc a b false))
 (define-cc-operator (/= a (b reg-imm16z)) () (eq-cc a b true))
 
-(define-cc-operator (< a b) () (lt-cc a b false))
+(define-cc-operator (< a (b reg-imm16)) () (lt-cc a b false))
 (define-cc-operator (> a b) () (lt-cc b a false))
 (define-cc-operator (<= a b) () (lt-cc b a true))
-(define-cc-operator (>= a b) () (lt-cc a b true))
+(define-cc-operator (>= a (b reg-imm16)) () (lt-cc a b true))
 
 ;;; Stack layout:
 ;;;
