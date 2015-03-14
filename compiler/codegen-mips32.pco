@@ -99,16 +99,16 @@
 ;; function to generate a branch on the cc, a function to convert the
 ;; cc to a value, and a flag to indicate whether the cc was negated.
 
-(define-struct cc ((constructor make-cc branch value negate))
+(define-struct cc ((constructor make-cc negate branch value))
+  negate
   branch
-  value
-  negate)
+  value)
 
 (define (negate-cc cc)
-  (make-cc (cc-branch cc) (cc-value cc) (not (cc-negate cc))))
+  (make-cc (not (cc-negate cc)) (cc-branch cc) (cc-value cc)))
 
 (define (eq-cc a b negate)
-  (make-cc
+  (make-cc negate
     (lambda (cg label negate)
       (when (number? b)
         (unless (eq? b 0) (emit-xor cg a b a))
@@ -119,17 +119,16 @@
     (lambda (cg reg negate)
       (unless (eq? b 0) (emit-xor cg a b a))
       (let* ((rego (reg-asm-operand reg)))
-      (if negate
-          (emit-without-flushing "sltu ~A, $0, ~A" rego (reg-asm-operand a))
-          (emit-without-flushing "sltiu ~A, ~A, 1" rego (reg-asm-operand a)))
-      (emit-without-flushing "sll ~A, ~A, ~D" rego rego special-tag-bits)
-      (emit-or cg reg false-representation reg)))
-    negate))
+        (if negate
+            (emit-without-flushing "sltu ~A, $0, ~A" rego (reg-asm-operand a))
+            (emit-without-flushing "sltiu ~A, ~A, 1" rego (reg-asm-operand a)))
+        (emit-without-flushing "sll ~A, ~A, ~D" rego rego special-tag-bits)
+        (emit-or cg reg false-representation reg)))))
 
 ;; The subu below should really be a sub, but that breaks some of the
 ;; gc address comparisons.  They should be fixed.
 (define (lt-cc a b negate)
-  (make-cc
+  (make-cc negate
     (lambda (cg label negate)
       (let* ((areg (reg-asm-operand a)))
         (emit-without-flushing "slt ~A, ~A, ~A" areg areg (reg-asm-operand b))
@@ -141,8 +140,7 @@
         (emit cg "sll ~A, ~A, ~D" rego rego special-tag-bits))
       (if negate
           (emit-xor cg reg true-representation reg)
-          (emit-or cg reg false-representation reg)))
-    negate))
+          (emit-or cg reg false-representation reg)))))
 
 (define (emit-branch cg cc label)
   (funcall (cc-branch cc) cg label (cc-negate cc)))
