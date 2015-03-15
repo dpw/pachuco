@@ -107,41 +107,6 @@
 (define (negate-cc cc)
   (make-cc (not (cc-negate cc)) (cc-branch cc) (cc-value cc)))
 
-(define (eq-cc a b negate)
-  (make-cc negate
-    (lambda (cg label negate)
-      (when (number? b)
-        (unless (eq? b 0) (emit-xor cg a b a))
-        (set! b %0))
-      (emit-without-flushing "~A ~A, ~A, ~A" (if negate "bne" "beq")
-                             (reg-asm-operand a) (reg-asm-operand b) label)
-      (emit-without-flushing "nop"))
-    (lambda (cg reg negate)
-      (unless (eq? b 0) (emit-xor cg a b a))
-      (let* ((rego (reg-asm-operand reg)))
-        (if negate
-            (emit-without-flushing "sltu ~A, $0, ~A" rego (reg-asm-operand a))
-            (emit-without-flushing "sltiu ~A, ~A, 1" rego (reg-asm-operand a)))
-        (emit-without-flushing "sll ~A, ~A, ~D" rego rego special-tag-bits)
-        (emit-or cg reg false-representation reg)))))
-
-;; The subu below should really be a sub, but that breaks some of the
-;; gc address comparisons.  They should be fixed.
-(define (lt-cc a b negate)
-  (make-cc negate
-    (lambda (cg label negate)
-      (emit-slt cg a b a)
-      (emit-without-flushing "~A ~A, ~A" (if negate "beqz" "bnez")
-                             (reg-asm-operand a) label)
-      (emit-without-flushing "nop"))
-    (lambda (cg reg negate)
-      (emit-slt cg a b reg)
-      (let* ((rego (reg-asm-operand reg)))
-        (emit cg "sll ~A, ~A, ~D" rego rego special-tag-bits))
-      (if negate
-          (emit-xor cg reg true-representation reg)
-          (emit-or cg reg false-representation reg)))))
-
 (define (emit-branch cg cc label)
   (funcall (cc-branch cc) cg label (cc-negate cc)))
 
@@ -162,10 +127,58 @@
 (define-cc-operator (= a (b reg-imm16z)) () (eq-cc a b false))
 (define-cc-operator (/= a (b reg-imm16z)) () (eq-cc a b true))
 
+(define (eq-cc a b negate)
+  (make-cc negate
+    (lambda (cg label negate)
+      (when (number? b)
+        (unless (eq? b 0) (emit-xor cg a b a))
+        (set! b %0))
+      (emit-without-flushing "~A ~A, ~A, ~A" (if negate "bne" "beq")
+                             (reg-asm-operand a) (reg-asm-operand b) label)
+      (emit-without-flushing "nop"))
+    (lambda (cg reg negate)
+      (unless (eq? b 0) (emit-xor cg a b a))
+      (let* ((rego (reg-asm-operand reg)))
+        (if negate
+            (emit-without-flushing "sltu ~A, $0, ~A" rego (reg-asm-operand a))
+            (emit-without-flushing "sltiu ~A, ~A, 1" rego (reg-asm-operand a)))
+        (emit-without-flushing "sll ~A, ~A, ~D" rego rego special-tag-bits)
+        (emit-or cg reg false-representation reg)))))
+
+;; Because MIPS has a slti instruction but no sgti instruction, < (and
+;; its negation >=) is easier to handle than > (respectively <=).
+;; When > has two register operands, we can simply reverse their
+;; order.  But when there is an immediate operand, we need to adjust
+;; it by 1 in order to convert the >/<= into a >=/<.  Due to immediate
+;; limits, this has to be done at codegen-simplify time.
+
+(define-codegen-simplify ((> <=) attrs a b)
+  (codegen-simplify-recurse form)
+  (let* ((bval (numberish-value b)))
+    (when bval
+      (rplaca form (cdr (assoc (car form) '((> . >=) (<= . <)))))
+      (rplaca (cdddr form) (list 'quote (1+ bval))))))
+
 (define-cc-operator (< a (b reg-imm16)) () (lt-cc a b false))
 (define-cc-operator (> a b) () (lt-cc b a false))
 (define-cc-operator (<= a b) () (lt-cc b a true))
 (define-cc-operator (>= a (b reg-imm16)) () (lt-cc a b true))
+
+(define (lt-cc a b negate)
+  (make-cc negate
+    (lambda (cg label negate)
+      (emit-slt cg a b a)
+      (emit-without-flushing "~A ~A, ~A" (if negate "beqz" "bnez")
+                             (reg-asm-operand a) label)
+      (emit-without-flushing "nop"))
+    (lambda (cg reg negate)
+      (emit-slt cg a b reg)
+      (let* ((rego (reg-asm-operand reg)))
+        (emit cg "sll ~A, ~A, ~D" rego rego special-tag-bits))
+      (if negate
+          (emit-xor cg reg true-representation reg)
+          (emit-or cg reg false-representation reg)))))
+
 
 ;;; Stack layout:
 ;;;
