@@ -10,6 +10,10 @@
 (define (reg-imm16-operand-constraint operand)
   (immediate16? operand))
 
+;; Is it a register or zero, so that $0 can be used
+(define (reg-zero-operand-constraint operand)
+  (eq? 0 operand))
+
 ;; Is it an immediate that fits within a zero-extended 16-bit field?
 (define (immediate16z? x)
   (and (number? x) (= 0 (logand x -65536))))
@@ -155,30 +159,45 @@
 (define-codegen-simplify ((> <=) attrs a b)
   (codegen-simplify-recurse form)
   (let* ((bval (numberish-value b)))
-    (when bval
+    (when (and bval (/= bval 0))
       (rplaca form (cdr (assoc (car form) '((> . >=) (<= . <)))))
       (rplaca (cdddr form) (list 'quote (1+ bval))))))
 
-(define-cc-operator (< a (b reg-imm16)) () (lt-cc a b false))
-(define-cc-operator (> a b) () (lt-cc b a false))
-(define-cc-operator (<= a b) () (lt-cc b a true))
-(define-cc-operator (>= a (b reg-imm16)) () (lt-cc a b true))
+(define-cc-operator (< a (b reg-imm16)) ()
+  (if (eq? 0 b)
+      (lt-cc a false 0 '("bltz" . "bgez") false)
+      (lt-cc a b b '("bnez" . "beqz") false)))
 
-(define (lt-cc a b negate)
+(define-cc-operator (>= a (b reg-imm16)) ()
+  (if (eq? 0 b)
+      (lt-cc a false 0 '("bltz" . "bgez") true)
+      (lt-cc a b b '("bnez" . "beqz") true)))
+
+(define-cc-operator (> a (b reg-zero)) ()
+  (if (eq? 0 b)
+      (lt-cc a false 1 '("blez" . "bgtz") true)
+      (lt-cc b a a '("bnez" . "beqz") false)))
+
+(define-cc-operator (<= a (b reg-zero)) ()
+  (if (eq? 0 b)
+      (lt-cc a false 1 '("blez" . "bgtz") false)
+      (lt-cc b a a '("bnez" . "beqz") true)))
+
+(define (lt-cc a branch-b value-b branch-instrs negate)
   (make-cc negate
     (lambda (cg label negate)
-      (emit-slt cg a b a)
-      (emit-without-flushing "~A ~A, ~A" (if negate "beqz" "bnez")
+      (when branch-b (emit-slt cg a branch-b a))
+      (emit-without-flushing "~A ~A, ~A"
+                             (if negate (cdr branch-instrs) (car branch-instrs))
                              (reg-asm-operand a) label)
       (emit-without-flushing "nop"))
     (lambda (cg reg negate)
-      (emit-slt cg a b reg)
+      (emit-slt cg a value-b reg)
       (let* ((rego (reg-asm-operand reg)))
         (emit cg "sll ~A, ~A, ~D" rego rego special-tag-bits))
       (if negate
           (emit-xor cg reg true-representation reg)
           (emit-or cg reg false-representation reg)))))
-
 
 ;;; Stack layout:
 ;;;
