@@ -286,8 +286,7 @@
 
 ;;; Literals
 
-(define-operator (raw) ()
-  (attr-ref attrs 'value))
+(define-operator (raw) () attrs)
 
 (define (quote-false? form)
   (and (eq? 'quote (car form)) (eq? (second form) #f)))
@@ -813,7 +812,7 @@
 (define-codegen-simplify (fixnum->raw attrs val)
   (codegen-simplify val)
   (let* ((n (numberish-value val)))
-    (when n (overwrite-form form (list 'raw (acons 'value n ()))))))
+    (when n (overwrite-form form (list 'raw n)))))
 
 ;;; We currently conflate character and numbers.  So eliminate
 ;;; character-related operators:

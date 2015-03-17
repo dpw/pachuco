@@ -659,9 +659,7 @@
     (let* ((indexval (second index)))
       (when (number? indexval)
         (rplaca form (compound-symbol (car form) "-const-index"))
-        (overwrite-form index (list 'raw
-                                    (acons 'value (vec-offset attrs indexval)
-                                           ())))))))
+        (overwrite-form index (list 'raw (vec-offset attrs indexval)))))))
 
 (define-codegen-simplify (raw-vec-set! attrs vec index val)
   (codegen-simplify-recurse form)

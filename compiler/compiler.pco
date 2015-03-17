@@ -866,8 +866,7 @@
 (define-comment-form (quote val)
   (list 'quote (if (string? val) (escape-string-literal val) val)))
 
-(define-comment-form (raw attrs)
-  (list 'raw (attr-ref attrs 'value)))
+(define-comment-form (raw attrs) form)
 
 (define-comment-form (ash-imm attrs n)
   (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
