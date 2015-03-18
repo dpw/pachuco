@@ -640,6 +640,11 @@
         (reg-asm-operand b))
   result)
 
+(define-operator (raw-* a b) ()
+  (emit cg "mul ~A, ~A, ~A" (reg-asm-operand result) (reg-asm-operand a)
+        (reg-asm-operand b))
+  result)
+
 (define-operator (negate a) ()
   ;; why not "sub"?  Because the compiler intentionally negates
   ;; 0x80000000.  That needs fixing first.

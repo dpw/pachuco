@@ -494,13 +494,18 @@
   (emiti cg "rsb ~A, ~A, #0" (reg-asm-operand result) (reg-asm-operand a))
   result)
 
-(define-operator (* a b) ((temp-regs temp))
-  ;; early versions of the ARM architecture (pre-v6) suggest that the
-  ;; operands of mul shouldn't be the same as the destination
-  (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand temp) (reg-asm-operand a)
+(define-operator (* a b) ()
+  (emiti cg "mov ~A, ~A, asr #~D" (reg-asm-operand a) (reg-asm-operand a)
         number-tag-bits)
-  (emiti cg "mul ~A, ~A, ~A" (reg-asm-operand result) (reg-asm-operand temp)
-        (reg-asm-operand b))
+  ;; early versions of the ARM architecture (pre-v6) suggest that the
+  ;; first operand of mul shouldn't be the same as the destination!
+  (emiti cg "mul ~A, ~A, ~A" (reg-asm-operand result) (reg-asm-operand b)
+        (reg-asm-operand a))
+  result)
+
+(define-operator (raw-* a b) ()
+  (emiti cg "mul ~A, ~A, ~A" (reg-asm-operand result) (reg-asm-operand b)
+        (reg-asm-operand a))
   result)
 
 (define-trashy-codegen (truncate attrs a b)

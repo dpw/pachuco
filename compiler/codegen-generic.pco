@@ -470,9 +470,12 @@
 (define-codegen-simplify (* attrs . args)
   (simplify-comm-binary-op form args (function *) 1
     (lambda (expr const)
-      (if (or (not expr) (<= const 0) (/= 0 (logand const (1- const))))
-          (make-bin-op-expr '* expr (list 'quote const))
-          (list 'ash-imm (acons 'shift (log2 const) ()) expr)))))
+      (cond ((and expr (> const 0) (= 0 (logand const (1- const))))
+             (list 'ash-imm (acons 'shift (log2 const) ()) expr))
+            ((not expr)
+             (list 'quote const))
+            (true
+             (list 'raw-* () expr (list 'raw const)))))))
 
 (define-codegen-simplify (- attrs a . args)
   (codegen-simplify-recurse form)

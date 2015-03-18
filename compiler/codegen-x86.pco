@@ -478,9 +478,11 @@
   a)
 
 (define-operator (* a (b reg-mem-imm)) ()
-  (if (number? b)
-      (set! b (ash b (- number-tag-bits)))
-      (emit-sar cg number-tag-bits a))
+  (emit-sar cg number-tag-bits a)
+  (emit-imul cg b a)
+  a)
+
+(define-operator (raw-* a (b reg-mem-imm)) ()
   (emit-imul cg b a)
   a)
 
