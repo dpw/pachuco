@@ -297,20 +297,22 @@
         (stack-param-offset cg 0))
   result)
 
-(define (emit-function-call cg func nargs)
-  (let* ((label (prepare-for-call cg func nargs)))
+(define (emit-function-call cg attrs)
+  (when (attr-ref attrs 'needs-nargs)
+    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
+  (let* ((label (attr-ref attrs 'label)))
     (if label
-        (emiti cg "bl ~A @ ~S" label (comment-form func))
+        (emiti cg "bl ~A" label)
         (begin
           (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
                  closure-tag)
           (emiti cg "mov lr, pc")
           (emiti cg "mov pc, r0")))))
 
-(define-codegen (call attrs func . args)
+(define-codegen (call attrs . args)
   (with-saved-frame-base cg
-    (codegen-call-args cg func args)
-    (emit-function-call cg func (length args)))
+    (codegen-call-args cg attrs args)
+    (emit-function-call cg attrs))
   (emit-restore-%closure cg)
   %funcres)
 
@@ -331,10 +333,12 @@
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
-(define (emit-function-jump cg func nargs)
-  (let* ((label (prepare-for-call cg func nargs)))
+(define (emit-function-jump cg attrs)
+  (when (attr-ref attrs 'needs-nargs)
+    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
+  (let* ((label (attr-ref attrs 'label)))
     (if label
-        (emiti cg "b ~A @ ~S" label (comment-form func))
+        (emiti cg "b ~A" label)
         (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag))
     (emit-ltorg cg)))
 
@@ -349,25 +353,25 @@
         (true
          (error "cowardly refusing big emit-copy-stack"))))
 
-(define (codegen-tail-call cg func args out-arg-count out-param-offset regs)
+(define (codegen-tail-call cg attrs args out-arg-count out-param-offset regs)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (copy-tail-call-args cg out-param-offset out-arg-count regs)
-  (emit-function-jump cg func out-arg-count)
+  (emit-function-jump cg attrs)
   (emit-ltorg cg))
 
-(define-codegen-discarding (tail-call attrs func . args)
-  (codegen-call-args cg func args)
+(define-codegen-discarding (tail-call attrs . args)
+  (codegen-call-args cg attrs args)
   (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (length args)))
-    (codegen-tail-call cg func args out-arg-count
+         (out-arg-count (attr-ref attrs 'nargs)))
+    (codegen-tail-call cg attrs args out-arg-count
                        (asm-operand (stack-param-offset cg (- in-arg-count
                                                               out-arg-count)))
                        general-registers)
     (codegen-function-tail cg out-frame-base)))
 
-(define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
-  (codegen-call-args cg func args)
-  (let* ((out-arg-count (length args))
+(define-codegen-discarding (varargs-tail-call attrs arg-count . args)
+  (codegen-call-args cg attrs args)
+  (let* ((out-arg-count (attr-ref attrs 'nargs))
          (out-param-offset-reg (first general-registers))
          (out-param-offset (reg-asm-operand out-param-offset-reg)))
     (trashy-codegen-into-reg arg-count cg false out-param-offset-reg)
@@ -375,7 +379,7 @@
           (scale-number-expr value-scale))
     (emiti cg "add ~A, ~A, #~D" out-param-offset out-param-offset
           (stack-param-offset cg (- out-arg-count)))
-    (codegen-tail-call cg func args out-arg-count out-param-offset
+    (codegen-tail-call cg attrs args out-arg-count out-param-offset
                        (cdr general-registers))
     (codegen-function-tail cg out-frame-base)))
 
@@ -391,7 +395,7 @@
         (scale-number-expr value-scale))
   (emiti cg "sub sp, sp, ~A~A" (reg-asm-operand after-arg-count)
         (scale-number-expr value-scale))
-  (emit-function-jump cg (fifth form) 0)
+  (emit-function-jump cg attrs)
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 

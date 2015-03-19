@@ -57,7 +57,7 @@
   (emit cg "ret")
   (codegen-function-tail cg out-frame-base))
 
-(define (codegen-tail-call func retaddr out-arg-count out-retaddr
+(define (codegen-tail-call attrs retaddr out-arg-count out-retaddr
                            regs cg)
   (let* ((tmpreg (first regs))
          (retaddr-reg (second regs)))
@@ -65,12 +65,12 @@
     (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
     (emit-lea cg out-retaddr %sp)
     (emit-mov cg retaddr-reg (mem-operand %sp))
-    (emit-call-or-jump cg "jmp" func out-arg-count)))
+    (emit-call-or-jump cg "jmp" attrs)))
 
-(define-codegen-discarding (tail-call attrs func . args)
-  (codegen-call-args cg func args)
+(define-codegen-discarding (tail-call attrs . args)
+  (codegen-call-args cg attrs args)
   (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (length args))
+         (out-arg-count (attr-ref attrs 'nargs))
          (retaddr (return-address-slot cg))
          (out-retaddr (reindex-operand retaddr (- in-arg-count out-arg-count))))
     (if (= in-arg-count out-arg-count)
@@ -78,15 +78,15 @@
           (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
           (emit-reset-frame-base cg 1)
-          (emit-call-or-jump cg "jmp" func out-arg-count))
-        (codegen-tail-call func retaddr out-arg-count out-retaddr
+          (emit-call-or-jump cg "jmp" attrs))
+        (codegen-tail-call attrs retaddr out-arg-count out-retaddr
                            general-registers cg))
     (codegen-function-tail cg out-frame-base)))
 
-(define-codegen-discarding (varargs-tail-call attrs arg-count func . args)
-  (codegen-call-args cg func args)
+(define-codegen-discarding (varargs-tail-call attrs arg-count . args)
+  (codegen-call-args cg attrs args)
   (let* ((in-arg-count-reg (first general-registers))
-         (out-arg-count (length args))
+         (out-arg-count (attr-ref attrs 'nargs))
          (retaddr (return-address-slot cg)))
     ;; here we assume that the arg-count is just a ref, and so won't
     ;; access %closure
@@ -95,7 +95,8 @@
     (emit-lea cg (reoffset-2-operand retaddr in-arg-count-reg
                                      (* value-size (- out-arg-count)))
               in-arg-count-reg)
-    (codegen-tail-call func retaddr out-arg-count (mem-operand in-arg-count-reg)
+    (codegen-tail-call attrs retaddr out-arg-count
+                       (mem-operand in-arg-count-reg)
                        (cdr general-registers) cg)
     (codegen-function-tail cg out-frame-base)))
 
@@ -111,7 +112,7 @@
   (emit-mov cg (return-address-slot cg) retaddr)
   (emit-lea cg (reoffset-operand (return-address-slot cg) before-arg-count) %sp)
   (emit-mov cg retaddr (mem-operand %sp))
-  (emit-call-or-jump cg "jmp" (fifth form) 0)
+  (emit-call-or-jump cg "jmp" attrs)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)

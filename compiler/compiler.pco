@@ -850,8 +850,12 @@
 
 ;;; Produce a comment form
 
+(define (comment-forms forms)
+  (mapfor (form forms) (comment-form form)))
+
 (define (comment-form-recurse form)
-  (list* (car form) (mapfor (subform (cddr form)) (comment-form subform))))
+  (cons (car form) (comment-forms (cddr form))))
+
 (define-walker comment-form ())
 
 (define-comment-form (begin . rest) '(begin etc.))
@@ -870,3 +874,6 @@
 
 (define-comment-form (ash-imm attrs n)
   (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
+
+(define-comment-form ((call tail-call varargs-tail-call) attrs . args)
+  (list* (first form) (second form) (comment-forms (cddr form))))

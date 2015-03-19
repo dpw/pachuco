@@ -108,12 +108,13 @@
           (lambda ()
             (emit-smart-label cg bad-nargs-label)
             (emit-function-prologue cg)
-            (trashy-codegen-discarding (quasiquote
+            (let* ((call (quasiquote
                (tail-call ((nparams . 2))
-                 (ref ((varrec . (unquote (codegen-arity-mismatch-varrec cg)))))
+                 (ref (unquote (codegen-arity-mismatch-varrec cg)))
                  (quote (unquote nparams))
-                 (arg-count ())))
-                                       cg false)))
+                 (arg-count ())))))
+              (codegen-simplify call)
+              (trashy-codegen-discarding call cg false))))
         (emit-function-label cg (attr-ref attrs 'direct-label))))
 
     (emit-function-prologue cg)
@@ -574,38 +575,68 @@
   (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
   val)
 
-;; prepare-for-call does all the work to make calls to
-;; statically-known functions fast:
+;; Do all the compile-time magic needed to make statically-known
+;; function calls fast:
 ;;
 ;; - Checking the number of arguments at compile time.
 ;;
 ;; - Storing the number of arguments in %nargs
 ;;
 ;; - Working out which label to branch to.
-(define (prepare-for-call cg func nargs)
-  (let* ((l (func-lambda func)))
-    (if l
-        (begin
-          (check-call-nargs l nargs)
-          (when (form-attr l 'vararg)
-            (emit-mov cg (fixnum-representation nargs) %nargs))
-          (form-attr l 'direct-label))
-        (begin
-          (emit-mov cg (fixnum-representation nargs) %nargs)
-          false))))
+;;
+;; - Decide whether the closure needs computing
+(define (simplify-call form func pre-func-cons args)
+  (codegen-simplify-recurse form)
+  (let* ((nargs (length args))
+         (needs-nargs true)
+         (needs-closure true)
+         (label false)
+         (l (func-lambda func)))
+    (when l
+      (check-call-nargs l nargs)
+      (unless (form-attr l 'vararg) (set! needs-nargs false))
+      (set! label (form-attr l 'direct-label))
 
-(define (codegen-call-args cg func args)
-  (dolist (arg (reverse args))
-    (emit-frame-spill cg (trashy-codegen arg cg false)
-                      (first general-registers)))
-  ;; static-lambdas don't need a closure.  But if the function is a
-  ;; static-lambda, not merely a reference to one, then we still need
-  ;; to ensure we codegen its body.
-  (if (eq? 'static-lambda (first func))
-      (trashy-codegen-discarding func cg false)
-      (let* ((l (func-lambda func)))
-        (unless (and l (eq? 'static-lambda (first l)))
-          (trashy-codegen-into-reg func cg false %closure)))))
+      (when (eq? 'static-lambda (first l))
+        ;; Remove func argument
+        (rplacd pre-func-cons args)
+        (set! needs-closure false)
+
+        ;; need to evaluate the func argument if a direct
+        ;; static-lambda, so that code gets generated for it
+        (when (eq? 'static-lambda (first func))
+          (let* ((old-form (cons (car form) (cdr form))))
+            (overwrite-form form (list 'begin () func old-form))
+            (set! form old-form)))))
+
+    (rplaca (cdr form)
+            (list* (cons 'nargs nargs)
+                   (cons 'needs-nargs needs-nargs)
+                   (cons 'needs-closure needs-closure)
+                   (cons 'label label)
+                   (second form)))))
+
+(define-codegen-simplify ((call tail-call) attrs func . args)
+  (simplify-call form func (cdr form) args))
+
+(define-codegen-simplify (varargs-tail-call attrs arg-count func . args)
+  (simplify-call form func (cddr form) args))
+
+(define-codegen-simplify (raw-jump-with-arg-space attrs
+                                before-arg-count after-arg-count bodyfunc)
+  (simplify-call form bodyfunc (cdddr form) ()))
+
+(define (codegen-call-args cg attrs args)
+  (labels ((for-args (args)
+             (unless (null? args)
+               (for-args (cdr args))
+               (emit-frame-spill cg (trashy-codegen (car args) cg false)
+                                 (first general-registers)))))
+    (if (attr-ref attrs 'needs-closure)
+        (begin
+          (for-args (cdr args))
+          (trashy-codegen-into-reg (car args) cg false %closure))
+        (for-args args))))
 
 (define (static-lambda-closure-label l)
   (let* ((cl (form-attr-defaulting l 'closure-label false)))
