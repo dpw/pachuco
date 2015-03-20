@@ -108,13 +108,14 @@
           (lambda ()
             (emit-smart-label cg bad-nargs-label)
             (emit-function-prologue cg)
-            (let* ((call (quasiquote
-               (tail-call ((nparams . 2))
-                 (ref (unquote (codegen-arity-mismatch-varrec cg)))
-                 (quote (unquote nparams))
-                 (arg-count ())))))
-              (codegen-simplify call)
-              (trashy-codegen-discarding call cg false))))
+            (let* ((expr (quasiquote
+               (return ((nparams . (unquote nparams)))
+                       (call ()
+                             (ref (unquote (codegen-arity-mismatch-varrec cg)))
+                             (quote (unquote nparams))
+                             (arg-count ()))))))
+              (codegen-simplify expr)
+              (trashy-codegen-discarding expr cg false))))
         (emit-function-label cg (attr-ref attrs 'direct-label))))
 
     (emit-function-prologue cg)
