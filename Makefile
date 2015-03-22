@@ -106,7 +106,7 @@ $(2)-gc-test-run: build/$(2)-gc-test
 	$$<
 
 $(2)-arity-mismatch-test-run: build/$(2)-arity-mismatch-test
-	( $$< ; [ $$$$? -ge 128 ] ) 2>/dev/null
+	[ "$$$$( ( $$< 2>&1 ; [ $$$$? -ge 128 ] || echo 'wrong exit code' ) | sed 's|^Aborted$$$$||' )" = "expected 2 arguments, got 1" ]
 
 $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	$(1) expand $(RUNTIME) $(SL_COMPILER_SOURCES)
