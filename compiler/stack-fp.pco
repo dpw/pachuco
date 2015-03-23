@@ -70,7 +70,7 @@
     (emit-lea cg out-retaddr %sp)
     (emit-mov cg retaddr-reg (mem-operand %sp))
     (emit-mov cg saved-fp-reg %bp)
-    (emit-call-or-jump cg "jmp" attrs)))
+    (emit-call-or-jump cg attrs "jmp")))
 
 (define-codegen-discarding (tail-call attrs . args)
   (codegen-call-args cg attrs args)
@@ -83,7 +83,7 @@
           (copy-tail-call-args cg out-arg-count out-retaddr
                                (first general-registers))
           (emit cg "leave")
-          (emit-call-or-jump cg "jmp" attrs))
+          (emit-call-or-jump cg attrs "jmp"))
         (codegen-tail-call cg attrs retaddr out-arg-count out-retaddr
                            general-registers))
     (codegen-function-tail cg out-frame-base)))
@@ -117,13 +117,13 @@
   (emit-lea cg (reoffset-operand (return-address-slot cg) before-arg-count) %sp)
   (emit-mov cg (mem-operand %bp) %bp)
   (emit-mov cg retaddr (mem-operand %sp))
-  (emit-call-or-jump cg "jmp" attrs)
+  (emit-call-or-jump cg attrs "jmp")
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov cg func %closure)
-  (emit cg "leave ; jmp *~A"
-        (value-sized (tagged-operand closure-tag %closure 0)))
+  (emit cg "leave")
+  (emit-indirect-call-or-jump cg "jmp")
   (codegen-function-tail cg out-frame-base))
 
 ;;; C-callable program wrapper

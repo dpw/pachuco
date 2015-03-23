@@ -297,22 +297,26 @@
         (stack-param-offset cg 0))
   result)
 
-(define (emit-function-call cg attrs)
-  (when (attr-ref attrs 'needs-nargs)
-    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
-  (let* ((label (attr-ref attrs 'label)))
-    (if label
-        (emiti cg "bl ~A" label)
-        (begin
-          (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
-                 closure-tag)
-          (emiti cg "mov lr, pc")
-          (emiti cg "mov pc, r0")))))
+(define (emit-direct-call-or-jump cg call label)
+  (if call
+      (emiti cg "bl ~A" label)
+      (emiti cg "b ~A" label)))
+
+(define (emit-indirect-call-or-jump cg call)
+  (if call
+      (begin
+        (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
+               closure-tag)
+        (emiti cg "mov lr, pc")
+        (emiti cg "mov pc, r0"))
+      (begin
+        (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag)
+        (emit-ltorg cg))))
 
 (define-codegen (call attrs . args)
   (with-saved-frame-base cg
     (codegen-call-args cg attrs args)
-    (emit-function-call cg attrs))
+    (emit-call-or-jump cg attrs true))
   (emit-restore-%closure cg)
   %funcres)
 
@@ -333,15 +337,6 @@
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
-(define (emit-function-jump cg attrs)
-  (when (attr-ref attrs 'needs-nargs)
-    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
-  (let* ((label (attr-ref attrs 'label)))
-    (if label
-        (emiti cg "b ~A" label)
-        (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag))
-    (emit-ltorg cg)))
-
 (define (copy-tail-call-args cg dest-offset count regs)
   (cond ((= count 0)
          (emiti cg "add sp, sp, ~A" dest-offset))
@@ -356,7 +351,7 @@
 (define (codegen-tail-call cg attrs args out-arg-count out-param-offset regs)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (copy-tail-call-args cg out-param-offset out-arg-count regs)
-  (emit-function-jump cg attrs))
+  (emit-call-or-jump cg attrs false))
 
 (define-codegen-discarding (tail-call attrs . args)
   (codegen-call-args cg attrs args)
@@ -394,15 +389,14 @@
         (scale-number-expr value-scale))
   (emiti cg "sub sp, sp, ~A~A" (reg-asm-operand after-arg-count)
         (scale-number-expr value-scale))
-  (emit-function-jump cg attrs)
+  (emit-call-or-jump cg attrs false)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov-maybe cg func %closure)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
-  (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag)
-  (emit-ltorg cg)
+  (emit-indirect-call-or-jump cg false)
   (codegen-function-tail cg out-frame-base))
 
 ;;; Variables

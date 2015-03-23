@@ -349,19 +349,17 @@
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
 
-(define (emit-call-or-jump cg insn attrs)
-  (when (attr-ref attrs 'needs-nargs)
-    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
-  (let* ((label (attr-ref attrs 'label)))
-    (if label
-        (emit cg "~A ~A" insn label)
-        (emit cg "~A *~A" insn
-              (value-sized (tagged-operand closure-tag %closure 0))))))
+(define (emit-direct-call-or-jump cg call-or-jump label)
+  (emit cg "~A ~A" call-or-jump label))
+
+(define (emit-indirect-call-or-jump cg call-or-jump)
+  (emit cg "~A *~A" call-or-jump
+        (value-sized (tagged-operand closure-tag %closure 0))))
 
 (define-codegen (call attrs . args)
   (with-saved-frame-base cg
     (codegen-call-args cg attrs args)
-    (emit-call-or-jump cg "call" attrs))
+    (emit-call-or-jump cg attrs "call"))
   (emit-restore-%closure cg)
   %funcres)
 

@@ -475,26 +475,20 @@
         (stack-param-offset cg 0))
   result)
 
-(define (emit-function-jump cg attrs instrd instri)
-  (when (attr-ref attrs 'needs-nargs)
-    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
-  (let* ((label (attr-ref attrs 'label)))
-    (if label
-        (begin
-          (emit cg "~A ~A" instrd label)
-          (emit-nop cg))
-        (emit-indirect-function-jump cg instri))))
+(define (emit-direct-call-or-jump cg call-or-jump label)
+  (emit cg "~A ~A" (car call-or-jump) label)
+  (emit-nop cg))
 
-(define (emit-indirect-function-jump cg instri)
+(define (emit-indirect-call-or-jump cg call-or-jump)
   (let* ((reg (reg-asm-operand (first general-registers))))
     (emit cg "lw ~A, -~D(~A)" reg closure-tag (reg-asm-operand %closure))
-    (emit cg "~A ~A" instri reg)
+    (emit cg "~A ~A" (cdr call-or-jump) reg)
     (emit-nop cg)))
 
 (define-codegen (call attrs . args)
   (with-saved-frame-base cg
     (codegen-call-args cg attrs args)
-    (emit-function-jump cg attrs "jal" "jalr $ra,"))
+    (emit-call-or-jump cg attrs '("jal" . "jalr $ra,")))
   (emit-restore-%closure cg)
   %funcres)
 
@@ -532,7 +526,7 @@
     (copy-tail-call-args cg out-arg-count (reg-asm-operand %sp) offset
                          (reg-asm-operand (first general-registers)))
     (emit cg "addiu $sp, $sp, ~D" offset)
-    (emit-function-jump cg attrs "j" "jr")
+    (emit-call-or-jump cg attrs '("j" . "jr"))
     (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
@@ -552,7 +546,7 @@
                                (reg-asm-operand (second general-registers)))
           (emit cg "move $sp, ~A" out-arg-base))
         (emit cg "addu $sp, $sp, ~A" out-arg-base))
-    (emit-function-jump cg attrs "j" "jr")
+    (emit-call-or-jump cg attrs '("j" . "jr"))
     (codegen-function-tail cg out-frame-base)))
 
 ;;; Apply support
@@ -566,14 +560,14 @@
   (emit-scale-number cg before-arg-count value-scale before-arg-count)
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
   (emit-addu cg %sp before-arg-count %sp)
-  (emit-function-jump cg attrs "j" "jr")
+  (emit-call-or-jump cg attrs '("j" . "jr"))
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov-maybe cg func %closure)
   (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
-  (emit-indirect-function-jump cg "jr"))
+  (emit-indirect-call-or-jump cg '(false . "jr")))
 
 ;;; Variables
 

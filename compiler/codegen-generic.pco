@@ -639,6 +639,14 @@
           (trashy-codegen-into-reg (car args) cg false %closure))
         (for-args args))))
 
+(define (emit-call-or-jump cg attrs call-or-jump)
+  (when (attr-ref attrs 'needs-nargs)
+    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
+  (let* ((label (attr-ref attrs 'label)))
+    (if label
+        (emit-direct-call-or-jump cg call-or-jump label)
+        (emit-indirect-call-or-jump cg call-or-jump))))
+
 (define (static-lambda-closure-label l)
   (let* ((cl (form-attr-defaulting l 'closure-label false)))
     (if (string? cl)
