@@ -171,6 +171,8 @@
   (assert-result (1- 1) 0)
 
   (assert-result (truncate -5 2) -2)
+  (assert-result (rem -3 2) -1)
+  (assert-result (mod -3 2) 1)
 
   (test-binary-operator ash ashx
     (assert-result (ashx 48 2) 192)
