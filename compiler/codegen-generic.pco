@@ -598,17 +598,28 @@
       (unless (form-attr l 'vararg) (set! needs-nargs false))
       (set! label (form-attr l 'direct-label))
 
-      (when (eq? 'static-lambda (first l))
+      (when (cond ((and (eq? 'ref (first func))
+                        (eq? 'self (varrec-mode (form-attr func 'varrec))))
+                   ;; self calls don't need to evaluate func, they
+                   ;; already have it in %closure
+                   true)
+
+                  ((eq? 'static-lambda (first l))
+                   ;; static-lambda calls don't need to evaluate func.
+                   ;; Exception, if it's a direct static-lambda form,
+                   ;; rather than a ref, we still need to ensure that
+                   ;; code gets generated for it
+                   (when (eq? 'static-lambda (first func))
+                     (let* ((old-form (cons (car form) (cdr form))))
+                       (overwrite-form form (list 'begin () func old-form))
+                       (set! form old-form)))
+                   true)
+
+                  (true
+                   false))
         ;; Remove func argument
         (rplacd pre-func-cons args)
-        (set! needs-closure false)
-
-        ;; need to evaluate the func argument if a direct
-        ;; static-lambda, so that code gets generated for it
-        (when (eq? 'static-lambda (first func))
-          (let* ((old-form (cons (car form) (cdr form))))
-            (overwrite-form form (list 'begin () func old-form))
-            (set! form old-form)))))
+        (set! needs-closure false)))
 
     (rplaca (cdr form)
             (list* (cons 'nargs nargs)
