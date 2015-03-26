@@ -84,7 +84,7 @@ cmd="$compiler compile $runtimedir/runtime.pco $runtimedir/cl-compat.pco $runtim
 [ -n "$verbose" ] && echo $cmd 1>&2
 
 if [ -n "$time" ] ; then
-    perf stat $cmd >/dev/null
+    eval perf stat $cmd >/dev/null
 else
     if [ -z "$dest" ] ; then
         echo "Destination file not specified" 1>&2
