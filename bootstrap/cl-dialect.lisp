@@ -282,6 +282,9 @@
 (defun make-vector-from-list (l)
   (make-array (length l) :initial-contents l))
 
+(defun vector-to-list (v)
+  (coerce v 'list))
+
 (defun code-character (a) (code-char a))
 (defun character-code (a) (char-code a))
 (defun character-alphanumeric? (a) (alphanumericp a))

@@ -588,6 +588,15 @@
   (copy-list-to-vector l vec 0)
   vec)
 
+(define (vector-to-list vec)
+  (define (aux index l)
+    (if (> index 0)
+        (begin
+          (set! index (1- index))
+          (aux index (cons (vector-ref vec index) l)))
+        l))
+  (aux (vector-length vec) ()))
+
 (define (vector . l)
   (make-vector-from-list l))
 
