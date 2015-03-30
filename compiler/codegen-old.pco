@@ -46,30 +46,6 @@
                                       (if (null? regs) false (first regs)))
                           out-frame-base tlabel flabel))
 
-;;; codegen functions called from outside this file
-
-(define (trashy-codegen form cg out-frame-base)
-  (codegen form cg out-frame-base general-registers (first general-registers)))
-
-(define (trashy-codegen-into-reg form cg out-frame-base reg)
-  (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
-                  reg))
-
-(define (trashy-codegen-discarding form cg out-frame-base)
-  ;; This is called for codegen of program fragments, so we need to do
-  ;; the reg-use pass
-  (reg-use-discarding form)
-  (codegen-discarding form cg out-frame-base general-registers))
-
-(defmacro (define-trashy-codegen template . body)
-  (quasiquote (definitions
-    (define-reg-use (unquote template)
-      (dolist (arg (cddr form)) (reg-use arg))
-      general-register-count)
-
-    (define-codegen (unquote template)
-      . (unquote body)))))
-
 ;;; Begin
 
 (define (reg-use-begin forms max-ru reg-use-last)
@@ -178,7 +154,7 @@
   ;; arguments of an operator
   (let* ((count 0)
          ;; calcuate the reg-use of each argument, and sort them into
-         ;; descending order - this is more-or-less the order we will
+         ;; descending order.  This is the basis for the order we will
          ;; evaluate them in operator-args-codegen
          (args-ru (sort (mapfor (arg (cddr form))
                           (let* ((index count))
@@ -195,6 +171,9 @@
     ;; intermediates holds the number of registers needed to hold
     ;; intermediate results during the evaluation of each argument.
     (dolist (arg-ru args-ru)
+      ;; The number of registers needed to evaluate this argument
+      ;; without spilling is the number of registers used by the
+      ;; argument itself, plus any intermediates.
       (let* ((ru (+ intermediates (cdr arg-ru))))
         (when (> ru max-ru) (set! max-ru ru))
         (if (> ru general-register-count)
@@ -254,7 +233,8 @@
                        ;; If the result of evaluating the argument
                        ;; doesn't meet the operand constraint, move it
                        ;; into the allocated register.
-                       (unless (funcall (elt operand-constraints arg) operand)
+                       (unless (funcall (funcall operand-constraints arg)
+                                        operand)
                          (emit-mov-maybe cg operand reg)
                          (set! operand reg))
 
@@ -290,7 +270,9 @@
 
     (labels ((for-trashy-args (trashy-args)
                (if (null? trashy-args)
-                   (codegen-non-trashy-args form cg regs operand-constraints)
+                   (codegen-non-trashy-args form cg regs
+                                            (lambda (arg)
+                                              (elt operand-constraints arg)))
                    (begin
                      ;; Evaluate a trashy-arg, saving its result on the
                      ;; stack.
@@ -485,6 +467,70 @@
       (emit-store-into-closure cg closure-reg index val-reg)
       (set! index (1+ index)))
     closure-reg))
+
+;;; codegen functions called from outside this file
+
+(define (trashy-codegen form cg out-frame-base)
+  (codegen form cg out-frame-base general-registers (first general-registers)))
+
+(define (trashy-codegen-into-reg form cg out-frame-base reg)
+  (emit-mov-maybe cg (codegen form cg out-frame-base general-registers reg)
+                  reg))
+
+(define (trashy-codegen-discarding form cg out-frame-base)
+  ;; This is called for codegen of program fragments, so we need to do
+  ;; the reg-use pass
+  (reg-use-discarding form)
+  (codegen-discarding form cg out-frame-base general-registers))
+
+(defmacro (define-trashy-codegen template . body)
+  (quasiquote (definitions
+    (define-reg-use (unquote template)
+      (operator-args-reg-use form)
+      general-register-count)
+
+    (define-codegen (unquote template)
+      . (unquote body)))))
+
+;; Generate code to evaluate subforms in some general contexts,
+;; e.g. tail calls, c-calls, etc.  Values can get pushed onto the
+;; stack, so it might need to be followed by an reset-frame-base.
+(define (trashy-codegen-subforms form cg regs operand-constraint)
+  (let* ((args (cddr form)))
+    ;; If the number of args is greater than the number of regs, then we
+    ;; need to pad the regs list with false entries
+    (when (> (length args) general-register-count)
+      (let* ((padded (make-vector (length args) false)))
+        (dolist (ntarg (form-attr form 'non-trashy-args))
+          (vector-set! padded ntarg (car regs))
+          (set! regs (cdr regs)))
+        (set! regs (nconc (vector-to-list padded) regs))))
+
+    (labels ((aux (trashy-args)
+               (if (null? trashy-args)
+                   (codegen-non-trashy-args form cg regs
+                                            (lambda (arg) operand-constraint))
+                   (begin
+                     ;; Evaluate a trashy-arg, saving its result on the
+                     ;; stack.
+                     (emit-frame-push cg (codegen (elt args (car trashy-args))
+                                                  cg false regs (first regs)))
+
+                     (let* ((operand (codegen-frame-base cg))
+                            (output-operands (aux (cdr trashy-args))))
+                       (set! operand (local-slot cg operand))
+                       ;; Apply operand-constraint to the result on
+                       ;; the stack
+                       (unless (funcall operand-constraint operand)
+                         (emit-mov-maybe cg operand (first regs))
+                         (set! operand (first regs)))
+                       (rplaca (nthcdr (car trashy-args) output-operands)
+                               operand)
+                       output-operands)))))
+      (aux (form-attr form 'trashy-args)))))
+
+(define (trashy-codegen-into-regs cg form regs)
+  (trashy-codegen-subforms form cg regs (function reg-operand-constraint)))
 
 (define-reg-use (call attrs . args)
   (dolist (arg args) (reg-use arg))

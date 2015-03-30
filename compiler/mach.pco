@@ -62,6 +62,9 @@
                       (cons r (fill-template (cdr template))))))))
     (fill-template template)))
 
+(define (move-to-front front others)
+  (append front (filterfor (other others) (not (member? other front)))))
+
 (define label-counter 0)
 
 (define (gen-prefixed-label prefix)

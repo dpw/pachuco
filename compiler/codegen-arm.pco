@@ -17,10 +17,30 @@
 (define (negate-cc cc)
   (logxor cc 1))
 
+;;; C calling convention
+
+(define c-callee-saved-regs (list %r4 %r5 %r6 %r7 %r8 %r9 %r10 %r11))
+(define c-call-arg-regs (list %r0 %r1 %r2 %r3))
+(define c-call-arg-max (length c-call-arg-regs))
+;;;We need to have all regs in c-call-arg-regs for trashy-codegen-into-regs
+(set! c-call-arg-regs (move-to-front c-call-arg-regs general-registers))
+
 ;;; Operand types
+
+;; ARM instructions operands are:
+;;
+;; - immediates, represented as a number or string (label)
+;;
+;; - registers, represented as a vector
+;;
+;; - a pseudo-operand type: stack slots, represented as a single
+;;   element list give the slot offset.  Of course, the MIPS
+;;   instruction sets does not have general support for memory
+;;   operands, so a mov from a stack slot is converted to a load.
 
 (define (register? x) (vector? x))
 (define (immediate? x) (or (number? x) (string? x)))
+(define (slot? x) (pair? x))
 
 ;; Detect ARM's funky rotated 8-bit immediates.  This doesn't capture
 ;; the full generality of such immediates - it only checks for
@@ -39,6 +59,8 @@
 
 (defmacro (reg-asm-operand reg)
   (list 'register-variant reg 0))
+
+(define (local-slot cg index) (list (stack-local-offset cg index)))
 
 (define (asm-operand x)
   (cond ((number? x) (format "#~D" x))
@@ -124,6 +146,8 @@
          (emiti cg "mov ~A, ~A" dest (reg-asm-operand src)))
         ((immediate8? src)
          (emiti cg "mov ~A, #~D" dest src))
+        ((slot? src)
+         (emiti cg "ldr ~A, [sp, #~D]" dest (first src)))
         (true
          (emiti cg "ldr ~A, =~A" dest src))))
 
@@ -181,11 +205,6 @@
     (emiti cg "bne ~A" loop-label)
 
     (emiti cg "mov pc, lr")))
-
-;;; C calling convention
-
-(define c-callee-saved-regs (list %r4 %r5 %r6 %r7 %r8 %r9 %r10 %r11))
-(define c-call-arg-regs (list %r0 %r1 %r2 %r3))
 
 ;;; C-callable program wrapper
 
@@ -505,13 +524,13 @@
   result)
 
 (define-trashy-codegen (truncate attrs a b)
-  (trashy-codegen-into-regs cg (list a b) c-call-arg-regs)
+  (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit-c-call cg "__aeabi_idiv")
   (emiti cg "mov r0, r0, asl #~D" number-tag-bits)
   %r0)
 
 (define-trashy-codegen (rem attrs a b)
-  (trashy-codegen-into-regs cg (list a b) c-call-arg-regs)
+  (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit-c-call cg "__aeabi_idivmod")
   %r1)
 
@@ -722,8 +741,12 @@
         (- (attr-ref attrs 'tag)))
   result)
 
+;; memmove takes the src and dest args in the opposite order
+(define memmove-arg-regs (list* (second c-call-arg-regs) (first c-call-arg-regs)
+                                (cddr c-call-arg-regs)))
+
 (define-trashy-codegen (copy-mem attrs src-addr dest-addr len)
-  (trashy-codegen-into-regs cg (list dest-addr src-addr len) c-call-arg-regs)
+  (trashy-codegen-into-regs cg form memmove-arg-regs)
   (let* ((len (reg-asm-operand (third c-call-arg-regs))))
     (emiti cg "mov ~A, ~A~A" len len
            (scale-number-expr (attr-ref attrs 'scale))))
@@ -871,9 +894,13 @@
     (emiti cg "mov sp, ~A" saved-sp)))
 
 (define-trashy-codegen (c-call attrs . args)
-  (trashy-codegen-into-regs cg args c-call-arg-regs)
-  (emit-c-call cg (attr-ref attrs 'c-function-name))
-  %r0)
+  (let* ((c-func (attr-ref attrs 'c-function-name)))
+    (when (> (length args) c-call-arg-max)
+      (error "too many args in call to ~A" c-func))
+
+    (trashy-codegen-into-regs cg form c-call-arg-regs)
+    (emit-c-call cg c-func)
+    %r0))
 
 (define-simple-number-operator raw-+ "add")
 (define-simple-number-operator raw-- "sub")

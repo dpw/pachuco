@@ -1,7 +1,27 @@
+;;; C calling convention
+
+(define c-callee-saved-regs (list %16 %17 %18 %19 %20 %21 %22 %23))
+(define c-call-arg-regs (list %4 %5 %6 %7))
+(define c-call-arg-max (length c-call-arg-regs))
+;;;We need to have all regs in c-call-arg-regs for trashy-codegen-into-regs
+(set! c-call-arg-regs (move-to-front c-call-arg-regs general-registers))
+
 ;;; Operand types
+
+;; MIPS instructions operands are:
+;;
+;; - immediates, represented as a number or string (label)
+;;
+;; - registers, represented as a vector
+;;
+;; - a pseudo-operand type: stack slots, represented as a single
+;;   element list give the slot offset.  Of course, the MIPS
+;;   instruction sets does not have general support for memory
+;;   operands, so a mov from a stack slot is converted to a load.
 
 (define (register? x) (vector? x))
 (define (immediate? x) (not (vector? x)))
+(define (slot? x) (pair? x))
 
 ;; Is it an immediate that fits within a sign-extended 16-bit field?
 (define (immediate16? x)
@@ -24,6 +44,8 @@
 (defmacro (reg-asm-operand reg)
   (list 'register-variant reg 0))
 
+(define (local-slot cg index) (list (stack-local-offset cg index)))
+
 (define (operand-using-reg? o r)
   (eq? o r))
 
@@ -42,10 +64,13 @@
   (emit cg "addiu $sp, $sp, ~D" value-size))
 
 (define (emit-mov cg src dest)
-  (if (register? src)
-      (emit cg "move ~A, ~A" (reg-asm-operand dest) (reg-asm-operand src))
-      (emit cg "~A ~A, ~A" (if (number? src) "li" "la") (reg-asm-operand dest)
-            src)))
+  (set! dest (reg-asm-operand dest))
+  (cond ((register? src)
+         (emit cg "move ~A, ~A" dest (reg-asm-operand src)))
+        ((slot? src)
+         (emit cg "lw ~A, ~D($sp)" dest (first src)))
+        (true
+         (emit cg "~A ~A, ~A" (if (number? src) "li" "la") dest src))))
 
 (define (emit-mov-maybe cg src dest)
   (if (register? src)
@@ -264,11 +289,6 @@
   (emit cg ".globl ~A" label)
   (emit cg ".type ~A, @function" label)
   (emit cg "~A:" label))
-
-;;; C calling convention
-
-(define c-callee-saved-regs (list %16 %17 %18 %19 %20 %21 %22 %23))
-(define c-call-arg-regs (list %4 %5 %6 %7))
 
 ;;; C-callable program wrapper
 
@@ -876,8 +896,12 @@
         (reg-asm-operand val) (reg-asm-operand addr))
   val)
 
+;; memmove takes the src and dest args in the opposite order
+(define memmove-arg-regs (list* (second c-call-arg-regs) (first c-call-arg-regs)
+                                (cddr c-call-arg-regs)))
+
 (define-trashy-codegen (copy-mem attrs src-addr dest-addr len)
-  (trashy-codegen-into-regs cg (list dest-addr src-addr len) c-call-arg-regs)
+  (trashy-codegen-into-regs cg form memmove-arg-regs)
   (let* ((len (third c-call-arg-regs)))
     (emit-scale-number cg len (attr-ref attrs 'scale) len))
   (emit cg "jal memmove")
@@ -928,7 +952,7 @@
   %alloc)
 
 (define-trashy-codegen (c-call attrs . args)
-  (trashy-codegen-into-regs cg args c-call-arg-regs)
+  (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit cg "jal ~A" (attr-ref attrs 'c-function-name))
   (emit-nop cg)
   %2)

@@ -716,20 +716,6 @@
 ;; tail positions
 (define-propagate ((raw-jump-with-arg-space raw-apply-jump) . rest))
 
-;;; Misc utility functions
-
-(define (trashy-codegen-into-regs cg forms regs)
-  (labels ((codegen-forms (forms regs)
-             (when (null? regs) (error "too many arguments for registers"))
-             (if (null? (cdr forms))
-                 (trashy-codegen-into-reg (car forms) cg false (car regs))
-                 (begin
-                   (emit-frame-spill cg (trashy-codegen (car forms) cg false)
-                                     (car regs))
-                   (codegen-forms (cdr forms) (cdr regs))
-                   (emit-frame-pop cg (car regs))))))
-    (unless (null? forms) (codegen-forms forms regs))))
-
 ;;; String/vector support
 
 (define (genericize-vec-op form name attrs)
