@@ -12,6 +12,7 @@
 ;; restore it after calling C funcs.
 (define %closure %16)
 (define %funcres (first general-registers))
+(define %return %ra)
 
 (define %alloc %17)
 (define %threshold %18)

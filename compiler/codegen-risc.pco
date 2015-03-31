@@ -1,0 +1,93 @@
+;; Code generation bits common to RISC-style architectures (used on
+;; ARM and MIPS currently)
+
+;; Instructions operands are:
+;;
+;; - immediates, represented as a number or string (label)
+;;
+;; - registers, represented as a vector
+;;
+;; - a pseudo-operand type: stack slots, represented as a single
+;;   element list give the slot offset.  Of course, RISC ISAs dos not
+;;   have general support for memory operands, so a mov from a stack
+;;   slot is converted to a load.
+
+(define (register? x) (vector? x))
+(define (immediate? x) (or (number? x) (string? x)))
+(define (slot? x) (pair? x))
+
+(defmacro (reg-asm-operand reg)
+  (list 'register-variant reg 0))
+
+(define (local-slot cg index) (list (stack-local-offset cg index)))
+
+(define (operand-using-reg? o r)
+  (eq? o r))
+
+;;; Stack layout:
+;;;
+;;; param N
+;;; ...
+;;; param 1
+;;; param 0  <--- %sp + frame-base
+;;; Return address
+;;; %closure (if present)
+;;; Local var 0
+;;; ...
+;;; Local var N
+;;; in-progress param N
+;;; in-progress param N-1
+;;; ...
+;;;
+;;; Functions are called with the closure in %closure, arg-count in
+;;; %nargs.  They return with the result in %funcres.
+
+(define (emit-function-prologue cg)
+  (codegen-set-frame-base! cg 0)
+  (emit-frame-push cg %return))
+
+(define (stack-param-offset cg index)
+  (* value-size (+ index (codegen-frame-base cg))))
+
+(define (stack-return-offset cg)
+  (stack-param-offset cg -1))
+
+(define (stack-closure-offset cg)
+  (stack-param-offset cg -2))
+
+(define (stack-local-offset cg index)
+  (* value-size (- (codegen-frame-base cg) index)))
+
+(define (closure-slot-offset index)
+  (- (* value-size (1+ index)) closure-tag))
+
+(define (emit-frame-spill cg operand reg)
+  (unless (register? operand)
+    (emit-mov-maybe cg operand reg)
+    (set! operand reg))
+  (emit-frame-push cg operand))
+
+;; Vector constant offsets
+
+(define (vec-offset attrs index)
+  (+ (ash index (attr-ref attrs 'scale))
+     (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag))))
+
+;; We fully calculate constant offsets during codegen-simplify, so
+;; that the operand constraints can accurately decide whether they fit
+;; into the relevant immediate fields.
+(define (identify-const-index-vec-op form attrs index)
+  (when (eq? 'quote (car index))
+    (let* ((indexval (second index)))
+      (when (number? indexval)
+        (rplaca form (compound-symbol (car form) "-const-index"))
+        (overwrite-form index (list 'raw (vec-offset attrs indexval)))))))
+
+(define-codegen-simplify (raw-vec-set! attrs vec index val)
+  (codegen-simplify-recurse form)
+  (identify-const-index-vec-op form attrs index))
+
+(define-codegen-simplify ((raw-vec-ref vec-address) attrs vec index)
+  (codegen-simplify-recurse form)
+  (identify-const-index-vec-op form attrs index))
+

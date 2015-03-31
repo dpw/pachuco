@@ -27,21 +27,6 @@
 
 ;;; Operand types
 
-;; ARM instructions operands are:
-;;
-;; - immediates, represented as a number or string (label)
-;;
-;; - registers, represented as a vector
-;;
-;; - a pseudo-operand type: stack slots, represented as a single
-;;   element list give the slot offset.  Of course, the MIPS
-;;   instruction sets does not have general support for memory
-;;   operands, so a mov from a stack slot is converted to a load.
-
-(define (register? x) (vector? x))
-(define (immediate? x) (or (number? x) (string? x)))
-(define (slot? x) (pair? x))
-
 ;; Detect ARM's funky rotated 8-bit immediates.  This doesn't capture
 ;; the full generality of such immediates - it only checks for
 ;; immediates that can fit in 8 bits with a shift.  But immediates
@@ -57,19 +42,11 @@
 ;; The offset_12 field also has a sign bit
 (define (offset12? x) (and (number? x) (= 0 (logand (abs x) -4096))))
 
-(defmacro (reg-asm-operand reg)
-  (list 'register-variant reg 0))
-
-(define (local-slot cg index) (list (stack-local-offset cg index)))
-
 (define (asm-operand x)
   (cond ((number? x) (format "#~D" x))
         ((string? x) x)
         ((vector? x) (reg-asm-operand x))
         (true (error "strange operand ~S" x))))
-
-(define (operand-using-reg? o r)
-  (eq? o r))
 
 (define (reg-imm8-operand-constraint operand)
   (immediate8? operand))
@@ -172,6 +149,16 @@
   (emiti cg "cmp ~A, #~A" (reg-asm-operand reg) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
+;; Stack handling
+
+(define (emit-offset-sp cg offset)
+  (emiti cg "add sp, sp, #~D" (* value-size offset)))
+
+(define (emit-restore-%closure cg)
+  (when (codegen-have-closure cg)
+    (emiti cg "ldr ~A, [sp, #~D]" (reg-asm-operand %closure)
+          (stack-closure-offset cg))))
+
 ;;; Helper init-mem function
 ;;;
 ;;; Init-mem functions are used by make-vec to clear the allocated
@@ -233,57 +220,6 @@
     (emit cg ".size lisp, .-lisp")
 
     (codegen-program-end cg)))
-
-;;; Stack layout:
-;;;
-;;; param N
-;;; ...
-;;; param 1
-;;; param 0  <--- %sp + frame-base
-;;; Return address
-;;; %closure (if present)
-;;; Local var 0
-;;; ...
-;;; Local var N
-;;; in-progress param N
-;;; in-progress param N-1
-;;; ...
-;;;
-;;; Functions are called with the closure in %closure, arg-count in
-;;; %nargs.  They return with the result in %funcres.
-
-(define (emit-function-prologue cg)
-  (codegen-set-frame-base! cg 0)
-  (emit-frame-push cg %lr))
-
-(define (stack-param-offset cg index)
-  (* value-size (+ index (codegen-frame-base cg))))
-
-(define (stack-return-offset cg)
-  (stack-param-offset cg -1))
-
-(define (stack-closure-offset cg)
-  (stack-param-offset cg -2))
-
-(define (stack-local-offset cg index)
-  (* value-size (- (codegen-frame-base cg) index)))
-
-(define (closure-slot-offset index)
-  (- (* value-size (1+ index)) closure-tag))
-
-(define (emit-offset-sp cg offset)
-  (emiti cg "add sp, sp, #~D" (* value-size offset)))
-
-(define (emit-frame-spill cg operand reg)
-  (unless (register? operand)
-    (emit-mov-maybe cg operand reg)
-    (set! operand reg))
-  (emit-frame-push cg operand))
-
-(define (emit-restore-%closure cg)
-  (when (codegen-have-closure cg)
-    (emiti cg "ldr ~A, [sp, #~D]" (reg-asm-operand %closure)
-          (stack-closure-offset cg))))
 
 ;;; Function and closure bits
 
@@ -666,28 +602,6 @@
     (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
           (reg-asm-operand %alloc) tag))
   result)
-
-(define (vec-offset attrs index)
-  (+ (ash index (attr-ref attrs 'scale))
-     (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag))))
-
-;; We fully calculate constant offsets during codegen-simplify, so
-;; that the operand constraints can accurately decide whether they fit
-;; into the relevant immediate fields.
-(define (identify-const-index-vec-op form attrs index)
-  (when (eq? 'quote (car index))
-    (let* ((indexval (second index)))
-      (when (number? indexval)
-        (rplaca form (compound-symbol (car form) "-const-index"))
-        (overwrite-form index (list 'raw (vec-offset attrs indexval)))))))
-
-(define-codegen-simplify (raw-vec-set! attrs vec index val)
-  (codegen-simplify-recurse form)
-  (identify-const-index-vec-op form attrs index))
-
-(define-codegen-simplify ((raw-vec-ref vec-address) attrs vec index)
-  (codegen-simplify-recurse form)
-  (identify-const-index-vec-op form attrs index))
 
 (define (emit-raw-vec-set!-ref-const-index cg attrs instrs vec index val)
   (emiti cg "~A ~A, [~A, ~A]"
