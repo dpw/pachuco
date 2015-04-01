@@ -45,7 +45,7 @@
   (cond ((register? src)
          (emit cg "move ~A, ~A" dest (reg-asm-operand src)))
         ((slot? src)
-         (emit cg "lw ~A, ~D($sp)" dest (first src)))
+         (emit cg "lw ~A, ~D($sp)" dest (stack-local-offset cg (first src))))
         (true
          (emit cg "~A ~A, ~A" (if (number? src) "li" "la") dest src))))
 

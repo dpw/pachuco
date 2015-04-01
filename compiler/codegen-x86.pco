@@ -62,26 +62,37 @@
 (define (reindex-operand base index)
   (reoffset-operand base (* value-size index)))
 
+(define (frame-slot index)
+  (list index 'frame))
+
+(define (param-slot index)
+  (frame-slot (- index)))
 
 (defmacro (reg-asm-operand reg scale)
   (list 'register-variant reg scale))
 
-(define (asm-operand x scale)
+(define (asm-operand cg x scale)
   (cond ((immediate? x) (format "$~A" x))
         ((vector? x) (reg-asm-operand x scale))
         ((pair? x)
          (cond ((null? (cdr x)) (absolute-asm-operand (car x)))
                ((null? (cddr x))
-                (format "~A(~A)" (if (eq? 0 (car x)) "" (car x))
-                         (reg-asm-operand (second x) value-scale)))
+                (let* ((offset (first x))
+                       (base (second x)))
+                  (when (eq? 'frame base)
+                    (set! x (normalize-frame-slot cg offset))
+                    (set! offset (first x))
+                    (set! base (second x)))
+                  (format "~A(~A)" (if (eq? 0 offset) "" offset)
+                          (reg-asm-operand base value-scale))))
                (true
                 (format "~A(~A,~A)" (if (eq? 0 (car x)) "" (car x))
                          (reg-asm-operand (third x) value-scale)
                          (reg-asm-operand (second x) value-scale)))))
         (true (error "strange operand ~S" x))))
 
-(define (value-sized operand)
-  (asm-operand operand value-scale))
+(define (value-sized cg operand)
+  (asm-operand cg operand value-scale))
 
 (define (operand-using-reg? o r)
   (cond ((register? o) (eq? o r))
@@ -119,7 +130,7 @@
 (define (emit-insn-2 cg insn src dest scale)
   (set! scale (if (null? scale) value-scale (car scale)))
   (emit cg "~A~C ~A, ~A" insn (string-ref insn-size-suffixes scale)
-        (asm-operand src scale) (asm-operand dest scale)))
+        (asm-operand cg src scale) (asm-operand cg dest scale)))
 
 (define-insn-2 emit-add "add")
 (define-insn-2 emit-sub "sub")
@@ -160,17 +171,16 @@
 (define (emit-movzx-32 cg src dest src-scale dest-scale)
   (emit cg "mov~A ~A,~A"
         (vector-ref (vector-ref movzx-suffixes dest-scale) src-scale)
-        (asm-operand src src-scale)
-        (asm-operand dest dest-scale)))
+        (asm-operand cg src src-scale) (asm-operand cg dest dest-scale)))
 
-(define (emit-push cg reg)
-  (emit cg "push~C ~A" value-insn-size-suffix (value-sized reg)))
+(define (emit-push cg operand)
+  (emit cg "push~C ~A" value-insn-size-suffix (value-sized cg operand)))
 
-(define (emit-pop cg reg)
-  (emit cg "pop~C ~A" value-insn-size-suffix (value-sized reg)))
+(define (emit-pop cg operand)
+  (emit cg "pop~C ~A" value-insn-size-suffix (value-sized cg operand)))
 
 (define (emit-set cg cc reg)
-  (emit cg "set~A ~A" cc (asm-operand reg 0)))
+  (emit cg "set~A ~A" cc (asm-operand cg reg 0)))
 
 (defmacro (define-insn-1 name insn)
   (quasiquote
@@ -180,7 +190,7 @@
 
 (define (emit-insn-1 cg insn oper scale)
   (emit cg "~A~C ~A" insn (string-ref insn-size-suffixes scale)
-        (asm-operand oper scale)))
+        (asm-operand cg oper scale)))
 
 (define-insn-1 emit-neg "neg")
 (define-insn-1 emit-not "not")
@@ -354,7 +364,7 @@
 
 (define (emit-indirect-call-or-jump cg call-or-jump)
   (emit cg "~A *~A" call-or-jump
-        (value-sized (tagged-operand closure-tag %closure 0))))
+        (value-sized cg (tagged-operand closure-tag %closure 0))))
 
 (define-codegen (call attrs . args)
   (with-saved-frame-base cg
@@ -365,15 +375,15 @@
 
 (define (emit-restore-%closure cg)
   (when (codegen-have-closure cg)
-    (emit-mov cg (closure-address-slot cg) %closure)))
+    (emit-mov cg (closure-address-slot) %closure)))
 
 ;;; Variables
 
 (define (varrec-operand varrec cg)
   (let* ((mode (varrec-mode varrec)))
     (cond ((eq? mode 'top-level) (mem-operand (varrec-index varrec)))
-          ((eq? mode 'param) (param-slot cg (varrec-index varrec)))
-          ((eq? mode 'local) (local-slot cg (varrec-index varrec)))
+          ((eq? mode 'param) (param-slot (varrec-index varrec)))
+          ((eq? mode 'local) (frame-slot (varrec-index varrec)))
           ((eq? mode 'closure) (closure-slot %closure (varrec-index varrec)))
           ((eq? mode 'self) %closure)
           (true (error "strange variable mode ~S" mode)))))
@@ -399,7 +409,7 @@
   (emit-branch cg "ne" bad-nargs-label))
 
 (define-operator (raw-args-base) ()
-  (emit-lea cg (param-slot cg 0) result)
+  (emit-lea cg (indexed-operand %sp (codegen-frame-base cg)) result)
   result)
 
 ;;; Comparisons
@@ -529,7 +539,7 @@
     (emit-branch cg "ae" l2)
     ;; 0 <= n < value-bits
     (emit cg "shl~C %cl, ~A" (string-ref insn-size-suffixes value-scale)
-          (value-sized n))
+          (value-sized cg n))
     (emit-jump cg l5)
 
     (emit-raw-label cg l2)
@@ -543,7 +553,7 @@
     (emit-branch cg "be" l3)
     (emit-neg cg %c)
     (emit cg "sar~C %cl, ~A" (string-ref insn-size-suffixes value-scale)
-          (value-sized n))
+          (value-sized cg n))
     (emit-jump cg l4)
 
     (emit-raw-label cg l3)

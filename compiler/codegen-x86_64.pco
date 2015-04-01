@@ -9,7 +9,7 @@
   (set! dest-scale (if (null? dest-scale) value-scale (car dest-scale)))
   (if (= dest-scale 3)
       (if (= src-scale 3)
-          (emit cg "movq ~A, ~A" (value-sized src) (value-sized dest))
+          (emit cg "movq ~A, ~A" (value-sized cg src) (value-sized cg dest))
           (emit-movzx-32 cg src dest src-scale 2))
       (emit-movzx-32 cg src dest src-scale dest-scale)))
 

@@ -5,7 +5,7 @@
 ;;; param N
 ;;; ...
 ;;; param 1
-;;; param 0  <--- (mem %sp frame-base)
+;;; param 0  <--- %sp + (frame-base * value-size)
 ;;; Return address
 ;;; Saved %bp <--- %bp
 ;;; %closure
@@ -19,17 +19,14 @@
 ;;; Functions are called with the closure in %closure, arg-count in
 ;;; %nargs.  They return with the result in %funcres.
 
-(define (param-slot cg index)
-  (indexed-operand %bp (+ 2 index)))
-
 (define (return-address-slot cg)
   (indexed-operand %bp 1))
 
 (define (closure-address-slot cg)
   (indexed-operand %bp -1))
 
-(define (local-slot cg index)
-  (indexed-operand %sp (- (codegen-frame-base cg) index)))
+(define (normalize-frame-slot cg index)
+  (indexed-operand %bp (- 2 index)))
 
 ;;; Functions, calls, returns, etc.
 

@@ -19,7 +19,8 @@
 (defmacro (reg-asm-operand reg)
   (list 'register-variant reg 0))
 
-(define (local-slot cg index) (list (stack-local-offset cg index)))
+(define (frame-slot index)
+  (list index))
 
 (define (operand-using-reg? o r)
   (eq? o r))
@@ -29,7 +30,7 @@
 ;;; param N
 ;;; ...
 ;;; param 1
-;;; param 0  <--- %sp + frame-base
+;;; param 0  <--- %sp + (frame-base * value-size)
 ;;; Return address
 ;;; %closure (if present)
 ;;; Local var 0

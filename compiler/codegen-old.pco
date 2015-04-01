@@ -518,7 +518,7 @@
 
                      (let* ((operand (codegen-frame-base cg))
                             (output-operands (aux (cdr trashy-args))))
-                       (set! operand (local-slot cg operand))
+                       (set! operand (frame-slot operand))
                        ;; Apply operand-constraint to the result on
                        ;; the stack
                        (unless (funcall operand-constraint operand)
