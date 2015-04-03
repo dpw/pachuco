@@ -363,10 +363,10 @@
          (if (string? name) name (subject-language-symbol-name name)))
   (emiti cg "~A ~A, [~A]" insn (reg-asm-operand reg) tempreg))
 
-(define (access-varrec cg varrec insn reg tempreg)
+(define (access-varrec cg varrec insn reg)
   (let* ((mode (varrec-mode varrec)))
     (cond ((eq? mode 'top-level)
-           (access-global cg insn reg (varrec-index varrec) tempreg))
+           (access-global cg insn reg (varrec-index varrec) reg))
           ((not (eq? mode 'self))
            (let* ((base-reg %sp)
                   (offset
@@ -389,8 +389,12 @@
   (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
   val)
 
-(define-operator (set! val) ((temp-regs temp))
-  (access-varrec cg (attr-ref attrs 'varrec) "str" val temp)
+(define-operator (set! val) ()
+  (access-varrec cg (attr-ref attrs 'varrec) "str" val)
+  val)
+
+(define-operator (top-level-set! val) ((temp-regs temp))
+  (access-global cg "str" val (varrec-index (attr-ref attrs 'varrec)) temp)
   val)
 
 (define-operator (ref) ()
@@ -398,7 +402,7 @@
          (const (varrec-const-operand varrec)))
     (if const
         (emit-mov cg const result)
-        (access-varrec cg varrec "ldr" result result)))
+        (access-varrec cg varrec "ldr" result)))
   result)
 
 ;;; Comparisons

@@ -68,6 +68,12 @@
     (set! operand reg))
   (emit-frame-push cg operand))
 
+;; Convert top-level variable accesses
+
+(define (codegen-simplify-set! form varrec)
+  (when (varrec-top-level? varrec)
+    (rplaca form 'top-level-set!)))
+
 ;; Vector constant offsets
 
 (define (vec-offset attrs index)

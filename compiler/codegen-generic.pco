@@ -406,17 +406,25 @@
       ;; don't need the define for a constant varrec
       (overwrite-form form val)
       (begin
+        ;; make the varrec into a normal attribute, in order to use
+        ;; define-operator
+        (rplaca (cdr form) (acons 'varrec varrec ()))
         ;; convert define for top-level variables to set!
-         (when (varrec-top-level? varrec) (rplaca form 'set!))
-         ;; make the varrec into a normal attribute, in order to use
-         ;; define-operator
-         (rplaca (cdr form) (acons 'varrec varrec ())))))
+        (when (varrec-top-level? varrec)
+          (rplaca form 'set!)
+          (codegen-simplify-set! form varrec)))))
 
-(define-codegen-simplify ((set! ref) varrec . rest)
+(define-codegen-simplify (set! varrec val)
+  (codegen-simplify val)
   ;; make the varrec into a normal attribute, in order to use
   ;; define-operator
   (rplaca (cdr form) (acons 'varrec varrec ()))
-  (codegen-simplify-forms rest))
+  (codegen-simplify-set! form varrec))
+
+(define-codegen-simplify (ref varrec)
+  ;; make the varrec into a normal attribute, in order to use
+  ;; define-operator
+  (rplaca (cdr form) (acons 'varrec varrec ())))
 
 ;;; Simplifications of arithmetic operators
 

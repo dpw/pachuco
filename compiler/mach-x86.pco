@@ -7,3 +7,6 @@
       (emit-and cg (low-bits-mask (unquote tag-bits)) val 0)
       (emit-cmp cg (unquote tag) val 0)
       "e")))
+
+(defmacro (codegen-simplify-set! . args)
+  '(begin))
