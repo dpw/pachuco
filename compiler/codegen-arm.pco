@@ -132,6 +132,10 @@
 (define (emit-mov-maybe cg src dest)
   (unless (eq? src dest) (emit-mov cg src dest)))
 
+(define (emit-load-store cg insn reg base-reg offset)
+  (emiti cg "~A ~A, [~A, #~D]" insn (reg-asm-operand reg)
+         (reg-asm-operand base-reg) offset))
+
 (define (emit-branch cg cc label)
   (emit-without-flushing "b~A ~A" (cc-insn-suffix cc) label))
 
@@ -209,7 +213,7 @@
     ;; code
     (let* ((temp (first general-registers)))
       (dolist (rglob register-globals)
-        (access-global cg "ldr" (cdr rglob) (car rglob) temp)))
+        (access-global cg load-insn (cdr rglob) (car rglob) temp)))
 
     (codegen-set-frame-base! cg 0)
     (codegen-body cg program 0)
@@ -354,56 +358,6 @@
   (emiti cg "add sp, sp, #~D" (stack-param-offset cg 0))
   (emit-indirect-call-or-jump cg false)
   (codegen-function-tail cg out-frame-base))
-
-;;; Variables
-
-(define (access-global cg insn reg name tempreg)
-  (set! tempreg (reg-asm-operand tempreg))
-  (emiti cg "ldr ~A, =~A" tempreg
-         (if (string? name) name (subject-language-symbol-name name)))
-  (emiti cg "~A ~A, [~A]" insn (reg-asm-operand reg) tempreg))
-
-(define (access-varrec cg varrec insn reg)
-  (let* ((mode (varrec-mode varrec)))
-    (cond ((eq? mode 'top-level)
-           (access-global cg insn reg (varrec-index varrec) reg))
-          ((not (eq? mode 'self))
-           (let* ((base-reg %sp)
-                  (offset
-                   (cond ((eq? mode 'closure)
-                          (set! base-reg %closure)
-                          (closure-slot-offset (varrec-index varrec)))
-                         ((eq? mode 'param)
-                          (stack-param-offset cg (varrec-index varrec)))
-                         ((eq? mode 'local)
-                          (stack-local-offset cg (varrec-index varrec)))
-                         (true (error "strange variable mode ~S" mode)))))
-             (emiti cg "~A ~A, [~A, #~D]" insn (reg-asm-operand reg)
-                   (reg-asm-operand base-reg) offset)))
-          (true ; (eq? mode 'self)
-           ;; we only need to read such variables
-           (emit-mov-maybe cg %closure reg)))))
-
-(define-operator (define val) ()
-  (emit-frame-push cg val)
-  (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
-  val)
-
-(define-operator (set! val) ()
-  (access-varrec cg (attr-ref attrs 'varrec) "str" val)
-  val)
-
-(define-operator (top-level-set! val) ((temp-regs temp))
-  (access-global cg "str" val (varrec-index (attr-ref attrs 'varrec)) temp)
-  val)
-
-(define-operator (ref) ()
-  (let* ((varrec (attr-ref attrs 'varrec))
-         (const (varrec-const-operand varrec)))
-    (if const
-        (emit-mov cg const result)
-        (access-varrec cg varrec "ldr" result)))
-  result)
 
 ;;; Comparisons
 
@@ -782,7 +736,7 @@
          (rglob (assoc name register-globals)))
     (if rglob
         (emit-mov cg val (cdr rglob))
-        (access-global cg "str" val name temp)))
+        (access-global cg store-insn val name temp)))
   val)
 
 (define-operator (raw-global-ref) ((temp-regs temp))
@@ -790,7 +744,7 @@
          (rglob (assoc name register-globals)))
     (if rglob
         (emit-mov cg (cdr rglob) result)
-        (access-global cg "ldr" result name temp)))
+        (access-global cg load-insn result name temp)))
   result)
 
 (define-operator (raw-ref addr) ()

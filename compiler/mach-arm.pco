@@ -28,3 +28,6 @@
                (low-bits-mask (unquote tag-bits)))
         (emiti cg "cmp ~A, #~D" valreg (unquote tag)))
       cc-eq)))
+
+(define load-insn "ldr")
+(define store-insn "str")

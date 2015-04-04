@@ -68,11 +68,57 @@
     (set! operand reg))
   (emit-frame-push cg operand))
 
-;; Convert top-level variable accesses
+;; Variable accesses
 
 (define (codegen-simplify-set! form varrec)
   (when (varrec-top-level? varrec)
     (rplaca form 'top-level-set!)))
+
+(define (access-global cg insn reg name tempreg)
+  (emit-mov cg (if (string? name) name (subject-language-symbol-name name))
+            tempreg)
+  (emit-load-store cg insn reg tempreg 0))
+
+(define (access-varrec cg varrec insn reg)
+  (let* ((mode (varrec-mode varrec)))
+    (cond ((eq? mode 'top-level)
+           (access-global cg insn reg (varrec-index varrec) reg))
+          ((not (eq? mode 'self))
+           (let* ((base-reg %sp)
+                  (offset
+                   (cond ((eq? mode 'closure)
+                          (set! base-reg %closure)
+                          (closure-slot-offset (varrec-index varrec)))
+                         ((eq? mode 'param)
+                          (stack-param-offset cg (varrec-index varrec)))
+                         ((eq? mode 'local)
+                          (stack-local-offset cg (varrec-index varrec)))
+                         (true (error "strange variable mode ~S" mode)))))
+             (emit-load-store cg insn reg base-reg offset)))
+          (true ; (eq? mode 'self)
+           ;; we only need to read such variables
+           (emit-mov-maybe cg %closure reg)))))
+
+(define-operator (define val) ()
+  (emit-frame-push cg val)
+  (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
+  val)
+
+(define-operator (set! val) ()
+  (access-varrec cg (attr-ref attrs 'varrec) store-insn val)
+  val)
+
+(define-operator (top-level-set! val) ((temp-regs temp))
+  (access-global cg store-insn val (varrec-index (attr-ref attrs 'varrec)) temp)
+  val)
+
+(define-operator (ref) ()
+  (let* ((varrec (attr-ref attrs 'varrec))
+         (const (varrec-const-operand varrec)))
+    (if const
+        (emit-mov cg const result)
+        (access-varrec cg varrec load-insn result)))
+  result)
 
 ;; Vector constant offsets
 

@@ -56,6 +56,10 @@
       (emit cg "~A ~A, ~A" (if (number? src) "li" "la") (reg-asm-operand dest)
             src)))
 
+(define (emit-load-store cg insn reg base-reg offset)
+  (emit cg "~A ~A, ~D(~A)" insn (reg-asm-operand reg) offset
+        (reg-asm-operand base-reg)))
+
 (define (emit-nop cg)
   (emit cg "nop"))
 
@@ -524,56 +528,6 @@
   (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
   (emit-indirect-call-or-jump cg '(false . "jr")))
-
-;;; Variables
-
-(define (access-global cg insn reg name tempreg)
-  (set! name (if (string? name) name (subject-language-symbol-name name)))
-  (set! tempreg (reg-asm-operand tempreg))
-  (emit cg "lui ~A, %hi(~A)" tempreg name)
-  (emit cg "~A ~A, %lo(~A)(~A)" insn (reg-asm-operand reg) name tempreg))
-
-(define (access-varrec cg varrec insn reg)
-  (let* ((mode (varrec-mode varrec)))
-    (cond ((eq? mode 'top-level)
-           (access-global cg insn reg (varrec-index varrec) reg))
-          ((not (eq? mode 'self))
-           (let* ((base-reg %sp)
-                  (offset
-                   (cond ((eq? mode 'closure)
-                          (set! base-reg %closure)
-                          (closure-slot-offset (varrec-index varrec)))
-                         ((eq? mode 'param)
-                          (stack-param-offset cg (varrec-index varrec)))
-                         ((eq? mode 'local)
-                          (stack-local-offset cg (varrec-index varrec)))
-                         (true (error "strange variable mode ~S" mode)))))
-             (emit cg "~A ~A, ~D(~A)" insn (reg-asm-operand reg)
-                   offset (reg-asm-operand base-reg))))
-          (true ; (eq? mode 'self)
-           ;; we only need to read such variables
-           (emit-mov-maybe cg %closure reg)))))
-
-(define-operator (define val) ()
-  (emit-frame-push cg val)
-  (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
-  val)
-
-(define-operator (set! val) ()
-  (access-varrec cg (attr-ref attrs 'varrec) "sw" val)
-  val)
-
-(define-operator (top-level-set! val) ((temp-regs temp))
-  (access-global cg "sw" val (varrec-index (attr-ref attrs 'varrec)) temp)
-  val)
-
-(define-operator (ref) ()
-  (let* ((varrec (attr-ref attrs 'varrec))
-         (const (varrec-const-operand varrec)))
-    (if const
-        (emit-mov cg const result)
-        (access-varrec cg varrec "lw" result)))
-  result)
 
 ;;; Numbers
 

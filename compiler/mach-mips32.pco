@@ -25,3 +25,6 @@
     (define-cc-operator ((unquote name) val) ()
       (emit-and cg val (low-bits-mask (unquote tag-bits)) val)
       (eq-cc val (unquote tag) false))))
+
+(define load-insn "lw")
+(define store-insn "sw")
