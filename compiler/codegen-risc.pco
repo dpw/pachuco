@@ -116,9 +116,17 @@
   (let* ((varrec (attr-ref attrs 'varrec))
          (const (varrec-const-operand varrec)))
     (if const
-        (emit-mov cg const result)
-        (access-varrec cg varrec load-insn result)))
-  result)
+        (begin
+          (emit-mov cg const result)
+          result)
+        (let* ((mode (varrec-mode varrec)))
+          (cond ((eq? mode 'param)
+                 (frame-slot (- (varrec-index varrec))))
+                ((eq? mode 'local)
+                 (frame-slot (varrec-index varrec)))
+                (true
+                 (access-varrec cg varrec load-insn result)
+                 result))))))
 
 ;; Vector constant offsets
 

@@ -99,7 +99,7 @@
     (set! instructions-since-pool 0)))
 
 (define (check-instructions-since-pool cg)
-  (when (> (set! instructions-since-pool (1+ instructions-since-pool)) 1000)
+  (when (> (set! instructions-since-pool (1+ instructions-since-pool)) 900)
     (let* ((label (gen-label)))
       (emit-smart-jump cg label)
       (flush-labels-and-jumps cg)
@@ -130,7 +130,10 @@
          (emiti cg "ldr ~A, =~A" dest src))))
 
 (define (emit-mov-maybe cg src dest)
-  (unless (eq? src dest) (emit-mov cg src dest)))
+  (if (register? src)
+      (unless (eq? src dest)
+        (emit cg "mov ~A, ~A" (reg-asm-operand dest) (reg-asm-operand src)))
+      (emit-mov cg src dest)))
 
 (define (emit-load-store cg insn reg base-reg offset)
   (emiti cg "~A ~A, [~A, #~D]" insn (reg-asm-operand reg)
@@ -150,8 +153,11 @@
   (emiti cg "mov~A ~A, #~A" (cc-insn-suffix cc) (reg-asm-operand reg)
          true-representation))
 
-(define (emit-branch-on-operand cg reg out-frame-base tlabel flabel)
-  (emiti cg "cmp ~A, #~A" (reg-asm-operand reg) false-representation)
+(define (emit-branch-on-operand cg oper reg out-frame-base tlabel flabel)
+  (unless (register? oper)
+    (emit-mov cg oper reg)
+    (set! oper reg))
+  (emiti cg "cmp ~A, #~A" (reg-asm-operand oper) false-representation)
   (emit-smart-branch cg cc-ne out-frame-base tlabel flabel))
 
 ;; Stack handling

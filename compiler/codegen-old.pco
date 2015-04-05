@@ -42,9 +42,9 @@
   (reg-use form))
 
 (define (codegen-conditional-recurse form cg out-frame-base regs tlabel flabel)
-  (emit-branch-on-operand cg (codegen form cg out-frame-base regs
-                                      (if (null? regs) false (first regs)))
-                          out-frame-base tlabel flabel))
+  (let* ((reg (if (null? regs) false (first regs))))
+    (emit-branch-on-operand cg (codegen form cg out-frame-base regs reg) reg
+                            out-frame-base tlabel flabel)))
 
 ;;; Begin
 

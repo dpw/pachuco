@@ -239,7 +239,7 @@
 (define (emit-mov-maybe cg src dst)
   (unless (eq? src dst) (emit-mov cg src dst)))
 
-(define (emit-branch-on-operand cg oper out-frame-base tlabel flabel)
+(define (emit-branch-on-operand cg oper reg out-frame-base tlabel flabel)
   (emit-cmp cg false-representation oper)
   (emit-smart-branch cg "ne" out-frame-base tlabel flabel))
 

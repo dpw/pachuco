@@ -1,6 +1,8 @@
 ;;; More-or-less the simplest code generation strategy that could
 ;;; possibly work
 
+(define main-reg (first general-registers))
+
 ;; codegen emits the code to evaluate the form, with the result going into
 ;; %funcres
 (define-walker codegen (cg out-frame-base))
@@ -17,11 +19,9 @@
 ;; conditional context.
 (define-walker codegen-conditional (cg out-frame-base tlabel flabel))
 (define (codegen-conditional-recurse form cg out-frame-base tlabel flabel)
-  (emit-branch-on-operand cg (codegen form cg out-frame-base)
+  (emit-branch-on-operand cg (codegen form cg out-frame-base) main-reg
                           out-frame-base tlabel flabel))
 
-
-(define main-reg (first general-registers))
 
 (define (codegen-into-reg form cg out-frame-base reg)
   (emit-mov-maybe cg (codegen form cg out-frame-base) reg))

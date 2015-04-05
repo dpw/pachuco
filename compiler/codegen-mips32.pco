@@ -53,8 +53,7 @@
   (if (register? src)
       (unless (eq? src dest)
         (emit cg "move ~A, ~A" (reg-asm-operand dest) (reg-asm-operand src)))
-      (emit cg "~A ~A, ~A" (if (number? src) "li" "la") (reg-asm-operand dest)
-            src)))
+      (emit-mov cg src dest)))
 
 (define (emit-load-store cg insn reg base-reg offset)
   (emit cg "~A ~A, ~D(~A)" insn (reg-asm-operand reg) offset
@@ -129,9 +128,12 @@
 (define (emit-convert-cc-value cg cc reg)
   (funcall (cc-value cc) cg reg (cc-negate cc)))
 
-(define (emit-branch-on-operand cg reg out-frame-base tlabel flabel)
-  (emit-xor cg reg false-representation reg)
-  (emit-smart-branch cg (eq-cc reg %0 true) out-frame-base tlabel flabel))
+(define (emit-branch-on-operand cg oper reg out-frame-base tlabel flabel)
+  (unless (register? oper)
+    (emit-mov cg oper reg)
+    (set! oper reg))
+  (emit-xor cg oper false-representation oper)
+  (emit-smart-branch cg (eq-cc oper %0 true) out-frame-base tlabel flabel))
 
 (define-cc-operator (eq? a (b reg-imm16z)) () (eq-cc a b false))
 (define-cc-operator (= a (b reg-imm16z)) () (eq-cc a b false))
