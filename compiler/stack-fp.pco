@@ -22,7 +22,7 @@
 (define (return-address-slot cg)
   (indexed-operand %bp 1))
 
-(define (closure-address-slot cg)
+(define (closure-address-slot)
   (indexed-operand %bp -1))
 
 (define (normalize-frame-slot cg index)
@@ -138,7 +138,7 @@
     (emit-set-ac-flag cg true)
     (dolist (reg c-callee-saved-regs-without-%bp) (emit-push cg reg))
 
-    (codegen-set-frame-base! cg (length c-callee-saved-regs-without-%bp))
+    (codegen-set-frame-base! cg (+ 2 (length c-callee-saved-regs-without-%bp)))
     (codegen-body cg program 0)
 
     (dolist (reg (reverse c-callee-saved-regs-without-%bp)) (emit-pop cg reg))
