@@ -14,7 +14,7 @@
 
 ;;; C calls
 
-(define-trashy-codegen (c-call attrs . args)
+(define-trashy-codegen (c-call attrs . args) ()
   (dolist (arg (reverse args))
     (emit-frame-push cg (trashy-codegen arg cg false)))
 

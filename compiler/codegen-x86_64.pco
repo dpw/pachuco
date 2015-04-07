@@ -31,7 +31,7 @@
 ;;;We need to have all regs in c-call-arg-regs for trashy-codegen-into-regs
 (set! c-call-arg-regs (move-to-front c-call-arg-regs general-registers))
 
-(define-trashy-codegen (c-call attrs . args)
+(define-trashy-codegen (c-call attrs . args) ()
   (let* ((c-func (attr-ref attrs 'c-function-name)))
     (when (> (length args) c-call-arg-max)
       (error "too many args in call to ~A" c-func))

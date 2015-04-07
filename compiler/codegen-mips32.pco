@@ -774,7 +774,7 @@
 (define memmove-arg-regs (list* (second c-call-arg-regs) (first c-call-arg-regs)
                                 (cddr c-call-arg-regs)))
 
-(define-trashy-codegen (copy-mem attrs src-addr dest-addr len)
+(define-trashy-codegen (copy-mem attrs src-addr dest-addr len) ()
   (trashy-codegen-into-regs cg form memmove-arg-regs)
   (let* ((len (third c-call-arg-regs)))
     (emit-scale-number cg len (attr-ref attrs 'scale) len))
@@ -825,7 +825,7 @@
               tempreg spare-regs (list size))
   %alloc)
 
-(define-trashy-codegen (c-call attrs . args)
+(define-trashy-codegen (c-call attrs . args) ()
   (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit cg "jal ~A" (attr-ref attrs 'c-function-name))
   (emit-nop cg)

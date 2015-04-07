@@ -483,14 +483,17 @@
   (reg-use-discarding form)
   (codegen-discarding form cg out-frame-base general-registers))
 
-(defmacro (define-trashy-codegen template . body)
-  (quasiquote (definitions
-    (define-reg-use (unquote template)
-      (operator-args-reg-use form)
-      general-register-count)
+(defmacro (define-trashy-codegen template options . body)
+  (options-bind ((tail-form false)) options
+    (quasiquote (definitions
+      ((unquote (if tail-form 'define-reg-use-discarding 'define-reg-use))
+          (unquote template)
+        (operator-args-reg-use form)
+        general-register-count)
 
-    (define-codegen (unquote template)
-      . (unquote body)))))
+      ((unquote (if tail-form 'define-codegen-discarding 'define-codegen))
+          (unquote template)
+        . (unquote body))))))
 
 ;; Generate code to evaluate subforms in some general contexts,
 ;; e.g. tail calls, c-calls, etc.  Values can get pushed onto the

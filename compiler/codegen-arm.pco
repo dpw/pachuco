@@ -424,13 +424,13 @@
         (reg-asm-operand a))
   result)
 
-(define-trashy-codegen (truncate attrs a b)
+(define-trashy-codegen (truncate attrs a b) ()
   (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit-c-call cg "__aeabi_idiv")
   (emiti cg "mov r0, r0, asl #~D" number-tag-bits)
   %r0)
 
-(define-trashy-codegen (rem attrs a b)
+(define-trashy-codegen (rem attrs a b) ()
   (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit-c-call cg "__aeabi_idivmod")
   %r1)
@@ -624,7 +624,7 @@
 (define memmove-arg-regs (list* (second c-call-arg-regs) (first c-call-arg-regs)
                                 (cddr c-call-arg-regs)))
 
-(define-trashy-codegen (copy-mem attrs src-addr dest-addr len)
+(define-trashy-codegen (copy-mem attrs src-addr dest-addr len) ()
   (trashy-codegen-into-regs cg form memmove-arg-regs)
   (let* ((len (reg-asm-operand (third c-call-arg-regs))))
     (emiti cg "mov ~A, ~A~A" len len
@@ -772,7 +772,7 @@
     (emiti cg "bl ~A" label)
     (emiti cg "mov sp, ~A" saved-sp)))
 
-(define-trashy-codegen (c-call attrs . args)
+(define-trashy-codegen (c-call attrs . args) ()
   (let* ((c-func (attr-ref attrs 'c-function-name)))
     (when (> (length args) c-call-arg-max)
       (error "too many args in call to ~A" c-func))

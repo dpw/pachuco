@@ -28,8 +28,12 @@
   (quasiquote (codegen-into-reg (unquote form) (unquote cg)
                                 (unquote out-frame-base) (unquote reg))))
 
-(defmacro (define-trashy-codegen template . body)
-  (quasiquote (define-codegen (unquote template) . (unquote body))))
+(defmacro (define-trashy-codegen template options . body)
+  (options-bind ((tail-form false)) options
+    (when tail-form
+      (set! body (nconc body (list false))))
+
+    (quasiquote (define-codegen (unquote template) . (unquote body)))))
 
 ;;; Begin
 
