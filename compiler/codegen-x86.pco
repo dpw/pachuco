@@ -68,6 +68,10 @@
 (define (param-slot index)
   (frame-slot (- index)))
 
+(define (frame-slot-index oper)
+  (and (pair? oper) (not (null? (cdr oper))) (eq? 'frame (second oper))
+       (first oper)))
+
 (defmacro (reg-asm-operand reg scale)
   (list 'register-variant reg scale))
 
@@ -112,6 +116,12 @@
 (define (reg-imm-operand-constraint operand)
   (not (and (not (string? operand))
             (not (immediate32? operand)))))
+
+(define (acceptable-store-source? operand)
+  (not (mem? operand)))
+;   (not (and (not (register? operand))
+;             (not (string? operand))
+;             (not (immediate32? operand)))))
 
 ;;; Condition codes
 

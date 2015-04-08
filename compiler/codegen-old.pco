@@ -519,9 +519,8 @@
                      (emit-frame-push cg (codegen (elt args (car trashy-args))
                                                   cg false regs (first regs)))
 
-                     (let* ((operand (codegen-frame-base cg))
+                     (let* ((operand (frame-slot (codegen-frame-base cg)))
                             (output-operands (aux (cdr trashy-args))))
-                       (set! operand (frame-slot operand))
                        ;; Apply operand-constraint to the result on
                        ;; the stack
                        (unless (funcall operand-constraint operand)
@@ -535,10 +534,19 @@
 (define (trashy-codegen-into-regs cg form regs)
   (trashy-codegen-subforms form cg regs (function reg-operand-constraint)))
 
+;; An operand constraint that accepts anything.  But for registers, we
+;; still need to ensure the the operand is in the allocated register.
+(define (any-operand-constraint op)
+  (not (register? op)))
+
+(define (trashy-codegen-general cg form)
+  (trashy-codegen-subforms form cg general-registers
+                           (function any-operand-constraint)))
+
 (define-reg-use (call attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)
 
-(define-reg-use-discarding ((tail-call varargs-tail-call) attrs . args)
+(define-reg-use-discarding (varargs-tail-call attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)

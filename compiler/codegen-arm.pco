@@ -118,16 +118,24 @@
   (emiti cg "ldr ~A, [sp], #4" (reg-asm-operand reg)))
 
 (define (emit-mov cg src dest)
-  (set! dest (reg-asm-operand dest))
-  (cond ((register? src)
-         (emiti cg "mov ~A, ~A" dest (reg-asm-operand src)))
-        ((immediate8? src)
-         (emiti cg "mov ~A, #~D" dest src))
-        ((slot? src)
-         (emiti cg "ldr ~A, [sp, #~D]" dest
-                (stack-local-offset cg (first src))))
+  (cond ((register? dest)
+         (set! dest (reg-asm-operand dest))
+         (cond ((register? src)
+                (emiti cg "mov ~A, ~A" dest (reg-asm-operand src)))
+               ((immediate8? src)
+                (emiti cg "mov ~A, #~D" dest src))
+               ((slot? src)
+                (emiti cg "ldr ~A, [sp, #~D]" dest
+                       (stack-local-offset cg (first src))))
+               (true
+                (emiti cg "ldr ~A, =~A" dest src))))
+        ((slot? dest)
+         (unless (register? src)
+           (error "source must be register for emit-mov to frame, was ~A" src))
+         (emiti cg "str ~A, [sp, #~D]" (reg-asm-operand src)
+                (stack-local-offset cg (first dest))))
         (true
-         (emiti cg "ldr ~A, =~A" dest src))))
+         (error "bad emit-mov dest ~A" dest))))
 
 (define (emit-mov-maybe cg src dest)
   (if (register? src)
@@ -319,15 +327,13 @@
   (copy-tail-call-args cg out-param-offset out-arg-count regs)
   (emit-call-or-jump cg attrs false))
 
-(define-codegen-discarding (tail-call attrs . args)
-  (codegen-call-args cg attrs args)
-  (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (attr-ref attrs 'nargs)))
-    (codegen-tail-call cg attrs args out-arg-count
-                       (asm-operand (stack-param-offset cg (- in-arg-count
-                                                              out-arg-count)))
-                       general-registers)
-    (codegen-function-tail cg out-frame-base)))
+(define-trashy-codegen (tail-call attrs . args) ()
+  (let* ((operands (trashy-codegen-general cg form)))
+    (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+    (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
+      (emit-reset-frame-base cg assignments-base)
+      (emit-call-or-jump cg attrs false)
+      (codegen-function-tail cg out-frame-base))))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
   (codegen-call-args cg attrs args)

@@ -872,3 +872,202 @@
 (define-codegen-simplify (character? attrs ch)
   (rplaca form 'number?)
   (codegen-simplify form))
+
+;;; Code generation for tail calls
+
+(define (codegen-tail-call-shuffle cg attrs operands extra-assignments)
+  (let* ((closure (and (attr-ref attrs 'needs-closure) (car operands)))
+
+         ;; 'assignments' is what we want the stack to look like just
+         ;; before the jump.  So it includes the return address, and
+         ;; excludes the closure pointer.
+         (out-arg-count (attr-ref attrs 'nargs))
+         (assignments-count (+ out-arg-count (length extra-assignments)))
+         (assignments (nconc extra-assignments
+                             (if closure (cdr operands) operands)))
+
+         (spare-regs
+           (nthcdr (if closure (1+ out-arg-count) out-arg-count) operands))
+         tmp-reg tmp-reg-2
+
+         ;; The frame slot index at which the assignments start.
+         ;; Parameter slots indices start at 0 and go down, so
+         ;; -nparams represents the top of the frame.
+         (orig-assignments-base (- assignments-count (attr-ref attrs 'nparams)))
+         (assignments-base orig-assignments-base)
+
+         (destinations false))
+    ;; We need up to 3 temporary registers below (one to hold the
+    ;; closure, and two for doing the assignments), but it is possible
+    ;; that all registers are occupied by arguments.  So there are
+    ;; cases where we need to spill some of those registers.  But such
+    ;; cases are rare in practice rare (as I write this, the only
+    ;; example is a test case deliberately designed to produce this
+    ;; situation).  So we take the simple approach of spilling
+    ;; up-front as needed to ensure we always have at least 3
+    ;; registers available.
+    (labels ((length-deficit (l n)
+               (if (and (not (null? l)) (> n 0))
+                   (length-deficit (cdr l) (1- n))
+                   n))
+
+             (spill (as n)
+               (when (> n 0)
+                 (spill-at-least-one as n)))
+
+             (spill-at-least-one (as n)
+               (when (null? as) (error "ran out of assignments to spill"))
+               (let* ((reg (car as)))
+                 (if (register? reg)
+                     (begin
+                       (emit-frame-push cg reg)
+                       (set! spare-regs (cons reg spare-regs))
+                       (rplaca as (frame-slot (codegen-frame-base cg)))
+                       (spill (cdr as) (1- n)))
+                     (spill-at-least-one (cdr as) n)))))
+
+      (let* ((to-spill (length-deficit spare-regs 3)))
+        (spill (cdr assignments) to-spill)))
+
+    ;; If the closure is on the stack, move it into a register so it
+    ;; doesn't get trampled on.
+    (when (and closure (frame-slot-index closure))
+      (emit-mov cg closure (car spare-regs))
+      (set! closure (car spare-regs))
+      (set! spare-regs (cdr spare-regs)))
+
+    (set! tmp-reg (first spare-regs))
+    (set! tmp-reg-2 (second spare-regs))
+
+    ;; 'assignments' may imply an %sp lower than its current value.
+    ;; By definition, these fresh slots cannot be the sources for
+    ;; other slots, so we can push them onto the stack, eliminating
+    ;; them from consideration.
+    (labels ((assign-fresh-slots ()
+               (when (> assignments-base (codegen-frame-base cg))
+                 (let* ((a (car assignments)))
+                   (set! assignments (cdr assignments))
+                   (set! assignments-base (1- assignments-base))
+                   (set! assignments-count (1- assignments-count))
+                   (assign-fresh-slots)
+                   (unless (acceptable-store-source? a)
+                     (emit-mov cg a tmp-reg)
+                     (set! a tmp-reg))
+                   (emit-frame-push cg a)))))
+      (assign-fresh-slots))
+
+    ;; 'assignments' gives the values for a range of frame slots.
+    ;; Some of these could be immediates, some could be registers, and
+    ;; some could be frame slots.  To decide how to shuffle the frame
+    ;; slots, we need to work out the destination frame slot (if any)
+    ;; for each frame slots.  So here we find destinations for
+    ;; assignments.
+    (labels ((vector-push! (vec index head)
+               (vector-set! vec index (cons head (vector-ref vec index))))
+
+             (find-destinations (as dest)
+               (when (< dest assignments-count)
+                 (let* ((source (frame-slot-index (car as))))
+                   (when source
+                     ;; Convert from frame slot indices to indices
+                     ;; into the outgoing arguments.
+                     (set! source (- assignments-base source))
+
+                     (cond ((= source dest)
+                            ;; The source and destination are the
+                            ;; same, so we can discard this assignment
+                            (rplaca as false))
+
+                           ((>= source 0)
+                            ;; The source frame slot is also a
+                            ;; destination.  We allocate the
+                            ;; destinations vector lazily, because
+                            ;; some tail calls won't need it.
+                            (unless destinations
+                              (set! destinations
+                                    (make-vector assignments-count ())))
+                            (vector-push! destinations source dest)))))
+
+                 (find-destinations (cdr as) (1+ dest)))))
+      (find-destinations assignments 0))
+
+    (if (not destinations)
+        ;; The easy case: there is no destinations vector, meaning
+        ;; that all assignments are independent and so can be done
+        ;; straightforwardly.
+        (labels ((do-assignments-easy (as index)
+                   (when (< index assignments-count)
+                     (let* ((source (car as)))
+                       (when source
+                         ;; if the source is a memory operand, we need
+                         ;; to copy via tmp-reg
+                         (unless (acceptable-store-source? source)
+                           (emit-mov cg source tmp-reg)
+                           (set! source tmp-reg))
+
+                         (emit-mov cg source
+                                   (frame-slot (- assignments-base index)))))
+
+                     (do-assignments-easy (cdr as) (1+ index)))))
+          (do-assignments-easy assignments 0))
+
+        ;; The hard case: There source of one assignment could be the
+        ;; destination of another, and there might be cycles.  But
+        ;; because a slot can only have a single source, there can
+        ;; only be one cycle within a connected segment of the graph.
+        ;; So we only need one register to break cycles.
+        (labels ((assign (as index source-index)
+                   (let* ((source (car as)))
+                     (cond
+                       ((not source)
+                        ;; assignment has aleady been done, or is
+                        ;; otherwise unnecessary
+                        )
+
+                       ((not (eq? 'current source))
+                        ;; mark the assignment as in progress
+                        (rplaca as 'current)
+
+                        ;; before we overwrite this slot, assign any
+                        ;; slots which take its value
+                        (dolist (dest (vector-ref destinations index))
+                          (assign (nthcdr dest assignments) dest index))
+
+                        (cond
+                          ;; Was the source preserved in tmp-reg-2 due
+                          ;; to a cycle?
+                          ((eq? 'cycle (car as))
+                           (set! source tmp-reg-2))
+
+                          ;; if the source is a memory operand, we
+                          ;; need to copy via tmp-reg
+                          ((not (acceptable-store-source? source))
+                           (emit-mov cg source tmp-reg)
+                           (set! source tmp-reg)))
+
+                        ;; The actual assignment
+                        (emit-mov cg source
+                                  (frame-slot (- assignments-base index)))
+
+                        ;; Mark the assignment done
+                        (rplaca as false))
+
+                       (true
+                        ;; We have detected in an assignment cycle.
+                        ;; Break the cycle by saving the source in
+                        ;; tmp-reg-2.
+                        (emit-mov cg
+                                  (frame-slot (- assignments-base source-index))
+                                  tmp-reg-2)
+                        (rplaca as 'cycle)))))
+
+                 (do-assignments (as index)
+                   (when (< index assignments-count)
+                     (assign as index 1000000)
+                     (do-assignments (cdr as) (1+ index)))))
+          (do-assignments assignments 0)))
+
+    (when closure
+      (emit-mov cg closure %closure))
+
+    orig-assignments-base))

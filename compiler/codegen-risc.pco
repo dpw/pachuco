@@ -22,6 +22,12 @@
 (define (frame-slot index)
   (list index))
 
+(define (frame-slot-index index)
+  (and (pair? index) (first index)))
+
+(define (acceptable-store-source? o)
+  (register? o))
+
 (define (operand-using-reg? o r)
   (eq? o r))
 

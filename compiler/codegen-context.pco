@@ -138,6 +138,12 @@
 (define (trashy-codegen-into-regs cg form regs)
   (codegen-operator-args cg (cddr form) regs))
 
+(define (trashy-codegen-general cg form)
+  (nconc (mapfor (arg (cddr form))
+           (emit-frame-spill cg (codegen arg cg false) main-reg)
+           (frame-slot (codegen-frame-base cg)))
+         general-registers))
+
 (defmacro (define-operator template options . body)
   ;; define how to generate code for an operator
   (options-bind ((temp-regs ())

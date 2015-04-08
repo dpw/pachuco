@@ -15,16 +15,16 @@
 (define (reg-imm16-operand-constraint operand)
   (immediate16? operand))
 
-;; Is it a register or zero, so that $0 can be used
-(define (reg-zero-operand-constraint operand)
-  (eq? 0 operand))
-
 ;; Is it an immediate that fits within a zero-extended 16-bit field?
 (define (immediate16z? x)
   (and (number? x) (= 0 (logand x -65536))))
 
 (define (reg-imm16z-operand-constraint operand)
   (immediate16z? operand))
+
+;; Is it a register or zero, so that $0 can be used
+(define (reg-zero-operand-constraint operand)
+  (eq? 0 operand))
 
 (define (emit-align cg scale)
   (emit cg ".align ~D" scale))
@@ -41,13 +41,24 @@
   (emit cg "addiu $sp, $sp, ~D" value-size))
 
 (define (emit-mov cg src dest)
-  (set! dest (reg-asm-operand dest))
-  (cond ((register? src)
-         (emit cg "move ~A, ~A" dest (reg-asm-operand src)))
-        ((slot? src)
-         (emit cg "lw ~A, ~D($sp)" dest (stack-local-offset cg (first src))))
+  (cond ((register? dest)
+         (set! dest (reg-asm-operand dest))
+         (cond ((register? src)
+                (emit cg "move ~A, ~A" dest (reg-asm-operand src)))
+               ((slot? src)
+                (emit cg "lw ~A, ~D($sp)" dest
+                      (stack-local-offset cg (first src))))
+               ((immediate? src)
+                (emit cg "~A ~A, ~A" (if (number? src) "li" "la") dest src))
+               (true
+                (error "bad emit-mov source ~A" src))))
+        ((slot? dest)
+         (unless (register? src)
+           (error "source must be register for emit-mov to frame, was ~A" src))
+         (emit cg "sw ~A, ~D($sp)" (reg-asm-operand src)
+               (stack-local-offset cg (first dest))))
         (true
-         (emit cg "~A ~A, ~A" (if (number? src) "li" "la") dest src))))
+         (error "bad emit-mov dest ~A" dest))))
 
 (define (emit-mov-maybe cg src dest)
   (if (register? src)
@@ -479,17 +490,13 @@
           (+ dest-offset (* value-size out-arg-count)) dest-base-reg)
     (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)))
 
-(define-codegen-discarding (tail-call attrs . args)
-  (codegen-call-args cg attrs args)
-  (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (attr-ref attrs 'nargs))
-         (offset (stack-param-offset cg (- in-arg-count out-arg-count))))
+(define-trashy-codegen (tail-call attrs . args) (tail-form)
+  (let* ((operands (trashy-codegen-general cg form)))
     (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
-    (copy-tail-call-args cg out-arg-count (reg-asm-operand %sp) offset
-                         (reg-asm-operand (first general-registers)))
-    (emit cg "addiu $sp, $sp, ~D" offset)
-    (emit-call-or-jump cg attrs '("j" . "jr"))
-    (codegen-function-tail cg out-frame-base)))
+    (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
+      (emit-reset-frame-base cg assignments-base)
+      (emit-call-or-jump cg attrs '("j" . "jr"))
+      (codegen-function-tail cg out-frame-base))))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
   (codegen-call-args cg attrs args)

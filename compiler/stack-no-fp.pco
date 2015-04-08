@@ -64,20 +64,12 @@
     (emit-mov cg retaddr-reg (mem-operand %sp))
     (emit-call-or-jump cg attrs "jmp")))
 
-(define-codegen-discarding (tail-call attrs . args)
-  (codegen-call-args cg attrs args)
-  (let* ((in-arg-count (attr-ref attrs 'nparams))
-         (out-arg-count (attr-ref attrs 'nargs))
-         (retaddr (return-address-slot cg))
-         (out-retaddr (reindex-operand retaddr (- in-arg-count out-arg-count))))
-    (if (= in-arg-count out-arg-count)
-        (begin
-          (copy-tail-call-args cg out-arg-count out-retaddr
-                               (first general-registers))
-          (emit-reset-frame-base cg 1)
-          (emit-call-or-jump cg attrs "jmp"))
-        (codegen-tail-call attrs retaddr out-arg-count out-retaddr
-                           general-registers cg))
+(define-trashy-codegen (tail-call attrs . args) (tail-form)
+  (let* ((operands (trashy-codegen-general cg form))
+         (assignments-base (codegen-tail-call-shuffle cg attrs operands
+                                                      (list (frame-slot 1)))))
+    (emit-reset-frame-base cg assignments-base)
+    (emit-call-or-jump cg attrs "jmp")
     (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
