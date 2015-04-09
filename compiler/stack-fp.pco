@@ -57,18 +57,6 @@
   (emit cg "ret")
   (codegen-function-tail cg out-frame-base))
 
-(define (codegen-tail-call cg attrs retaddr out-arg-count out-retaddr regs)
-  (let* ((tmpreg (first regs))
-         (retaddr-reg (second regs))
-         (saved-fp-reg (third regs)))
-    (emit-mov cg retaddr retaddr-reg)
-    (emit-mov cg (mem-operand %bp) saved-fp-reg)
-    (copy-tail-call-args cg out-arg-count out-retaddr tmpreg)
-    (emit-lea cg out-retaddr %sp)
-    (emit-mov cg retaddr-reg (mem-operand %sp))
-    (emit-mov cg saved-fp-reg %bp)
-    (emit-call-or-jump cg attrs "jmp")))
-
 (define-trashy-codegen (tail-call attrs . args) (tail-form)
   (let* ((operands (trashy-codegen-general cg form))
          (assignments-base (codegen-tail-call-shuffle cg attrs operands
@@ -80,19 +68,30 @@
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
   (codegen-call-args cg attrs args)
-  (let* ((in-arg-count-reg (first general-registers))
-         (out-arg-count (attr-ref attrs 'nargs))
-         (retaddr (return-address-slot cg)))
-    ;; here we assume that the arg-count is just a ref, and so won't
-    ;; access %closure
-    (trashy-codegen-into-reg arg-count cg false in-arg-count-reg)
-    (emit-scale-number cg value-scale in-arg-count-reg)
-    (emit-lea cg (reoffset-2-operand retaddr in-arg-count-reg
+  (let* ((out-arg-count (attr-ref attrs 'nargs))
+         (retaddr (return-address-slot cg))
+         (out-retaddr-reg (first general-registers))
+         (tmpreg (second general-registers))
+         (saved-retaddr-reg (third general-registers))
+         (saved-fp-reg (fourth general-registers)))
+    ;; Compute the intended location of the return address on the
+    ;; stack.  Here we assume that the arg-count is just a ref, and so
+    ;; won't access %closure
+    (trashy-codegen-into-reg arg-count cg false out-retaddr-reg)
+    (emit-scale-number cg value-scale out-retaddr-reg)
+    (emit-lea cg (reoffset-2-operand retaddr out-retaddr-reg
                                      (* value-size (- out-arg-count)))
-              in-arg-count-reg)
-    (codegen-tail-call cg attrs retaddr out-arg-count
-                       (mem-operand in-arg-count-reg) (cdr general-registers))
-    (codegen-function-tail cg out-frame-base)))
+              out-retaddr-reg)
+    ;; Stash the return address and frame pointer
+    (emit-mov cg retaddr saved-retaddr-reg)
+    (emit-mov cg (mem-operand %bp) saved-fp-reg)
+    ;; Copy the arguments to their intended locations
+    (copy-tail-call-args cg out-arg-count (mem-operand out-retaddr-reg) tmpreg)
+    ;; Fix up the return address on the stack and %bp and jump
+    (emit-mov cg out-retaddr-reg %sp)
+    (emit-mov cg saved-retaddr-reg (mem-operand %sp))
+    (emit-mov cg saved-fp-reg %bp)
+    (emit-call-or-jump cg attrs "jmp")))
 
 ;;; Apply support
 

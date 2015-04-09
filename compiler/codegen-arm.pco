@@ -311,6 +311,14 @@
   (emit-ltorg cg)
   (codegen-function-tail cg out-frame-base))
 
+(define-trashy-codegen (tail-call attrs . args) ()
+  (let* ((operands (trashy-codegen-general cg form)))
+    (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+    (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
+      (emit-reset-frame-base cg assignments-base)
+      (emit-call-or-jump cg attrs false)
+      (codegen-function-tail cg out-frame-base))))
+
 (define (copy-tail-call-args cg dest-offset count regs)
   (cond ((= count 0)
          (emiti cg "add sp, sp, ~A" dest-offset))
@@ -322,19 +330,6 @@
         (true
          (error "cowardly refusing big emit-copy-stack"))))
 
-(define (codegen-tail-call cg attrs args out-arg-count out-param-offset regs)
-  (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
-  (copy-tail-call-args cg out-param-offset out-arg-count regs)
-  (emit-call-or-jump cg attrs false))
-
-(define-trashy-codegen (tail-call attrs . args) ()
-  (let* ((operands (trashy-codegen-general cg form)))
-    (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
-    (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
-      (emit-reset-frame-base cg assignments-base)
-      (emit-call-or-jump cg attrs false)
-      (codegen-function-tail cg out-frame-base))))
-
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
   (codegen-call-args cg attrs args)
   (let* ((out-arg-count (attr-ref attrs 'nargs))
@@ -345,8 +340,10 @@
           (scale-number-expr value-scale))
     (emiti cg "add ~A, ~A, #~D" out-param-offset out-param-offset
           (stack-param-offset cg (- out-arg-count)))
-    (codegen-tail-call cg attrs args out-arg-count out-param-offset
-                       (cdr general-registers))
+    (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
+    (copy-tail-call-args cg out-param-offset out-arg-count
+                         (cdr general-registers))
+    (emit-call-or-jump cg attrs false)
     (codegen-function-tail cg out-frame-base)))
 
 ;;; Apply support

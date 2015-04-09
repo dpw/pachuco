@@ -482,14 +482,6 @@
   (emit-nop cg)
   (codegen-function-tail cg out-frame-base))
 
-(define (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)
-  (when (> out-arg-count 0)
-    (set! out-arg-count (1- out-arg-count))
-    (emit cg "lw ~A, ~D($sp)" tmp-reg (* value-size out-arg-count))
-    (emit cg "sw ~A, ~D(~A)" tmp-reg
-          (+ dest-offset (* value-size out-arg-count)) dest-base-reg)
-    (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)))
-
 (define-trashy-codegen (tail-call attrs . args) (tail-form)
   (let* ((operands (trashy-codegen-general cg form)))
     (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
@@ -497,6 +489,14 @@
       (emit-reset-frame-base cg assignments-base)
       (emit-call-or-jump cg attrs '("j" . "jr"))
       (codegen-function-tail cg out-frame-base))))
+
+(define (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)
+  (when (> out-arg-count 0)
+    (set! out-arg-count (1- out-arg-count))
+    (emit cg "lw ~A, ~D($sp)" tmp-reg (* value-size out-arg-count))
+    (emit cg "sw ~A, ~D(~A)" tmp-reg
+          (+ dest-offset (* value-size out-arg-count)) dest-base-reg)
+    (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
   (codegen-call-args cg attrs args)
