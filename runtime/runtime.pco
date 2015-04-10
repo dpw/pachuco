@@ -286,15 +286,17 @@
   (flatten* ls))
 
 (defmacro (dolist binding . body)
+  (define loopf (gensym))
   (define l (gensym))
   (quasiquote
     (begin
-      (define (unquote l) (unquote (second binding)))
-      (until (null? (unquote l))
-        (begin
-          (define (unquote (first binding)) (car (unquote l)))
-          . (unquote body))
-        (set! (unquote l) (cdr (unquote l)))))))
+      (define ((unquote loopf) (unquote l))
+        (unless (null? (unquote l))
+          (begin
+            (define (unquote (first binding)) (car (unquote l)))
+            . (unquote body))
+          ((unquote loopf) (cdr (unquote l)))))
+      ((unquote loopf) (unquote (second binding))))))
 
 (defmacro (mapfor binding . body)
   (define bodyf (gensym))
