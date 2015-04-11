@@ -313,16 +313,14 @@
 
           (define (unquote out)
               (cons ((unquote bodyf) (car (unquote in))) ()))
-          (define (unquote tail) (unquote out))
-          (define ((unquote loopf) (unquote in))
+          (define ((unquote loopf) (unquote in) (unquote tail))
             (unless (null? (unquote in))
               (define (unquote out)
                   (cons ((unquote bodyf) (car (unquote in))) ()))
               (rplacd (unquote tail) (unquote out))
-              (set! (unquote tail) (unquote out))
-              ((unquote loopf) (cdr (unquote in)))))
+              ((unquote loopf) (cdr (unquote in)) (unquote out))))
 
-          ((unquote loopf) (cdr (unquote in)))
+          ((unquote loopf) (cdr (unquote in)) (unquote out))
           (unquote out))))))
 
 (defmacro (nmapfor binding . body)
