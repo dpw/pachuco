@@ -234,7 +234,13 @@
   (aux l))
 
 (define (last-cons l)
-  (last-n-conses l 1))
+  (define (aux l)
+    (if (null? (cdr l))
+        l
+        (last-cons (cdr l))))
+  (if (null? l)
+      ()
+      (aux l)))
 
 (define (last-elem l)
   (car (last-cons l)))
@@ -284,6 +290,25 @@
 
 (define (nconc . ls)
   (flatten* ls))
+
+(define (reduce-right l op)
+  (define (aux h t op)
+    (if (null? t)
+        h
+        (op h (aux (car t) (cdr t) op))))
+  (aux (car l) (cdr l) op))
+
+(define (nconc-2 a b)
+  (if (null? a)
+      b
+      (begin
+        (rplacd (last-cons a) b)
+        a)))
+
+(defmacro (nconc . ls)
+  (if (null? ls)
+      ()
+      (reduce-right ls (lambda (a b) (list 'nconc-2 a b)))))
 
 (defmacro (dolist binding . body)
   (define loopf (gensym))

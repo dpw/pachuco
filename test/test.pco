@@ -260,10 +260,18 @@
 
   (assert-result (copy-tree '((1 . 2) 3)) '((1 . 2) 3))
 
-  (assert-result (nconc ()) ())
-  (assert-result (nconc (copy-list '(1 2)) (copy-list '(3 4))) '(1 2 3 4))
-  (assert-result (nconc () (copy-list '(1 2)) () (copy-list '(3 4)))
-                 '(1 2 3 4))
+  (begin
+    (defmacro (test-nconc f)
+      (quasiquote (begin
+         (assert-result ((unquote f) ()) ())
+         (assert-result ((unquote f) (copy-list '(1 2)) (copy-list '(3 4)))
+                        '(1 2 3 4))
+         (assert-result ((unquote f) () (copy-list '(1 2)) ()
+                         (copy-list '(3 4)) ())
+                        '(1 2 3 4)))))
+
+    (test-nconc nconc)
+    (test-nconc (car (list nconc))))
 
   (assert-result (remove 1 '(0 1 2 1)) '(0 2))
   (assert-result (delete 1 (copy-list '(0 1 2 1))) '(0 2))
