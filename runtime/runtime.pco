@@ -222,17 +222,6 @@
 (define (nthcdr index l)
   (if (= 0 index) l (nthcdr (1- index) (cdr l))))
 
-(define (last-n-conses l n)
-  (define (aux l)
-    (if (null? l) ()
-        (begin
-          (define res (aux (cdr l)))
-          (if (= n 0) res
-              (begin
-                (set! n (1- n))
-                l)))))
-  (aux l))
-
 (define (last-cons l)
   (define (aux l)
     (if (null? (cdr l))
@@ -245,13 +234,18 @@
 (define (last-elem l)
   (car (last-cons l)))
 
-(define (list* l1 . l)
-  (if (null? l) l1
-    (begin
-      (set! l (cons l1 l))
-      (define penultimate (last-n-conses l 2))
-      (rplacd penultimate (cadr penultimate))
-      l)))
+(define (list* h . t)
+  (if (null? t)
+      h
+      (begin
+        (define (aux a b)
+            (if (null? (cdr b))
+                (rplacd a (car b))
+                (aux b (cdr b))))
+
+        (set! h (cons h t))
+        (aux h t)
+        h)))
 
 (defmacro (list* l1 . l)
   (define (aux l1 l)
