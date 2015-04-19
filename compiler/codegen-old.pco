@@ -539,9 +539,8 @@
 (define (any-operand-constraint op)
   (not (register? op)))
 
-(define (trashy-codegen-general cg form)
-  (trashy-codegen-subforms form cg general-registers
-                           (function any-operand-constraint)))
+(define (trashy-codegen-general cg form constraint)
+  (trashy-codegen-subforms form cg general-registers constraint))
 
 (define-reg-use (call attrs . args)
   (dolist (arg args) (reg-use arg))

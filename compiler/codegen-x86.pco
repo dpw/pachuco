@@ -117,11 +117,18 @@
   (not (and (not (string? operand))
             (not (immediate32? operand)))))
 
+;; A register, immediate or memory reference that does not depend on
+;; %closure
+(define (not-closure-operand-constraint operand)
+  (cond ((not (mem? operand))
+         (not (register? operand)))
+        ((null? (cdr operand))
+         true)
+        (true
+         (not (eq? %closure (second operand))))))
+
 (define (acceptable-store-source? operand)
   (not (mem? operand)))
-;   (not (and (not (register? operand))
-;             (not (string? operand))
-;             (not (immediate32? operand)))))
 
 ;;; Condition codes
 

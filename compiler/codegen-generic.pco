@@ -926,15 +926,13 @@
                        (spill (cdr as) (1- n)))
                      (spill-at-least-one (cdr as) n)))))
 
-      (let* ((to-spill (length-deficit spare-regs 3)))
+      (let* ((to-spill (length-deficit spare-regs 2)))
         (spill (cdr assignments) to-spill)))
 
-    ;; If the closure is on the stack, move it into a register so it
-    ;; doesn't get trampled on.
-    (when (and closure (frame-slot-index closure))
-      (emit-mov cg closure (car spare-regs))
-      (set! closure (car spare-regs))
-      (set! spare-regs (cdr spare-regs)))
+    ;; Set closure early.  The caller is required to make sure that no
+    ;; operands depend upon %closure.
+    (when closure
+      (emit-mov cg closure %closure))
 
     (set! tmp-reg (first spare-regs))
     (set! tmp-reg-2 (second spare-regs))
@@ -1066,8 +1064,5 @@
                      (assign as index 1000000)
                      (do-assignments (cdr as) (1+ index)))))
           (do-assignments assignments 0)))
-
-    (when closure
-      (emit-mov cg closure %closure))
 
     orig-assignments-base))

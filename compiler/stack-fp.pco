@@ -58,7 +58,8 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-trashy-codegen (tail-call attrs . args) (tail-form)
-  (let* ((operands (trashy-codegen-general cg form))
+  (let* ((operands (trashy-codegen-general cg form
+                                     (function not-closure-operand-constraint)))
          (assignments-base (codegen-tail-call-shuffle cg attrs operands
                                        (list (frame-slot 2) (frame-slot 1)))))
     (emit-lea cg (normalize-frame-slot cg assignments-base) %sp)

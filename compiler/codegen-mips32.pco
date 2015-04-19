@@ -483,7 +483,8 @@
   (codegen-function-tail cg out-frame-base))
 
 (define-trashy-codegen (tail-call attrs . args) (tail-form)
-  (let* ((operands (trashy-codegen-general cg form)))
+  (let* ((operands (trashy-codegen-general cg form
+                                           (function any-operand-constraint))))
     (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
     (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
       (emit-reset-frame-base cg assignments-base)
