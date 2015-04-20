@@ -699,6 +699,7 @@
         ((eq? ch #\\) (read-character-literal istr))
         ((or (eq? ch #\x) (eq? ch #\X)) (read-radixed-integer 16))
         ((or (eq? ch #\b) (eq? ch #\B)) (read-radixed-integer 2))
+        ((or (eq? ch #\o) (eq? ch #\O)) (read-radixed-integer 8))
         (#t (error "unknown sharp sign sequence #~C" ch))))
 
 (define (read-maybe istr c)
