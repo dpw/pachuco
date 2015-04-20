@@ -560,12 +560,11 @@
 ;;; Function calls
 
 (define (func-lambda func)
-  (cond ((eq? 'ref (first func))
-         (varrec-lambda (varrec-origin (form-attr func 'varrec))))
-        ((member? (first func) '(lambda static-lambda))
-         func)
-        (true
-         false)))
+  (when (eq? 'ref (first func))
+    (let* ((val (varrec-value (varrec-origin (form-attr func 'varrec)))))
+      (when val (set! func val))))
+  (and (member? (first func) '(lambda static-lambda))
+       func))
 
 (define (check-call-nargs l nargs)
   (let* ((expected (length (form-attr l 'params)))
@@ -683,11 +682,11 @@
     (format "~A+~D" label closure-tag)))
 
 (define (varrec-const? varrec)
-  (let* ((l (varrec-lambda varrec)))
+  (let* ((l (varrec-value varrec)))
     (and l (eq? 'static-lambda (first l)))))
 
 (define (varrec-const-operand varrec)
-  (let* ((l (varrec-lambda varrec)))
+  (let* ((l (varrec-value varrec)))
     (and l
          (eq? 'static-lambda (first l))
          (format "~A+~D" (static-lambda-closure-label l) closure-tag))))

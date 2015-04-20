@@ -149,7 +149,7 @@
   index ; index of closure/parameter/frame/etc. slot
   misc ; available for per-phase use
   access ; access class: read-only, written or early-function
-  lambda ; the lambda that this variable refers to, if not written
+  value ; the defined value of this variable, if not written
   origin ; origin varrec for closure variables
   source ; source varrec for closure variables
   boxed ; is the variable boxed?
@@ -410,12 +410,11 @@
                                                 varrec-define-lambda-state-table
                                                 varrec-define-state-table))))
     (when (= state 2) (rplaca form 'set!))
-    (when lambda?
-      ;; Record the lambda in the varrec.  We don't know if the varrec
-      ;; is read-only at this point, but if it turns out not to be, we
-      ;; remove this attr later on.
-      (varrec-set-lambda! varrec val)
-      (form-attr-set! val 'self varrec))))
+    ;; Record the value in the varrec.  We don't know if the varrec
+    ;; is read-only at this point, but if it turns out not to be, we
+    ;; clear this later on.
+    (varrec-set-value! varrec val)
+    (when lambda? (form-attr-set! val 'self varrec))))
 
 (define (classify-block-variables varrecs init mode form)
   (dolist (varrec varrecs)
@@ -433,10 +432,11 @@
         (varrec-set-access! varrec access)
         (when (eq? access 'written)
           ;; Remove lambda/self cross references
-          (let* ((lambda (varrec-lambda varrec)))
-            (when lambda
-              (varrec-set-lambda! varrec false)
-              (form-attr-set! lambda 'self false))))))))
+          (let* ((val (varrec-value varrec)))
+            (when val
+              (varrec-set-value! varrec false)
+              (when (eq? 'lambda (car val))
+                (form-attr-set! val 'self false)))))))))
 
 (define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 4 'local form))
@@ -802,9 +802,8 @@
          (when (varrec-source varrec)
            (varrec-set-source! varrec
                                (debug-uniquify-varrec (varrec-source varrec))))
-         (when (varrec-lambda varrec)
-           (varrec-set-lambda! varrec
-                               (debug-lambda (varrec-lambda varrec) false)))
+         (when (varrec-value varrec)
+           (varrec-set-value! varrec (list (car (varrec-value varrec)) 'etc)))
          varrec)))
 
 (define (debug-uniquify-varrecs varrecs)
