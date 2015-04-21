@@ -422,9 +422,13 @@
   (codegen-simplify-set! form varrec))
 
 (define-codegen-simplify (ref varrec)
-  ;; make the varrec into a normal attribute, in order to use
-  ;; define-operator
-  (rplaca (cdr form) (acons 'varrec varrec ())))
+  (let* ((val (varrec-value varrec)))
+    (if (and val (eq? 'quote (first val)))
+        ;; propagate constant
+        (overwrite-form form (copy-list val))
+        ;; make the varrec into a normal attribute, in order to use
+        ;; define-operator
+        (rplaca (cdr form) (acons 'varrec varrec ())))))
 
 ;;; Simplifications of arithmetic operators
 
@@ -682,8 +686,8 @@
     (format "~A+~D" label closure-tag)))
 
 (define (varrec-const? varrec)
-  (let* ((l (varrec-value varrec)))
-    (and l (eq? 'static-lambda (first l)))))
+  (let* ((val (varrec-value varrec)))
+    (and val (member? (first val) '(quote static-lambda)))))
 
 (define (varrec-const-operand varrec)
   (let* ((l (varrec-value varrec)))
