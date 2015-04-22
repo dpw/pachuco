@@ -366,7 +366,8 @@
 (define-operator (alloc-closure) ()
   (emit-alloc cg (* value-size (1+ (attr-ref attrs 'length)))
               value-scale closure-tag-bits result spare-regs ())
-  (emit-mov cg (attr-ref attrs 'label) (mem-operand result))
+  (emit-mov cg (lambda-indirect-label (attr-ref attrs 'lambda))
+            (mem-operand result))
   (emit-add cg closure-tag result)
   result)
 

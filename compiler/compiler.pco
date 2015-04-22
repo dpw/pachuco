@@ -727,7 +727,7 @@
          (vals (mapfor (cvarrec (form-attr form 'closure))
                  (set! len (1+ len))
                  (list 'ref (varrec-source cvarrec)))))
-    (decompose-lambda form len false vals)))
+    (decompose-lambda form len vals)))
 
 (define (fill-closures-define-lambda varrec form)
   (let* ((body (third form))
@@ -737,31 +737,20 @@
                         (val (closure-slot-value varrec index source)))
                    (set! index (1+ index))
                    val))))
-    (decompose-lambda form index (and (varrec-top-level? varrec)
-                                      (varrec-name varrec))
-                      vals)))
+    (decompose-lambda form index vals)))
 
-(define (decompose-lambda form len name closure-vals)
-  (let* ((body (third form))
-         (indirect-label (make-label-for name indirect-function-label-prefix)))
+(define (decompose-lambda form len closure-vals)
+  (let* ((body (third form)))
     (form-attr-set! form 'body body)
-    (form-attr-set! form 'indirect-label indirect-label)
-    (form-attr-set! form 'direct-label
-                    (if (form-attr form 'vararg)
-                        indirect-label
-                        (make-label-for name direct-function-label-prefix)))
     (if (= len 0)
         (begin
           (rplaca form 'static-lambda)
-          (when name (form-attr-set! form 'closure-label name))
           (rplacd (cdr form) ()))
-        (rplacd (cdr form) (cons (make-alloc-closure len indirect-label)
+        (rplacd (cdr form) (cons (list 'alloc-closure
+                                       (list (cons 'length len)
+                                             (cons 'lambda form)))
                                  closure-vals)))
     (fill-closures body)))
-
-(define (make-alloc-closure len indirect-label)
-    (list 'alloc-closure (list (cons 'length len)
-                               (cons 'label indirect-label))))
 
 (define (closure-slot-value varrec index source)
   (let* ((fixups (varrec-misc source)))
@@ -840,6 +829,11 @@
 
 (define-debug-form ((lambda static-lambda) attrs . body)
   (debug-lambda form true))
+
+(define-debug-form (alloc-closure attrs)
+  (list 'alloc-closure (mapfor (attr attrs) (if (eq? 'lambda (car attr))
+                                                '(lambda . etc)
+                                                attr))))
 
 (define-debug-form ((define set!) varrec . val)
   (list* (car form) (debug-uniquify-varrec varrec) (debug-forms val)))

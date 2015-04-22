@@ -78,10 +78,28 @@
   ;; This indicates to the linker that we support a non-executable stack
   (emit cg ".section .note.GNU-stack,\"\",%progbits"))
 
+(define (lambda-label l attr prefix)
+  (let* ((label (form-attr-defaulting l attr false)))
+    (or label
+        (let* ((varrec (form-attr-defaulting l 'self false)))
+          (set! label (make-label-for (and varrec
+                                           (varrec-top-level? varrec)
+                                           (varrec-name varrec)) prefix))
+          (form-attr-set! l attr label)))))
+
+(define (static-lambda-closure-label l)
+  (lambda-label l 'closure-label closure-label-prefix))
+
+(define (lambda-direct-label l)
+  (lambda-label l 'direct-label direct-function-label-prefix))
+
+(define (lambda-indirect-label l)
+  (lambda-label l 'indirect-label indirect-function-label-prefix))
+
 (define (codegen-function cg form)
   (let* ((attrs (second form))
          (closure (attr-ref attrs 'closure))
-         (indirect-label (attr-ref attrs 'indirect-label)))
+         (indirect-label (lambda-indirect-label form)))
     (labels ((assign-varrec-indices (varrecs)
                ;; assign slot indices to varrecs
                (let* ((index 0))
@@ -116,7 +134,7 @@
                              (arg-count ()))))))
               (codegen-simplify expr)
               (trashy-codegen-discarding expr cg false))))
-        (emit-function-label cg (attr-ref attrs 'direct-label))))
+        (emit-function-label cg (lambda-direct-label form))))
 
     (emit-function-prologue cg)
     (codegen-set-have-closure! cg (if (null? closure)
@@ -606,8 +624,11 @@
          (l (func-lambda func)))
     (when l
       (check-call-nargs l nargs)
-      (unless (form-attr l 'vararg) (set! needs-nargs false))
-      (set! label (form-attr l 'direct-label))
+      (set! label (if (form-attr l 'vararg)
+                      (lambda-indirect-label l)
+                      (begin
+                        (set! needs-nargs false)
+                        (lambda-direct-label l))))
 
       (when (cond ((and (eq? 'ref (first func))
                         (eq? 'self (varrec-mode (form-attr func 'varrec))))
@@ -669,19 +690,11 @@
         (emit-direct-call-or-jump cg call-or-jump label)
         (emit-indirect-call-or-jump cg call-or-jump))))
 
-(define (static-lambda-closure-label l)
-  (let* ((cl (form-attr-defaulting l 'closure-label false)))
-    (if (string? cl)
-        cl
-        (begin
-          (set! cl (make-label-for cl closure-label-prefix))
-          (form-attr-set! l 'closure-label cl)))))
-
 (define-operator (static-lambda) ()
   (codegen-lambda-todo cg form)
   (let* ((label (static-lambda-closure-label form)))
     (emit-data cg label closure-tag-bits)
-    (emit-literal cg (attr-ref attrs 'indirect-label))
+    (emit-literal cg (lambda-indirect-label form))
     (emit cg ".text")
     (format "~A+~D" label closure-tag)))
 
