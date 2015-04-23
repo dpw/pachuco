@@ -135,13 +135,22 @@
 (define (syscall-close fd)
   (checked-syscall "close" (fixnum->raw fd)))
 
-;; O_* values for Linux x86/x86_64
+(define (syscall-unlink path)
+  (checked-syscall "unlink" (make-c-string path)))
+
+;; O_* values for Linux
 
 (define (open-file-for-reading pathname)
-  (syscall-open pathname 0 0))
+  (syscall-open pathname 0 0)) ; O_RDONLY
+
+(define (open-file-for-writing pathname)
+  (syscall-open pathname #o101 #o777)) ; O_WRONLY | O_CREAT
 
 (define (close-file fd)
   (syscall-close fd))
+
+(define (unlink-file path)
+  (syscall-unlink path))
 
 ;;; Command line access
 

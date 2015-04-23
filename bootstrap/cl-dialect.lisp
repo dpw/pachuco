@@ -183,6 +183,9 @@
 (defun open-file-for-reading (pathname)
   (open pathname))
 
+(defun open-file-for-reading (pathname)
+  (open pathname :direction :output))
+
 (defun close-file (f)
   (close f))
 

@@ -457,9 +457,14 @@ y)" '(x y))
     (assert-read "(x ;comment
 )" '(x)))
 
-  (with-open-file-for-reading (f "test/testfile")
+  (with-open-file-for-writing (f "/tmp/testfile")
+    (formout f "~S~%" '("hello" world)))
+
+  (with-open-file-for-reading (f "/tmp/testfile")
     (assert-result (read f) '("hello" world))
     (assert-result (read f #f) #f))
+
+  (unlink-file "/tmp/testfile")
 
   ;; check that body forms at the end of bodies are evaluated correctly
   (assert-result (begin (define x #t) (define y x)) #t)
