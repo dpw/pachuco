@@ -744,31 +744,3 @@
             (car c)
             (attempt-read))))
   (attempt-read))
-
-;;; Files
-
-(defmacro (with-open-file-for-reading var-pathname . body)
-  (define fd (gensym))
-  (define res (gensym))
-  (quasiquote
-    (begin
-      (define (unquote fd)
-              (open-file-for-reading (unquote (second var-pathname))))
-      (define (unquote (first var-pathname)) (make-fd-istream (unquote fd)))
-      (define res (unquote-splicing body))
-      (close-file (unquote fd))
-      res)))
-
-(defmacro (with-open-file-for-writing var-pathname . body)
-  (define fd (gensym))
-  (define res (gensym))
-  (quasiquote
-    (begin
-      (define (unquote fd)
-              (open-file-for-writing (unquote (second var-pathname))))
-      (define (unquote (first var-pathname))
-              (make-fd-ostream (unquote fd) 10000))
-      (define res (unquote-splicing body))
-      (flush-ostream (unquote (first var-pathname)))
-      (close-file (unquote fd))
-      res)))

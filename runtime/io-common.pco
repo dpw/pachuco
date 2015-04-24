@@ -1,0 +1,19 @@
+;;; Files
+
+(defmacro (with-open-file-for-reading var-pathname . body)
+  (let* ((res (gensym)))
+    (quasiquote
+      (let* (((unquote (first var-pathname))
+              (open-file-for-reading (unquote (second var-pathname))))
+             ((unquote res) (begin (unquote-splicing body))))
+        (close-istream (unquote (first var-pathname)))
+        (unquote res)))))
+
+(defmacro (with-open-file-for-writing var-pathname . body)
+  (let* ((res (gensym)))
+    (quasiquote
+      (let* (((unquote (first var-pathname))
+              (open-file-for-writing (unquote (second var-pathname))))
+             ((unquote res) (begin (unquote-splicing body))))
+        (close-ostream (unquote (first var-pathname)))
+        (unquote res)))))

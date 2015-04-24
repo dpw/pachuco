@@ -183,10 +183,13 @@
 (defun open-file-for-reading (pathname)
   (open pathname))
 
-(defun open-file-for-reading (pathname)
+(defun close-istream (f)
+  (close f))
+
+(defun open-file-for-writing (pathname)
   (open pathname :direction :output))
 
-(defun close-file (f)
+(defun close-ostream (f)
   (close f))
 
 ;; Quasiquote
@@ -265,9 +268,6 @@
   (if eos
       (common-lisp:read in nil (car eos))
       (common-lisp:read in)))
-
-(defmacro with-open-file-for-reading (&rest body)
-  `(with-open-file ,@body))
 
 (defmacro sublist (&rest args)
   `(subseq ,@args))

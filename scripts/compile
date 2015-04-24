@@ -79,7 +79,7 @@ while [ $# -gt 0 ] ; do
     esac
 done
 
-cmd="$compiler compile $runtimedir/runtime.pco $runtimedir/cl-compat.pco $runtimedir/runtime2.pco $runtimedir/io.pco 'no-interp!$runtimedir/compiled-builtins.pco' 'no-interp!$runtimedir/gc.pco' $files"
+cmd="$compiler compile $runtimedir/runtime.pco $runtimedir/cl-compat.pco $runtimedir/runtime2.pco $runtimedir/io.pco $runtimedir/io-common.pco 'no-interp!$runtimedir/compiled-builtins.pco' 'no-interp!$runtimedir/gc.pco' $files"
 
 [ -n "$verbose" ] && echo $cmd 1>&2
 

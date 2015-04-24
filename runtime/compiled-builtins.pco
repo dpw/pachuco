@@ -141,13 +141,19 @@
 ;; O_* values for Linux
 
 (define (open-file-for-reading pathname)
-  (syscall-open pathname 0 0)) ; O_RDONLY
+  ;; O_RDONLY
+  (make-fd-istream (syscall-open pathname 0 0)))
 
 (define (open-file-for-writing pathname)
-  (syscall-open pathname #o101 #o777)) ; O_WRONLY | O_CREAT
+  ;; O_WRONLY | O_CREAT
+  (make-fd-ostream (syscall-open pathname #o101 #o777) 10000))
 
-(define (close-file fd)
-  (syscall-close fd))
+(define (close-istream is)
+  (syscall-close (istream-fd is)))
+
+(define (close-ostream os)
+  (flush-ostream os)
+  (syscall-close (ostream-fd os)))
 
 (define (unlink-file path)
   (syscall-unlink path))

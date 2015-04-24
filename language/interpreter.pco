@@ -257,7 +257,6 @@
                                    (function raw-read-substring))
 (register-interpreter-builtin-func 'open-file-for-reading
                                    (function open-file-for-reading))
-(register-interpreter-builtin-func 'close-file (function close-file))
 (register-interpreter-builtin-var 'raw-stdout raw-stdout)
 (register-interpreter-builtin-var 'raw-stderr raw-stderr)
 (register-interpreter-builtin-var 'raw-stdin raw-stdin)

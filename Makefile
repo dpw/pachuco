@@ -59,10 +59,13 @@ COMPILER_SOURCES= \
     $(CODEGEN_SOURCES) compiler/codegen-generic.pco compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
-    bootstrap/cl-dialect.lisp runtime/runtime2.pco $(COMPILER_SOURCES)
+    bootstrap/cl-dialect.lisp runtime/runtime2.pco runtime/io-common.pco \
+    $(COMPILER_SOURCES)
 export CL_COMPILER_SOURCES
 
-RUNTIME=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco runtime/io.pco no-interp!runtime/compiled-builtins.pco no-interp!runtime/gc.pco
+RUNTIME=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco \
+    runtime/io.pco runtime/io-common.pco \
+    no-interp!runtime/compiled-builtins.pco no-interp!runtime/gc.pco
 RUNTIME_SOURCES=$(patsubst no-interp!%,%,$(RUNTIME))
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
 
