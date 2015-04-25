@@ -110,8 +110,12 @@
       (assign-varrec-indices (attr-ref attrs 'params)))
 
     (emit cg ".text")
-    (emit-align cg value-scale)
-    (emit-literal cg (fixnum-representation (1+ (length closure))))
+    ;; The indirect label is preceded by the closure size in order to
+    ;; tell the GC how big a closure is.  But the GC leaves the
+    ;; closures for static-lambdas alone.
+    (unless (eq? 'static-lambda (car form))
+      (emit-align cg value-scale)
+      (emit-literal cg (fixnum-representation (1+ (length closure)))))
     (emit-function-label cg indirect-label)
 
     (let* ((self-varrec (attr-ref attrs 'self)))
