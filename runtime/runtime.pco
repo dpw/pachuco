@@ -314,30 +314,20 @@
           ((unquote loopf) (cdr (unquote l)))))
       ((unquote loopf) (unquote (second binding))))))
 
+(define (map f l)
+  (if (null? l) ()
+      (begin
+        (define res (cons (f (car l)) ()))
+        (define tail res)
+        (dolist (x (cdr l))
+          (define new-tail (cons (f x) ()))
+          (rplacd tail new-tail)
+          (set! tail new-tail))
+        res)))
+
 (defmacro (mapfor binding . body)
-  (define bodyf (gensym))
-  (define loopf (gensym))
-  (define in (gensym))
-  (define out (gensym))
-  (define tail (gensym))
-  (quasiquote (begin
-    (define (unquote in) (unquote (second binding)))
-    (if (null? (unquote in)) ()
-        (begin
-          (define ((unquote bodyf) (unquote (first binding)))
-              . (unquote body))
-
-          (define (unquote out)
-              (cons ((unquote bodyf) (car (unquote in))) ()))
-          (define ((unquote loopf) (unquote in) (unquote tail))
-            (unless (null? (unquote in))
-              (define (unquote out)
-                  (cons ((unquote bodyf) (car (unquote in))) ()))
-              (rplacd (unquote tail) (unquote out))
-              ((unquote loopf) (cdr (unquote in)) (unquote out))))
-
-          ((unquote loopf) (cdr (unquote in)) (unquote out))
-          (unquote out))))))
+  (quasiquote (map (lambda ((unquote (first binding))) (unquote-splicing body))
+                   (unquote (second binding)))))
 
 (defmacro (nmapfor binding . body)
   (define loopf (gensym))

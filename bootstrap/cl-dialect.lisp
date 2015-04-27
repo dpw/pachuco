@@ -73,6 +73,9 @@
     (or id
         (setf (get sym 'id) (setq symbol-id-counter (1+ symbol-id-counter))))))
 
+(shadow 'map)
+(defmacro map (f l) `(mapcar ,f ,l))
+
 (defmacro mapfor (decl &rest body)
   (let ((var (first decl))
         (l (second decl)))
