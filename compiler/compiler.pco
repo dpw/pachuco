@@ -359,26 +359,7 @@
 ;;;
 ;;; During classification, a simple state machine operates for each
 ;;; variable, with transitions triggered by forms that refer to that
-;;; variable.  The state machine's table is shown below.  The state is
-;;; recorded in the misc field of a varrec, represented by a small
-;;; integer.
-;;;
-;;; States:
-;;;
-;;; I (4) - initial state
-;;; r (5) - read before a define
-;;; F (3) - an early-use function (reads before its define)
-;;; E (2) - an early-use (reads and/or writes before define)
-;;; W (1) - written (after definition)
-;;; R (0) - read (after definition)
-;;; ! (6) - error
-;;;
-;;;               R W E F I r !
-;;;
-;;; define        ! W E ! R E !
-;;; define lambda ! W E ! R F !
-;;; ref           R W E F r r !
-;;; set!          W W E E E E !
+;;; variable.
 ;;;
 ;;; When we finish traversing a binding form, an "acccess" attribute
 ;;; is added to each varrec, indicating whether the access style is
@@ -386,10 +367,47 @@
 
 (define-trivial-walker classify-variables ())
 
-(define varrec-define-state-table (vector 6 1 2 6 0 2 6))
-(define varrec-define-lambda-state-table (vector 6 1 2 6 0 3 6))
-(define varrec-ref-state-table (vector 0 1 2 3 5 5 6))
-(define varrec-set!-state-table (vector 1 1 2 2 2 2 6))
+;; A macro to generate names for states and the state machine tables.
+(defmacro (define-varrec-states states . table)
+  (labels ((state-name (state)
+             (compound-symbol "varrec-" state "-state"))
+           (make-state-defs (states n)
+             (if (null? states)
+                 ()
+                 (cons (list 'defconstant (state-name (car states)) n)
+                       (make-state-defs (cdr states) (1+ n)))))
+           (make-table-defs (table)
+             (if (null? table)
+                 ()
+                 (let* ((table-name (compound-symbol "varrec-" (caar table)
+                                                     "-state-table")))
+                   (cons (quasiquote
+                           (define (unquote table-name)
+                             (make-vector-from-list (list (unquote-splicing
+                               (map (function state-name) (cdar table)))))))
+                         (make-table-defs (cdr table)))))))
+    (quasiquote (definitions
+      (unquote-splicing (make-state-defs states 0))
+      (unquote-splicing (make-table-defs table))))))
+
+;;; States, and the transitions that lead to them.
+;;;
+;;; i: initial state
+;;; err: error state
+;;; r (read only): { define, define-lambda } ref*
+;;; w (write only): { define, define-lambda } { ref, set! }*
+;;; er (early refs): ref*
+;;; e (early uses): ref* { define, set! } any*
+;;                 | ref* define-lambda ref* set! ref*
+;;; ef (early function): ref* define-lambda ref*
+
+(define-varrec-states
+                (r   w   e   ef  i   er  err)
+  (define        err w   e   err r   e   err)
+  (define-lambda err w   e   err r   ef  err)
+  (ref           r   w   e   ef  er  er  err)
+  (set!          w   w   e   e   e   e   err))
+
 (define varrec-access-table
   (vector 'read-only 'written 'written 'early-function))
 
@@ -409,7 +427,7 @@
          (state (update-varrec-state varrec (if lambda?
                                                 varrec-define-lambda-state-table
                                                 varrec-define-state-table))))
-    (when (= state 2) (rplaca form 'set!))
+    (when (= state varrec-e-state) (rplaca form 'set!))
     ;; Record the value in the varrec.  We don't know if the varrec
     ;; is read-only at this point, but if it turns out not to be, we
     ;; clear this later on.
@@ -424,8 +442,9 @@
   (dolist (varrec varrecs)
     (let* ((state (varrec-misc varrec)))
       (varrec-set-misc! varrec false)
-      (cond ((>= state 4) (error "bad variable ~S" (varrec-name varrec)))
-            ((= state 2)
+      (cond ((>= state varrec-i-state)
+             (error "bad variable ~S" (varrec-name varrec)))
+            ((= state varrec-e-state)
              (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
                                       (cddr form)))))
       (let* ((access (vector-ref varrec-access-table state)))
@@ -439,11 +458,12 @@
                 (form-attr-set! val 'self false)))))))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs 4 'local form))
+  (classify-block-variables varrecs varrec-i-state 'local form))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) 0 'param form))
+  (classify-block-variables (attr-ref attrs 'params) varrec-r-state 'param
+                            form))
 
 (define (varrec-written? varrec)
   (eq? 'written (varrec-access varrec)))
