@@ -55,7 +55,7 @@ endif
 
 COMPILER_SOURCES= \
     language/util.pco language/expander.pco language/interpreter.pco \
-    compiler/walker.pco $(MACH_SOURCES) compiler/compiler.pco \
+    compiler/walker.pco $(MACH_SOURCES) compiler/front-end.pco \
     $(CODEGEN_SOURCES) compiler/codegen-generic.pco compiler/driver.pco
 
 CL_COMPILER_SOURCES= \
