@@ -155,7 +155,7 @@
   (flush-ostream os)
   (syscall-close (ostream-fd os)))
 
-(define (unlink-file path)
+(define (delete-file path)
   (syscall-unlink path))
 
 ;;; Command line access

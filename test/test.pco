@@ -464,7 +464,7 @@ y)" '(x y))
     (assert-result (read f) '("hello" world))
     (assert-result (read f #f) #f))
 
-  (unlink-file "/tmp/testfile")
+  (delete-file "/tmp/testfile")
 
   ;; check that body forms at the end of bodies are evaluated correctly
   (assert-result (begin (define x #t) (define y x)) #t)
