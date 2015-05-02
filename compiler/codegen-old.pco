@@ -230,13 +230,9 @@
                             (reg (car c))
                             (operand (codegen (elt args arg) cg false
                                               available-regs reg)))
-                       ;; If the result of evaluating the argument
-                       ;; doesn't meet the operand constraint, move it
-                       ;; into the allocated register.
-                       (unless (funcall (funcall operand-constraints arg)
-                                        operand)
-                         (emit-mov-maybe cg operand reg)
-                         (set! operand reg))
+                       (set! operand (apply-operand-constraint cg
+                                            (funcall operand-constraints arg)
+                                            operand reg))
 
                        ;; Results are not necessaily produced as
                        ;; register operands (e.g. an arg can produce
@@ -521,13 +517,9 @@
 
                      (let* ((operand (frame-slot (codegen-frame-base cg)))
                             (output-operands (aux (cdr trashy-args))))
-                       ;; Apply operand-constraint to the result on
-                       ;; the stack
-                       (unless (funcall operand-constraint operand)
-                         (emit-mov-maybe cg operand (first regs))
-                         (set! operand (first regs)))
                        (rplaca (nthcdr (car trashy-args) output-operands)
-                               operand)
+                               (apply-operand-constraint cg operand-constraint
+                                                         operand (first regs)))
                        output-operands)))))
       (aux (form-attr form 'trashy-args)))))
 

@@ -37,6 +37,15 @@
   (reduce 0 regs
           (lambda (bits reg) (logior bits (register-bit reg)))))
 
+;; If the result of evaluating the argument doesn't meet the operand
+;; constraint, move it into the given register.
+(define (apply-operand-constraint cg constraint operand reg)
+  (if (funcall constraint operand)
+      operand
+      (begin
+        (emit-mov-maybe cg operand reg)
+        reg)))
+
 ;; Assembly utility functions
 
 (define (emit-data cg label scale)
