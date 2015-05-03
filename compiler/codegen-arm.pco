@@ -248,7 +248,8 @@
 (define-operator (alloc-closure) ((temp-regs labelreg))
   (emit-alloc cg  (* value-size (1+ (attr-ref attrs 'length)))
               value-scale closure-tag-bits (cons labelreg spare-regs) ())
-  (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg) (attr-ref attrs 'label))
+  (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg)
+         (lambda-indirect-label (attr-ref attrs 'lambda)))
   (emiti cg "str ~A, [~A]" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) closure-tag)
@@ -313,7 +314,7 @@
 
 (define-trashy-codegen (tail-call attrs . args) ()
   (let* ((operands (trashy-codegen-general cg form
-                                           (function any-operand-constraint)))
+                                           (function any-operand-constraint))))
     (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))
     (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
       (emit-reset-frame-base cg assignments-base)
