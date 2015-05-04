@@ -259,13 +259,10 @@
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand val)
         (reg-asm-operand closure) (closure-slot-offset index)))
 
-(define-cc-operator (check-arg-count) ()
-  cc-eq)
-
-(define (emit-check-nargs cg nparams bad-nargs-label)
+(define (emit-check-nargs cg nparams branch-on-ok label)
   (emiti cg "cmp ~A, #~D" (reg-asm-operand %nargs)
          (fixnum-representation nparams))
-  (emit-branch cg cc-ne bad-nargs-label))
+  (emit-branch cg (if branch-on-ok cc-eq cc-ne) label))
 
 (define-operator (raw-args-base) ()
   (emiti cg "add ~A, sp, #~D" (reg-asm-operand result)

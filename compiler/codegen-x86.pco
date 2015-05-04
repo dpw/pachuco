@@ -422,9 +422,9 @@
 
 ;;; Function call-related internals
 
-(define (emit-check-nargs cg nparams bad-nargs-label)
+(define (emit-check-nargs cg nparams branch-on-ok label)
   (emit-cmp cg (fixnum-representation nparams) %nargs)
-  (emit-branch cg "ne" bad-nargs-label))
+  (emit-branch cg (if branch-on-ok "e" "ne") label))
 
 (define-operator (raw-args-base) ()
   (emit-lea cg (indexed-operand %sp (codegen-frame-base cg)) result)

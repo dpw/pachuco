@@ -433,14 +433,14 @@
   (emit cg "sw ~A, ~D(~A)" (reg-asm-operand val)
         (closure-slot-offset index) (reg-asm-operand closure)))
 
-(define (emit-check-nargs cg nparams bad-nargs-label)
-  (let* ((nargs (reg-asm-operand %nargs)))
-    (if (= 0 nparams)
-        (emit cg "bnez ~A, ~A" nargs bad-nargs-label)
-        (let* ((temp (reg-asm-operand (first general-registers))))
-          (emit cg "addiu ~A, ~A, -~D" temp nargs
-                (fixnum-representation nparams))
-          (emit cg "bnez ~A, ~A" temp bad-nargs-label)))
+(define (emit-check-nargs cg nparams branch-on-ok label)
+  (let* ((reg %nargs))
+    (unless (= 0 nparams)
+      (let* ((temp (first general-registers)))
+        (emit-xor cg reg (fixnum-representation nparams) temp)
+        (set! reg temp)))
+    (emit cg "~A ~A, ~A" (if branch-on-ok "beqz" "bnez")
+          (reg-asm-operand reg) label)
     (emit-nop cg)))
 
 (define-operator (raw-args-base) ()

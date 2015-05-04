@@ -125,29 +125,26 @@
     (unless (eq? 'static-lambda (car form))
       (emit-align cg value-scale)
       (emit-literal cg (fixnum-representation (1+ (length closure)))))
-    (emit-function-label cg indirect-label)
 
     (let* ((self-varrec (attr-ref attrs 'self)))
       (when self-varrec
         (emit-comment cg "function ~S" (varrec-name self-varrec))))
 
+    (emit-function-label cg indirect-label)
     (unless (attr-ref attrs 'vararg)
-      (let* ((nparams (length (attr-ref attrs 'params)))
-             (bad-nargs-label (gen-label)))
-        (emit-check-nargs cg nparams bad-nargs-label)
-        (codegen-push-out-of-line cg
-          (lambda ()
-            (emit-smart-label cg bad-nargs-label)
-            (emit-function-prologue cg)
-            (let* ((expr (quasiquote
-               (return ((nparams . (unquote nparams)))
-                       (call ()
-                             (ref (unquote (codegen-arity-mismatch-varrec cg)))
-                             (quote (unquote nparams))
-                             (arg-count ()))))))
-              (codegen-simplify expr)
-              (trashy-codegen-discarding expr cg false))))
-        (emit-function-label cg (lambda-direct-label form))))
+      (let* ((direct-label (lambda-direct-label form))
+             (nparams (length (attr-ref attrs 'params))))
+        (emit-check-nargs cg nparams true direct-label)
+        (emit-function-prologue cg)
+        (let* ((expr (quasiquote
+              (return ((nparams . (unquote nparams)))
+                      (call ()
+                            (ref (unquote (codegen-arity-mismatch-varrec cg)))
+                            (quote (unquote nparams))
+                            (arg-count ()))))))
+          (codegen-simplify expr)
+          (trashy-codegen-discarding expr cg false))
+        (emit-function-label cg direct-label)))
 
     (emit-function-prologue cg)
     (codegen-set-have-closure! cg (if (null? closure)
