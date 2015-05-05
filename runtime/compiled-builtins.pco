@@ -138,15 +138,14 @@
 (define (syscall-unlink path)
   (checked-syscall "unlink" (make-c-string path)))
 
-;; O_* values for Linux
-
 (define (open-file-for-reading pathname)
-  ;; O_RDONLY
-  (make-fd-istream (syscall-open pathname 0 0)))
+  (make-fd-istream (syscall-open pathname syscall-o-rdonly 0)))
 
 (define (open-file-for-writing pathname)
-  ;; O_WRONLY | O_CREAT
-  (make-fd-ostream (syscall-open pathname #o101 #o777) 10000))
+  (make-fd-ostream (syscall-open pathname
+                                 (logior syscall-o-wronly syscall-o-creat)
+                                 #o777)
+                   10000))
 
 (define (close-istream is)
   (syscall-close (istream-fd is)))

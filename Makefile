@@ -64,7 +64,7 @@ CL_COMPILER_SOURCES= \
 export CL_COMPILER_SOURCES
 
 RUNTIME=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime2.pco \
-    runtime/io.pco runtime/io-common.pco \
+    runtime/io.pco runtime/io-common.pco runtime/sysconstants.pco \
     no-interp!runtime/compiled-builtins.pco no-interp!runtime/gc.pco
 RUNTIME_SOURCES=$(patsubst no-interp!%,%,$(RUNTIME))
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco
@@ -78,6 +78,16 @@ DUMP_PHASE=fill-closures
 .PHONY: all clean print-compiler-sources compare-stage3
 
 all: stage0-test-run stage0-gc-test-run stage0-arity-mismatch-test-run compare-stage3
+
+build/sysconstants: runtime/sysconstants.c
+	@mkdir -p build
+	$(CC) -Wall -Werror -o $@ $<
+
+runtime/sysconstants.pco: build/sysconstants
+	$< >$@
+
+clean::
+	rm -f runtime/sysconstants.pco
 
 print-compiler-sources:
 	@echo $(SL_COMPILER_SOURCES)
@@ -129,7 +139,7 @@ $(2)-time: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	scripts/compile -C $(1) $(COMPILEOPTS) -T $(SL_COMPILER_SOURCES)
 endef
 
-clean:
+clean::
 	rm -rf build
 
 scripts/sbcl-wrapper: $(CL_COMPILER_SOURCES)
