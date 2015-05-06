@@ -37,6 +37,11 @@
   (reduce 0 regs
           (lambda (bits reg) (logior bits (register-bit reg)))))
 
+;; An operand constraint that accepts anything.  But for registers, we
+;; still need to ensure the the operand is in the allocated register.
+(define (any-operand-constraint op)
+  (not (register? op)))
+
 ;; If the result of evaluating the argument doesn't meet the operand
 ;; constraint, move it into the given register.
 (define (apply-operand-constraint cg constraint operand reg)
