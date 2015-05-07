@@ -1,40 +1,33 @@
 # Introduction
 
 Pachuco is a self-hosting compiler for a dialect of the Lisp
-programming language (and it also has a lot in common with Scheme).
-It generates i386 or x86-64 assembly code directly, rather than
-compiling to another high-level language or virtual machine.  The
-system is about 5000 lines of code, including the compiler, runtime,
-garbage collector, and interpreter (used in the macro system).  The
-whole system is written in the Pachuco language, except for a minimal
-amount of C and Common Lisp code to allow the system to be
-bootstrapped.
+programming language.  It generates assembly code directly, rather
+than compiling to another high-level language or virtual machine.  It
+targets x86 (32- and 64-bit), ARM and MIPS. The goal of the compiler
+is to be simple and fast: On my 2013-era x86 laptop, it compiles
+itself in under 0.2s.
 
-The Pachuco language is very modest in comparison to Common Lisp and
-Scheme, lacking facilities and conveniences not required for the
-compiler.  Nonetheless, the concise implementation of the compiler
-demonstrates the expressive power of such a simple dialect of Lisp.
+The system is about 10000 lines of code, including the compiler,
+runtime, garbage collector, and interpreter (used in the macro
+system).  The whole system is written in the Pachuco language, except
+for a minimal amount of C and Common Lisp code for bootstrapping.  The
+implementation remains very spartan in comparison to production
+compilers (e.g. its error reporting is almost non-existent).
 
-The language is briefly described in the LANGUAGE file.  Like Scheme,
-the language features a small core, lexically-scoped variables, and
+The Pachuco language is briefly described in the LANGUAGE file.  It is
+modest in comparison to Common Lisp and Scheme.  Like Scheme, the
+language features a small core, lexically-scoped variables, and
 supports proper tail recursion.  But the macro system and the library
-functions in the runtime are based on Common Lisp.
+functions in the runtime are influenced more by Common Lisp.
 
 Like a C compiler, the Pachuco compiler produces stand-alone
 executables.  Unlike traditional Lisps, it is not integrated into a
 read-eval-print loop, although the system does include a simple
 interpreter-based REPL.
 
-The current implementation of Pachuco has a number of limitations, and
-it is very spartan in comparison to production compilers (e.g. its
-error reporting is almost non-existent).  It is probably not yet
-suitable for other applications.
-
-
 # Getting Started
 
-Pachuco currently targets the i386 and x86-64 instruction set
-architectures, and builds and runs under Linux.  It requires basic
+Pachuco currently builds and runs under Linux.  It requires basic
 development tools to be installed, such as gcc, binutils, and make.
 It also uses the sbcl implementation of Common Lisp to bootstrap
 itself.  This is available as the sbcl package on Debian, Ubuntu and
