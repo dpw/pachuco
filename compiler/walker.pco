@@ -27,12 +27,13 @@
               ((unquote recurse-name) form . (unquote implicit-vars)))))
 
       (defmacro ((unquote define-name) template . body)
-        (quasiquote
-          (set-walker-symtab-entries (unquote (unquote symtab-name))
-            '(unquote (car template))
-            (lambda (form . (unquote (unquote implicit-vars)))
-              (bind (unquote (cdr template)) (cdr form)
-                . (unquote body))))))))))
+        (list 'set-walker-symtab-entries '(unquote symtab-name)
+              (list 'quote (car template))
+              (if (or (pair? body) (null? body))
+                  (quasiquote (lambda (form . (unquote (unquote implicit-vars)))
+                                (bind (unquote (cdr template)) (cdr form)
+                                      . (unquote body))))
+                  (list 'function body))))))))
 
 ;;; define-trivial-walker is like define-walker, but it also provides
 ;;; a recusrion function that does a straightforward recursion into
