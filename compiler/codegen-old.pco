@@ -299,12 +299,15 @@
         (rplacd pre (cons item (cdr pre)))
         l2)))
 
+(define (no-args-operator-reg-use form) 1)
+
 (defmacro (define-operator template options . body)
   (if (and (null? (cdr template)) (null? options))
       ;; A simple no-args operator.  We don't need the full codegen
       ;; machinery for this.
       (quasiquote (definitions
-        (define-reg-use ((unquote (car template)) attrs) 1)
+        (define-reg-use ((unquote (car template)) attrs)
+          . no-args-operator-reg-use)
 
         (define-codegen ((unquote (car template)) attrs)
           (let* ((result reg)
