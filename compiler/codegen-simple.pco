@@ -113,6 +113,7 @@
 (defmacro (define-operator template options . body)
   ;; define how to generate code for an operator
   (options-bind ((temp-regs ())
+                 (impure false) ; this is ignored in this code generator
                  (tail-form false)
                  (temp-fixed-regs ()))
                 options

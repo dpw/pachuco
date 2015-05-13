@@ -616,7 +616,7 @@
                (if varrec (varrec-name varrec) "anonymous function")
                at-least expected nargs)))))
 
-(define-operator (set-closure! closure val) ()
+(define-operator (set-closure! closure val) (impure)
   (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
   val)
 

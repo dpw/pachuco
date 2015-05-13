@@ -105,16 +105,16 @@
            ;; we only need to read such variables
            (emit-mov-maybe cg %closure reg)))))
 
-(define-operator (define val) ()
+(define-operator (define val) (impure )
   (emit-frame-push cg val)
   (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
   val)
 
-(define-operator (set! val) ()
+(define-operator (set! val) (impure)
   (access-varrec cg (attr-ref attrs 'varrec) store-insn val)
   val)
 
-(define-operator (top-level-set! val) ((temp-regs temp))
+(define-operator (top-level-set! val) (impure (temp-regs temp))
   (access-global cg store-insn val (varrec-index (attr-ref attrs 'varrec)) temp)
   val)
 

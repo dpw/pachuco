@@ -406,12 +406,12 @@
           ((eq? mode 'self) %closure)
           (true (error "strange variable mode ~S" mode)))))
 
-(define-operator (define (val reg-mem-imm)) ()
+(define-operator (define (val reg-mem-imm)) (impure)
   (emit-frame-push cg val)
   (varrec-set-index! (attr-ref attrs 'varrec) (codegen-frame-base cg))
   val)
 
-(define-operator (set! (val reg-imm)) ()
+(define-operator (set! (val reg-imm)) (impure)
   (emit-mov cg val (varrec-operand (attr-ref attrs 'varrec) cg))
   val)
 
@@ -457,11 +457,11 @@
 (define-operator (car a) () (tagged-operand pair-tag a 0))
 (define-operator (cdr a) () (tagged-operand pair-tag a 1))
 
-(define-operator (rplaca c (a reg-imm)) ()
+(define-operator (rplaca c (a reg-imm)) (impure)
   (emit-mov cg a (tagged-operand pair-tag c 0))
   c)
 
-(define-operator (rplacd c (d reg-imm)) ()
+(define-operator (rplacd c (d reg-imm)) (impure)
   (emit-mov cg d (tagged-operand pair-tag c 1))
   c)
 
@@ -473,7 +473,7 @@
   (emit-lea cg (offset-operand alloc box-tag) result)
   result)
 
-(define-operator (raw-box-set! box (val reg-imm)) ()
+(define-operator (raw-box-set! box (val reg-imm)) (impure)
   (emit-mov cg val (tagged-operand box-tag box 0))
   val)
 
@@ -652,13 +652,13 @@
         (begin (emit-movzx cg slot result scale)
                result))))
 
-(define-operator (raw-vec-set! vec (index reg-imm) (val reg-imm)) ()
+(define-operator (raw-vec-set! vec (index reg-imm) (val reg-imm)) (impure)
   (emit-mov cg val (vec-slot cg attrs vec index) (attr-ref attrs 'scale))
   val)
 
 (define-operator (copy-mem (src-addr fixed-reg %si) (dest-addr fixed-reg %di)
                            (len fixed-reg %c))
-                 ((temp-regs scaled-len dest-delta))
+                 (impure (temp-regs scaled-len dest-delta))
   (let* ((tag (attr-ref attrs 'tag))
          (scale (attr-ref attrs 'scale))
          (l1 (gen-label))
@@ -700,7 +700,7 @@
   (emit-movzx cg (mem-operand addr) result (attr-ref attrs 'scale))
   result)
 
-(define-operator (raw-set! (addr reg-imm) (val reg-imm)) ()
+(define-operator (raw-set! (addr reg-imm) (val reg-imm)) (impure)
   (emit-mov cg val (mem-operand addr) (attr-ref attrs 'scale))
   val)
 
@@ -730,7 +730,7 @@
 
 (define-operator (raw-label) () (attr-ref attrs 'name))
 
-(define-operator (raw-global-set! (val reg-imm)) ()
+(define-operator (raw-global-set! (val reg-imm)) (impure)
   (emit-mov cg val (mem-operand (subject-language-symbol-name
                                  (attr-ref attrs 'name))))
   val)

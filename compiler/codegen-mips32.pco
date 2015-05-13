@@ -653,11 +653,11 @@
          (reg-asm-operand a))
   result)
 
-(define-operator (rplaca c a) ()
+(define-operator (rplaca c a) (impure)
   (emit cg "sw ~A, ~D(~A)" (reg-asm-operand a) (- pair-tag) (reg-asm-operand c))
   c)
 
-(define-operator (rplacd c d) ()
+(define-operator (rplacd c d) (impure)
   (emit cg "sw ~A, ~D(~A)" (reg-asm-operand d) (- value-size pair-tag)
         (reg-asm-operand c))
   c)
@@ -690,7 +690,7 @@
   (emit-addu cg %alloc box-tag result)
   result)
 
-(define-operator (raw-box-set! box val) ()
+(define-operator (raw-box-set! box val) (impure)
   (emit cg "sw ~A, ~D(~A)" (reg-asm-operand val) (- box-tag)
         (reg-asm-operand box))
   val)
@@ -727,7 +727,7 @@
         (vector-ref instrs (attr-ref attrs 'scale))
         (reg-asm-operand val) index (reg-asm-operand vec)))
 
-(define-operator (raw-vec-set!-const-index vec (index reg-imm16) val) ()
+(define-operator (raw-vec-set!-const-index vec (index reg-imm16) val) (impure)
   (emit-raw-vec-set!-ref-const-index cg attrs store-variants vec index val)
   val)
 
@@ -747,7 +747,7 @@
           (- (attr-ref attrs 'header-size) (attr-ref attrs 'tag))
           (reg-asm-operand vec))))
 
-(define-operator (raw-vec-set! vec index val) ()
+(define-operator (raw-vec-set! vec index val) (impure)
   (emit-raw-vec-set!-ref cg attrs store-variants vec index val)
   val)
 
@@ -773,7 +773,7 @@
         (reg-asm-operand result) (reg-asm-operand addr))
   result)
 
-(define-operator (raw-set! addr val) ()
+(define-operator (raw-set! addr val) (impure)
   (emit cg "~A ~A, (~A)" (vector-ref store-variants (attr-ref attrs 'scale))
         (reg-asm-operand val) (reg-asm-operand addr))
   val)
@@ -806,7 +806,7 @@
   (emit-mov cg (attr-ref attrs 'name) result)
   result)
 
-(define-operator (raw-global-set! val) ((temp-regs temp))
+(define-operator (raw-global-set! val) (impure (temp-regs temp))
   (let* ((name (attr-ref attrs 'name))
          (rglob (assoc name register-globals)))
     (if rglob

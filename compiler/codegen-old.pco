@@ -300,6 +300,15 @@
         l2)))
 
 (define (no-args-operator-reg-use form) 1)
+(define (no-args-operator-reg-use-discarding form) 0)
+(define (no-args-operator-codegen-discarding form cg out-frame-base regs))
+
+(define (pure-operator-reg-use-discarding form)
+  (max$ 0 (mapfor (param (cdr form)) (reg-use-discarding param))))
+
+(define (pure-operator-codegen-discarding form cg out-frame-base regs)
+  (dolist (param (cdr form))
+    (codegen-discarding param cg out-frame-base regs)))
 
 (defmacro (define-operator template options . body)
   (if (and (null? (cdr template)) (null? options))
@@ -312,8 +321,15 @@
         (define-codegen ((unquote (car template)) attrs)
           (let* ((result reg)
                  (spare-regs regs))
-            . (unquote body)))))
+            . (unquote body)))
+
+        ;; No-args operations are always pure
+        (define-reg-use-discarding ((unquote (car template)) attrs)
+          . no-args-operator-reg-use-discarding)
+        (define-codegen-discarding ((unquote (car template)) attrs)
+          . no-args-operator-codegen-discarding)))
       (options-bind ((temp-regs ())
+                     (impure false)
                      (tail-form false)
                      (temp-fixed-regs ()))
                     options
@@ -397,7 +413,14 @@
                    (operator-args-codegen form cg regs
                                           (unquote operand-constraints-name))
                (let* (unquote (if tail-form () '((result reg))))
-                 . (unquote body))))))))))
+                 . (unquote body))))
+
+            . (unquote (if (or impure tail-form) () (quasiquote (
+              (define-reg-use-discarding ((unquote name) attrs . params)
+                . pure-operator-reg-use-discarding)
+
+              (define-codegen-discarding ((unquote name) attrs . params)
+                . pure-operator-codegen-discarding)))))))))))
 
 (defmacro (define-cc-operator template options . body)
   ;; define how to generate code for an operator that is free of

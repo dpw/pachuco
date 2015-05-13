@@ -492,12 +492,12 @@
         (- value-size pair-tag))
   result)
 
-(define-operator (rplaca c a) ()
+(define-operator (rplaca c a) (impure)
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand a) (reg-asm-operand c)
         (- pair-tag))
   c)
 
-(define-operator (rplacd c d) ()
+(define-operator (rplacd c d) (impure)
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand d) (reg-asm-operand c)
         (- value-size pair-tag))
   c)
@@ -531,7 +531,7 @@
          (reg-asm-operand %alloc) box-tag)
   result)
 
-(define-operator (raw-box-set! box val) ()
+(define-operator (raw-box-set! box val) (impure)
   (emiti cg "str ~A, [~A, #~D]" (reg-asm-operand val) (reg-asm-operand box)
         (- box-tag))
   val)
@@ -575,7 +575,7 @@
          (vector-ref instrs (attr-ref attrs 'scale))
          (reg-asm-operand val) (reg-asm-operand vec) (asm-operand index)))
 
-(define-operator (raw-vec-set!-const-index vec (index reg-offset12) val) ()
+(define-operator (raw-vec-set!-const-index vec (index reg-offset12) val) (impure)
   (emit-raw-vec-set!-ref-const-index cg attrs str-variants vec index val)
   val)
 
@@ -602,7 +602,7 @@
          (reg-asm-operand val) (reg-asm-operand vec) (reg-asm-operand index)
          (shift-expr (- number-tag-bits (attr-ref attrs 'scale)))))
 
-(define-operator (raw-vec-set! vec index val) ()
+(define-operator (raw-vec-set! vec index val) (impure)
   (emit-raw-vec-set!-ref cg attrs str-variants vec index val)
   val)
 
@@ -739,7 +739,7 @@
   (emiti cg "ldr ~A, =~A" (reg-asm-operand result) (attr-ref attrs 'name))
   result)
 
-(define-operator (raw-global-set! val) ((temp-regs temp))
+(define-operator (raw-global-set! val) (impure (temp-regs temp))
   (let* ((name (attr-ref attrs 'name))
          (rglob (assoc name register-globals)))
     (if rglob
@@ -760,7 +760,7 @@
          (reg-asm-operand result) (reg-asm-operand addr))
   result)
 
-(define-operator (raw-set! addr val) ()
+(define-operator (raw-set! addr val) (impure)
   (emiti cg "~A ~A, [~A]" (vector-ref str-variants (attr-ref attrs 'scale))
          (reg-asm-operand val) (reg-asm-operand addr))
   val)
