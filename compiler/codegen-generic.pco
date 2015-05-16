@@ -623,28 +623,25 @@
 ;; Do all the compile-time magic needed to make statically-known
 ;; function calls fast:
 ;;
-;; - Checking the number of arguments at compile time.
+;; - Checking the number of arguments at compile time
 ;;
 ;; - Storing the number of arguments in %nargs
 ;;
-;; - Working out which label to branch to.
+;; - Decide whether the closure needs computing, and removes the
+;; function from the argument list if it isn't needed
 ;;
-;; - Decide whether the closure needs computing
+;; - Attach the lambda to the call if it is needed to determine the
+;; - label to branch to
 (define (simplify-call form func pre-func-cons args)
   (codegen-simplify-recurse form)
-  (let* ((nargs (length args))
-         (needs-nargs true)
-         (needs-closure true)
-         (label false)
-         (l (func-lambda func)))
+  (let* ((attrs (second form))
+         (nargs (length args))
+         (pass-nargs nargs)
+         (l (func-lambda func))
+         (needs-closure true))
     (when l
       (check-call-nargs l nargs)
-      (set! label (if (form-attr l 'vararg)
-                      (lambda-indirect-label l)
-                      (begin
-                        (set! needs-nargs false)
-                        (lambda-direct-label l))))
-
+      (unless (form-attr l 'vararg) (set! pass-nargs false))
       (when (cond ((and (eq? 'ref (first func))
                         (eq? 'self (varrec-mode (form-attr func 'varrec))))
                    ;; self calls don't need to evaluate func, they
@@ -664,16 +661,21 @@
 
                   (true
                    false))
-        ;; Remove func argument
+        ;; Remove func argument.  We add it to the attrs below
+        ;; just for the sake of emit-comment-form.
         (rplacd pre-func-cons args)
-        (set! needs-closure false)))
+        (set! needs-closure false))
 
-    (rplaca (cdr form)
-            (list* (cons 'nargs nargs)
-                   (cons 'needs-nargs needs-nargs)
-                   (cons 'needs-closure needs-closure)
-                   (cons 'label label)
-                   (second form)))))
+      (set! attrs (list* (cons 'lambda l)
+                         (cons 'func func)
+                         (cons 'needs-closure needs-closure)
+                         attrs)))
+
+    (when needs-closure
+      (set! attrs (acons 'needs-closure true attrs)))
+    (rplaca (cdr form) (list* (cons 'pass-nargs pass-nargs)
+                              (cons 'nargs nargs)
+                              attrs))))
 
 (define-codegen-simplify ((call tail-call) attrs func . args)
   (simplify-call form func (cdr form) args))
@@ -691,18 +693,20 @@
                (for-args (cdr args))
                (emit-frame-spill cg (trashy-codegen (car args) cg false)
                                  (first general-registers)))))
-    (if (attr-ref attrs 'needs-closure)
+    (if (attr-ref-defaulting attrs 'needs-closure false)
         (begin
           (for-args (cdr args))
           (trashy-codegen-into-reg (car args) cg false %closure))
         (for-args args))))
 
 (define (emit-call-or-jump cg attrs call-or-jump)
-  (when (attr-ref attrs 'needs-nargs)
-    (emit-mov cg (fixnum-representation (attr-ref attrs 'nargs)) %nargs))
-  (let* ((label (attr-ref attrs 'label)))
-    (if label
-        (emit-direct-call-or-jump cg call-or-jump label)
+  (let* ((nargs (attr-ref-defaulting attrs 'pass-nargs false)))
+    (when nargs (emit-mov cg (fixnum-representation nargs) %nargs)))
+  (let* ((l (attr-ref-defaulting attrs 'lambda false)))
+    (if l
+        (emit-direct-call-or-jump cg call-or-jump (if (form-attr l 'vararg)
+                                                      (lambda-indirect-label l)
+                                                      (lambda-direct-label l)))
         (emit-indirect-call-or-jump cg call-or-jump))))
 
 (define-operator (static-lambda) ()
@@ -907,7 +911,8 @@
 ;;; Code generation for tail calls
 
 (define (codegen-tail-call-shuffle cg attrs operands extra-assignments)
-  (let* ((closure (and (attr-ref attrs 'needs-closure) (car operands)))
+  (let* ((closure (and (attr-ref-defaulting attrs 'needs-closure false)
+                       (car operands)))
 
          ;; 'assignments' is what we want the stack to look like just
          ;; before the jump.  So it includes the return address, and

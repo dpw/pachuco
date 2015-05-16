@@ -889,4 +889,9 @@
   (list 'ash-imm (acons 'shift (attr-ref attrs 'shift) ()) (comment-form n)))
 
 (define-comment-form ((call tail-call varargs-tail-call) attrs . args)
-  (list* (first form) (second form) (comment-forms (cddr form))))
+  (list* (first form)
+         (mapfor (attr attrs)
+           (cond ((eq? 'lambda (car attr)) '(lambda etc))
+                 ((eq? 'func (car attr)) (cons 'func (comment-form (cdr attr))))
+                 (true attr)))
+         (comment-forms args)))
