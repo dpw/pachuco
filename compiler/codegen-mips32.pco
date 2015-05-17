@@ -439,9 +439,22 @@
       (let* ((temp (first general-registers)))
         (emit-xor cg reg (fixnum-representation nparams) temp)
         (set! reg temp)))
-    (emit cg "~A ~A, ~A" (if branch-on-ok "beqz" "bnez")
-          (reg-asm-operand reg) label)
-    (emit-nop cg)))
+    (if branch-on-ok
+        (let* ((skip-label (gen-label)))
+          ;; beqz can only branch to +-128KB.  Because we emit the
+          ;; indirect function stub lazily, it can end up far from the
+          ;; direct function code, and so we can exceed that limit.
+          ;; So we jump to the direct label with a j instruction.  It
+          ;; would be good if we could identify those few cases that
+          ;; really need this, but that would be hard.
+          (emit cg "bnez ~A, ~A" (reg-asm-operand reg) skip-label)
+          (emit-nop cg)
+          (emit cg "j ~A" label)
+          (emit-nop cg)
+          (emit-smart-label cg skip-label))
+        (begin
+          (emit cg "bnez ~A, ~A" (reg-asm-operand reg) label)
+          (emit-nop cg)))))
 
 (define-operator (raw-args-base) ()
   (emit cg "addiu ~A, $sp, ~D" (reg-asm-operand result)
