@@ -478,7 +478,6 @@
   (max (reg-use closure) (1+ (max$ 0 (mapfor (val vals) (reg-use val))))))
 
 (define-codegen (lambda attrs closure . vals)
-  (codegen-lambda-todo cg form)
   (let* ((closure-reg (first regs))
          (val-reg (second regs))
          (index 0))

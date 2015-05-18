@@ -16,14 +16,14 @@
       (funcall (caar ool))
       (codegen-do-out-of-line cg))))
 
-(define (codegen-lambda-todo cg form)
-  (codegen-set-todo! cg (cons form (codegen-todo cg))))
+(define (codegen-push-todo cg todo)
+  (codegen-set-todo! cg (cons todo (codegen-todo cg))))
 
 (define (codegen-do-todos cg)
   (let* ((todo (codegen-todo cg)))
     (unless (null? todo)
       (codegen-set-todo! cg (cdr todo))
-      (codegen-function cg (car todo))
+      (funcall (car todo))
       (codegen-do-todos cg))))
 
 (define (fixnum-representation n) (ash n number-tag-bits))
@@ -70,6 +70,8 @@
     (dolist (varrec (second program))
       (when (eq? 'arity-mismatch (varrec-name varrec))
         (codegen-set-arity-mismatch-varrec! cg varrec))
+      (when (eq? 'gc (varrec-name varrec))
+        (codegen-set-gc-varrec! cg varrec))
 
       (unless (varrec-const? varrec)
         (let* ((label (make-label-for (varrec-name varrec)
@@ -85,35 +87,44 @@
 
 ;;; Finish off the assembly output
 (define (codegen-program-end cg)
-  (codegen-do-todos cg)
   (codegen-helpers cg)
+  (codegen-do-todos cg)
   (codegen-symbols cg)
 
   ;; This indicates to the linker that we support a non-executable stack
   (emit cg ".section .note.GNU-stack,\"\",%progbits"))
 
-(define (lambda-label l attr prefix)
+(define (lambda-label cg l attr prefix todo)
   (let* ((label (form-attr-defaulting l attr false)))
     (or label
         (let* ((varrec (form-attr-defaulting l 'self false)))
           (set! label (make-label-for (and varrec
                                            (varrec-top-level? varrec)
                                            (varrec-name varrec)) prefix))
+          (codegen-push-todo cg todo)
           (form-attr-set! l attr label)))))
 
-(define (static-lambda-closure-label l)
-  (lambda-label l 'closure-label closure-label-prefix))
+(define (static-lambda-closure-label cg form)
+  (lambda-label cg form 'closure-label closure-label-prefix
+                (lambda () (codegen-static-lambda cg form))))
 
-(define (lambda-direct-label l)
-  (lambda-label l 'direct-label direct-function-label-prefix))
+(define (lambda-direct-label cg form)
+  (lambda-label cg form 'direct-label direct-function-label-prefix
+                (lambda () (codegen-function cg form))))
 
-(define (lambda-indirect-label l)
-  (lambda-label l 'indirect-label indirect-function-label-prefix))
+(define (lambda-indirect-label cg form)
+  (if (form-attr form 'vararg)
+      (lambda-direct-label cg form)
+      (lambda-label cg form 'indirect-label indirect-function-label-prefix
+                    (lambda () (codegen-function-indirect cg form)))))
+
+(define (codegen-gc-label cg)
+  (lambda-direct-label cg (varrec-value (codegen-gc-varrec cg))))
 
 (define (codegen-function cg form)
   (let* ((attrs (second form))
          (closure (attr-ref attrs 'closure))
-         (indirect-label (lambda-indirect-label form)))
+         (direct-label (attr-ref attrs 'direct-label)))
     (labels ((assign-varrec-indices (varrecs)
                ;; assign slot indices to varrecs
                (let* ((index 0))
@@ -124,33 +135,14 @@
       (assign-varrec-indices (attr-ref attrs 'params)))
 
     (emit cg ".text")
-    ;; The indirect label is preceded by the closure size in order to
-    ;; tell the GC how big a closure is.  But the GC leaves the
-    ;; closures for static-lambdas alone.
-    (unless (eq? 'static-lambda (car form))
-      (emit-align cg value-scale)
-      (emit-literal cg (fixnum-representation (1+ (length closure)))))
+    (when (attr-ref attrs 'vararg)
+      (emit-function-closure-size cg form closure))
 
     (let* ((self-varrec (attr-ref attrs 'self)))
       (when self-varrec
         (emit-comment cg "function ~S" (varrec-name self-varrec))))
 
-    (emit-function-label cg indirect-label)
-    (unless (attr-ref attrs 'vararg)
-      (let* ((direct-label (lambda-direct-label form))
-             (nparams (length (attr-ref attrs 'params))))
-        (emit-check-nargs cg nparams true direct-label)
-        (emit-function-prologue cg)
-        (let* ((expr (quasiquote
-              (return ((nparams . (unquote nparams)))
-                      (call ()
-                            (ref (unquote (codegen-arity-mismatch-varrec cg)))
-                            (quote (unquote nparams))
-                            (arg-count ()))))))
-          (codegen-simplify expr)
-          (trashy-codegen-discarding expr cg false))
-        (emit-function-label cg direct-label)))
-
+    (emit-function-label cg direct-label)
     (emit-function-prologue cg)
     (codegen-set-have-closure! cg (if (null? closure)
                                       false
@@ -159,7 +151,39 @@
                                         true)))
     (codegen-body cg (attr-ref attrs 'body) false)
     (codegen-do-out-of-line cg)
-    (emit cg ".size ~A, .-~A" indirect-label indirect-label)))
+    (emit cg ".size ~A, .-~A" direct-label direct-label)))
+
+(define (codegen-function-indirect cg form)
+  (let* ((attrs (second form))
+         (closure (attr-ref attrs 'closure))
+         (indirect-label (attr-ref attrs 'indirect-label)))
+    (emit cg ".text")
+    (emit-function-closure-size cg form closure)
+
+    (let* ((self-varrec (attr-ref attrs 'self)))
+      (when self-varrec
+        (emit-comment cg "function ~S" (varrec-name self-varrec))))
+
+    (emit-function-label cg indirect-label)
+    (let* ((nparams (length (attr-ref attrs 'params))))
+      (emit-check-nargs cg nparams true (lambda-direct-label cg form))
+      (emit-function-prologue cg)
+      (let* ((expr (quasiquote
+               (return ((nparams . (unquote nparams)))
+                       (call ()
+                             (ref (unquote (codegen-arity-mismatch-varrec cg)))
+                             (quote (unquote nparams))
+                             (arg-count ()))))))
+        (codegen-simplify expr)
+        (trashy-codegen-discarding expr cg false)))))
+
+(define (emit-function-closure-size cg form closure)
+  ;; The indirect label is preceded by the closure size in order to
+  ;; tell the GC how big a closure is.  But the GC leaves the
+  ;; closures for static-lambdas alone.
+  (unless (eq? 'static-lambda (car form))
+    (emit-align cg value-scale)
+    (emit-literal cg (fixnum-representation (1+ (length closure))))))
 
 ;;; Generate code for the body of a function or main program body
 (define (codegen-body cg body out-frame-base)
@@ -650,13 +674,6 @@
 
                   ((eq? 'static-lambda (first l))
                    ;; static-lambda calls don't need to evaluate func.
-                   ;; Exception, if it's a direct static-lambda form,
-                   ;; rather than a ref, we still need to ensure that
-                   ;; code gets generated for it
-                   (when (eq? 'static-lambda (first func))
-                     (let* ((old-form (cons (car form) (cdr form))))
-                       (overwrite-form form (list 'begin () func old-form))
-                       (set! form old-form)))
                    true)
 
                   (true
@@ -704,28 +721,27 @@
     (when nargs (emit-mov cg (fixnum-representation nargs) %nargs)))
   (let* ((l (attr-ref-defaulting attrs 'lambda false)))
     (if l
-        (emit-direct-call-or-jump cg call-or-jump (if (form-attr l 'vararg)
-                                                      (lambda-indirect-label l)
-                                                      (lambda-direct-label l)))
+        (emit-direct-call-or-jump cg call-or-jump
+                                  (lambda-direct-label cg l))
         (emit-indirect-call-or-jump cg call-or-jump))))
 
 (define-operator (static-lambda) ()
-  (codegen-lambda-todo cg form)
-  (let* ((label (static-lambda-closure-label form)))
-    (emit-data cg label closure-tag-bits)
-    (emit-literal cg (lambda-indirect-label form))
-    (emit cg ".text")
-    (format "~A+~D" label closure-tag)))
+  (format "~A+~D" (static-lambda-closure-label cg form) closure-tag))
+
+(define (codegen-static-lambda cg form)
+  (let* ((label (static-lambda-closure-label cg form)))
+    (emit-data cg (form-attr form 'closure-label) closure-tag-bits)
+    (emit-literal cg (lambda-indirect-label cg form))))
 
 (define (varrec-const? varrec)
   (let* ((val (varrec-value varrec)))
     (and val (member? (first val) '(quote static-lambda)))))
 
-(define (varrec-const-operand varrec)
+(define (varrec-const-operand cg varrec)
   (let* ((l (varrec-value varrec)))
     (and l
          (eq? 'static-lambda (first l))
-         (format "~A+~D" (static-lambda-closure-label l) closure-tag))))
+         (format "~A+~D" (static-lambda-closure-label cg l) closure-tag))))
 
 (define-codegen-simplify (c-call c-function-name . args)
   (rplaca (cdr form) (list (cons 'c-function-name c-function-name)))

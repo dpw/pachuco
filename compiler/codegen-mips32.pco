@@ -357,8 +357,6 @@
     (emit cg "jr $ra")
     (emit-nop cg)))
 
-(define gc-label (make-label-for 'gc direct-function-label-prefix))
-
 (define (codegen-heap-exhausted cg)
   (labels ((for-registers (regs bit-offset negated-cond op)
              (emit cg ".set noat")
@@ -394,7 +392,7 @@
       (for-registers general-registers general-register-count "eqz"
                      (lambda (cg reg) (emit-add cg reg value-size reg)))
       (emit-push cg reg)
-      (emit cg "jal ~A" gc-label)
+      (emit cg "jal ~A" (codegen-gc-label cg))
       (emit-nop cg)
       (emit-pop cg %closure))
 
@@ -424,7 +422,7 @@
 (define-operator (alloc-closure) ((temp-regs labelreg))
   (emit-alloc cg (* value-size (1+ (attr-ref attrs 'length))) value-scale
               closure-tag-bits labelreg spare-regs ())
-  (emit-mov cg (lambda-indirect-label (attr-ref attrs 'lambda)) labelreg)
+  (emit-mov cg (lambda-indirect-label cg (attr-ref attrs 'lambda)) labelreg)
   (emit cg "sw ~A, (~A)" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emit-addu cg %alloc closure-tag result)
   result)

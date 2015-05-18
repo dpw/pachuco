@@ -99,7 +99,8 @@
   (redirect-labels ())
   (out-of-line ())
   (todo ())
-  (arity-mismatch-varrec false))
+  (arity-mismatch-varrec false)
+  (gc-varrec false))
 
 (define-trivial-walker codegen-simplify ())
 

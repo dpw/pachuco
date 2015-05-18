@@ -120,7 +120,7 @@
 
 (define-operator (ref) ()
   (let* ((varrec (attr-ref attrs 'varrec))
-         (const (varrec-const-operand varrec)))
+         (const (varrec-const-operand cg varrec)))
     (if const
         (begin
           (emit-mov cg const result)

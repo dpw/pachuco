@@ -155,7 +155,6 @@
 ;;; Misc
 
 (define-codegen (lambda attrs closure . vals)
-  (codegen-lambda-todo cg form)
   (labels ((fill-slots (vals index)
              (if (null? vals)
                  (codegen-into-reg closure cg false main-reg)

@@ -249,7 +249,7 @@
   (emit-alloc cg  (* value-size (1+ (attr-ref attrs 'length)))
               value-scale closure-tag-bits (cons labelreg spare-regs) ())
   (emiti cg "ldr ~A, =~A" (reg-asm-operand labelreg)
-         (lambda-indirect-label (attr-ref attrs 'lambda)))
+         (lambda-indirect-label cg (attr-ref attrs 'lambda)))
   (emiti cg "str ~A, [~A]" (reg-asm-operand labelreg) (reg-asm-operand %alloc))
   (emiti cg "add ~A, ~A, #~D" (reg-asm-operand result)
          (reg-asm-operand %alloc) closure-tag)
@@ -673,8 +673,6 @@
   (codegen-init-mem cg 0)
   (codegen-init-mem cg 2))
 
-(define gc-label (make-label-for 'gc direct-function-label-prefix))
-
 (define (codegen-heap-exhausted cg)
   (labels ((for-registers (regs bit-offset op)
              (dolist (reg regs)
@@ -706,7 +704,7 @@
                      (lambda (r) (emiti cg "addne r0, r0, #4")))
 
       (emiti cg "str r0, [sp, #-4]!")
-      (emiti cg "bl ~A" gc-label)
+      (emiti cg "bl ~A" (codegen-gc-label cg))
 
       ;; Restore register bitset
       (emiti cg "ldr ~A, [sp], #4" reg))

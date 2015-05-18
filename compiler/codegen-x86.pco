@@ -302,8 +302,6 @@
         (emit-restore-%closure cg)
         (emit-jump cg again-label)))))
 
-(define gc-label (make-label-for 'gc direct-function-label-prefix))
-
 (define (codegen-helpers cg)
   (labels ((for-registers (regs bit-offset negated-cond op)
              (dolist (reg regs)
@@ -334,7 +332,7 @@
     (for-registers general-registers general-register-count "z"
                    (lambda (cg reg) (emit-add cg value-size %a)))
     (emit-push cg %a)
-    (emit cg "call ~A" gc-label)
+    (emit cg "call ~A" (codegen-gc-label cg))
 
     ;; Restore register bitset
     (emit-pop cg %closure)
@@ -366,7 +364,7 @@
 (define-operator (alloc-closure) ()
   (emit-alloc cg (* value-size (1+ (attr-ref attrs 'length)))
               value-scale closure-tag-bits result spare-regs ())
-  (emit-mov cg (lambda-indirect-label (attr-ref attrs 'lambda))
+  (emit-mov cg (lambda-indirect-label cg (attr-ref attrs 'lambda))
             (mem-operand result))
   (emit-add cg closure-tag result)
   result)
@@ -417,7 +415,7 @@
 
 (define-operator (ref) ()
   (let* ((varrec (attr-ref attrs 'varrec)))
-    (or (varrec-const-operand varrec)
+    (or (varrec-const-operand cg varrec)
         (varrec-operand varrec cg))))
 
 ;;; Function call-related internals
