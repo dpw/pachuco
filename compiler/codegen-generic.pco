@@ -94,15 +94,20 @@
   ;; This indicates to the linker that we support a non-executable stack
   (emit cg ".section .note.GNU-stack,\"\",%progbits"))
 
+(define (set-lambda-label cg l attr prefix)
+  (let* ((varrec (form-attr-defaulting l 'self false)))
+    (form-attr-set! l attr
+                    (make-label-for (and varrec
+                                         (varrec-top-level? varrec)
+                                         (varrec-name varrec)) prefix))))
+
 (define (lambda-label cg l attr prefix todo)
   (let* ((label (form-attr-defaulting l attr false)))
     (or label
-        (let* ((varrec (form-attr-defaulting l 'self false)))
-          (set! label (make-label-for (and varrec
-                                           (varrec-top-level? varrec)
-                                           (varrec-name varrec)) prefix))
-          (codegen-push-todo cg todo)
-          (form-attr-set! l attr label)))))
+        (begin
+         (set! label (set-lambda-label cg l attr prefix))
+         (codegen-push-todo cg todo)
+         label))))
 
 (define (static-lambda-closure-label cg form)
   (lambda-label cg form 'closure-label closure-label-prefix
@@ -156,7 +161,9 @@
 (define (codegen-function-indirect cg form)
   (let* ((attrs (second form))
          (closure (attr-ref attrs 'closure))
-         (indirect-label (attr-ref attrs 'indirect-label)))
+         (nparams (length (attr-ref attrs 'params)))
+         (indirect-label (attr-ref attrs 'indirect-label))
+         (direct-label (form-attr-defaulting form 'direct-label false)))
     (emit cg ".text")
     (emit-function-closure-size cg form closure)
 
@@ -165,17 +172,30 @@
         (emit-comment cg "function ~S" (varrec-name self-varrec))))
 
     (emit-function-label cg indirect-label)
-    (let* ((nparams (length (attr-ref attrs 'params))))
-      (emit-check-nargs cg nparams true (lambda-direct-label cg form))
-      (emit-function-prologue cg)
-      (let* ((expr (quasiquote
-               (return ((nparams . (unquote nparams)))
-                       (call ()
-                             (ref (unquote (codegen-arity-mismatch-varrec cg)))
-                             (quote (unquote nparams))
-                             (arg-count ()))))))
-        (codegen-simplify expr)
-        (trashy-codegen-discarding expr cg false)))))
+    (labels ((emit-arity-mismatch-call ()
+               (emit-function-prologue cg)
+               (let* ((expr (quasiquote
+                             (return ((nparams . (unquote nparams)))
+                                     (call ()
+                                           (ref (unquote (codegen-arity-mismatch-varrec cg)))
+                                           (quote (unquote nparams))
+                                           (arg-count ()))))))
+                 (codegen-simplify expr)
+                 (trashy-codegen-discarding expr cg false))))
+      (if direct-label
+          (begin
+            (emit-check-nargs cg nparams true direct-label)
+            (emit-arity-mismatch-call))
+          (let* ((bad-nargs-label (gen-label)))
+            (set! direct-label
+                  (set-lambda-label cg form 'direct-label
+                                    direct-function-label-prefix))
+            (emit-check-nargs cg nparams false bad-nargs-label)
+            (codegen-push-out-of-line cg
+                                      (lambda ()
+                                        (emit-smart-label cg bad-nargs-label)
+                                        (emit-arity-mismatch-call)))
+            (codegen-function cg form))))))
 
 (define (emit-function-closure-size cg form closure)
   ;; The indirect label is preceded by the closure size in order to
