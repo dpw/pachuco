@@ -70,9 +70,6 @@
   (emit cg "~A ~A, ~D(~A)" insn (reg-asm-operand reg) offset
         (reg-asm-operand base-reg)))
 
-(define (emit-nop cg)
-  (emit cg "nop"))
-
 (defmacro (define-emit-instr-i name reginstr imminstr)
   (quasiquote
     (define ((unquote name) cg a b dest)
@@ -131,8 +128,7 @@
   (funcall (cc-branch cc) cg label (cc-negate cc)))
 
 (define (emit-jump cg label)
-  (emit-without-flushing "b ~A" label)
-  (emit-without-flushing "nop"))
+  (emit-without-flushing "b ~A" label))
 
 (define (emit-prepare-convert-cc-value cg reg))
 
@@ -157,8 +153,7 @@
         (unless (eq? b 0) (emit-xor cg a b a))
         (set! b %0))
       (emit-without-flushing "~A ~A, ~A, ~A" (if negate "bne" "beq")
-                             (reg-asm-operand a) (reg-asm-operand b) label)
-      (emit-without-flushing "nop"))
+                             (reg-asm-operand a) (reg-asm-operand b) label))
     (lambda (cg reg negate)
       (unless (eq? b 0) (emit-xor cg a b a))
       (let* ((rego (reg-asm-operand reg)))
@@ -208,8 +203,7 @@
       (when branch-b (emit-slt cg a branch-b a))
       (emit-without-flushing "~A ~A, ~A"
                              (if negate (cdr branch-instrs) (car branch-instrs))
-                             (reg-asm-operand a) label)
-      (emit-without-flushing "nop"))
+                             (reg-asm-operand a) label))
     (lambda (cg reg negate)
       (emit-slt cg a value-b reg)
       (let* ((rego (reg-asm-operand reg)))
@@ -248,7 +242,6 @@
 (define (codegen-program program)
   (let* ((cg (make-codegen)))
     (emit cg ".set arch=mips32")
-    (emit cg ".set noreorder")
     (codegen-program-start cg program)
 
     (emit cg ".text")
@@ -272,7 +265,6 @@
 
     (emit-pop cg %ra)
     (emit cg "jr $ra")
-    (emit-nop cg)
 
     (codegen-do-out-of-line cg)
     (emit cg ".size lisp, .-lisp")
@@ -304,7 +296,6 @@
       (emit-and cg %alloc tempreg %alloc))
     (emit-sltu cg %alloc %threshold tempreg)
     (emit cg "bnez ~A, ~A" (reg-asm-operand tempreg) exhausted-label)
-    (emit-nop cg)
 
     (codegen-push-out-of-line cg
       (lambda ()
@@ -313,10 +304,8 @@
                                             protect-regs)
                   %closure)
         (emit cg "jal heap_exhausted")
-        (emit-nop cg)
         (emit-restore-%closure cg)
-        (emit cg "b ~A" again-label)
-        (emit-nop cg)))))
+        (emit cg "b ~A" again-label)))))
 
 ;;; Helper init-mem function
 ;;;
@@ -339,6 +328,7 @@
          (size (reg-asm-operand %init-mem-size))
          (ptr (reg-asm-operand %init-mem-ptr)))
     (emit-function-label cg name)
+    (emit cg ".set noreorder")
 
     ;; If %init-mem-size is zero, return straight away
     (emit cg "beqz ~A, ~A" size out-label)
@@ -355,7 +345,8 @@
 
     (emit-raw-label cg out-label)
     (emit cg "jr $ra")
-    (emit-nop cg)))
+    (emit cg "nop")
+    (emit cg ".set reorder")))
 
 (define (codegen-heap-exhausted cg)
   (labels ((for-registers (regs bit-offset negated-cond op)
@@ -365,7 +356,6 @@
                  (emit-mov cg (ash (register-bit reg) bit-offset) %1)
                  (emit-and cg %1 %closure %1)
                  (emit cg "b~A $1, ~A" negated-cond l)
-                 (emit-nop cg)
                  (funcall op cg reg)
                  (emit-raw-label cg l)))
              (emit cg ".set at")))
@@ -393,7 +383,6 @@
                      (lambda (cg reg) (emit-add cg reg value-size reg)))
       (emit-push cg reg)
       (emit cg "jal ~A" (codegen-gc-label cg))
-      (emit-nop cg)
       (emit-pop cg %closure))
 
     (let* ((rev-gen-regs (reverse general-registers)))
@@ -405,8 +394,7 @@
       (for-registers rev-gen-regs 0 "nez" (function emit-pop)))
 
     (emit-pop cg %ra)
-    (emit cg "jr $ra")
-    (emit-nop cg)))
+    (emit cg "jr $ra")))
 
 (define (codegen-helpers cg)
   (emit cg ".text")
@@ -446,13 +434,10 @@
           ;; would be good if we could identify those few cases that
           ;; really need this, but that would be hard.
           (emit cg "bnez ~A, ~A" (reg-asm-operand reg) skip-label)
-          (emit-nop cg)
           (emit cg "j ~A" label)
-          (emit-nop cg)
           (emit-smart-label cg skip-label))
         (begin
-          (emit cg "bnez ~A, ~A" (reg-asm-operand reg) label)
-          (emit-nop cg)))))
+          (emit cg "bnez ~A, ~A" (reg-asm-operand reg) label)))))
 
 (define-operator (raw-args-base) ()
   (emit cg "addiu ~A, $sp, ~D" (reg-asm-operand result)
@@ -460,14 +445,12 @@
   result)
 
 (define (emit-direct-call-or-jump cg call-or-jump label)
-  (emit cg "~A ~A" (car call-or-jump) label)
-  (emit-nop cg))
+  (emit cg "~A ~A" (car call-or-jump) label))
 
 (define (emit-indirect-call-or-jump cg call-or-jump)
   (let* ((reg (reg-asm-operand (first general-registers))))
     (emit cg "lw ~A, -~D(~A)" reg closure-tag (reg-asm-operand %closure))
-    (emit cg "~A ~A" (cdr call-or-jump) reg)
-    (emit-nop cg)))
+    (emit cg "~A ~A" (cdr call-or-jump) reg)))
 
 (define-codegen (call attrs . args)
   (with-saved-frame-base cg
@@ -480,7 +463,6 @@
   (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
   (emit-addu cg %sp (stack-param-offset cg (attr-ref attrs 'nparams)) %sp)
   (emit cg "jr $ra")
-  (emit-nop cg)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (varargs-return arg-count (retval fixed-reg %funcres))
@@ -490,7 +472,6 @@
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
   (emit-addu cg %sp arg-count %sp)
   (emit cg "jr $ra")
-  (emit-nop cg)
   (codegen-function-tail cg out-frame-base))
 
 (define-trashy-codegen (tail-call attrs . args) (tail-form)
@@ -798,7 +779,6 @@
   (let* ((len (third c-call-arg-regs)))
     (emit-scale-number cg len (attr-ref attrs 'scale) len))
   (emit cg "jal memmove")
-  (emit-nop cg)
   unspecified-representation)
 
 ;;; Misc runtime support
@@ -847,5 +827,4 @@
 (define-trashy-codegen (c-call attrs . args) ()
   (trashy-codegen-into-regs cg form c-call-arg-regs)
   (emit cg "jal ~A" (attr-ref attrs 'c-function-name))
-  (emit-nop cg)
   %2)
