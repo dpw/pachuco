@@ -269,13 +269,13 @@
         (stack-param-offset cg 0))
   result)
 
-(define (emit-direct-call-or-jump cg call label)
-  (if call
+(define (emit-direct-call-or-jump cg is-call label)
+  (if is-call
       (emiti cg "bl ~A" label)
       (emiti cg "b ~A" label)))
 
-(define (emit-indirect-call-or-jump cg call)
-  (if call
+(define (emit-indirect-call-or-jump cg is-call)
+  (if is-call
       (begin
         (emiti cg "ldr r0, [~A, #-~D]" (reg-asm-operand %closure)
                closure-tag)
@@ -284,13 +284,6 @@
       (begin
         (emiti cg "ldr pc, [~A, #-~D]" (reg-asm-operand %closure) closure-tag)
         (emit-ltorg cg))))
-
-(define-codegen (call attrs . args)
-  (with-saved-frame-base cg
-    (codegen-call-args cg attrs args)
-    (emit-call-or-jump cg attrs true))
-  (emit-restore-%closure cg)
-  %funcres)
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emiti cg "ldr lr, [sp, #~D]" (stack-return-offset cg))

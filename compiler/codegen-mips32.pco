@@ -444,20 +444,13 @@
         (stack-param-offset cg 0))
   result)
 
-(define (emit-direct-call-or-jump cg call-or-jump label)
-  (emit cg "~A ~A" (car call-or-jump) label))
+(define (emit-direct-call-or-jump cg is-call label)
+  (emit cg "~A ~A" (if is-call "jal" "j") label))
 
-(define (emit-indirect-call-or-jump cg call-or-jump)
+(define (emit-indirect-call-or-jump cg is-call)
   (let* ((reg (reg-asm-operand (first general-registers))))
     (emit cg "lw ~A, -~D(~A)" reg closure-tag (reg-asm-operand %closure))
-    (emit cg "~A ~A" (cdr call-or-jump) reg)))
-
-(define-codegen (call attrs . args)
-  (with-saved-frame-base cg
-    (codegen-call-args cg attrs args)
-    (emit-call-or-jump cg attrs '("jal" . "jalr $ra,")))
-  (emit-restore-%closure cg)
-  %funcres)
+    (emit cg "~A ~A" (if is-call "jalr $ra," "jr") reg)))
 
 (define-operator (return (retval fixed-reg %funcres)) (tail-form)
   (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
@@ -480,7 +473,7 @@
     (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
     (let* ((assignments-base (codegen-tail-call-shuffle cg attrs operands ())))
       (emit-reset-frame-base cg assignments-base)
-      (emit-call-or-jump cg attrs '("j" . "jr"))
+      (emit-call-or-jump cg attrs false)
       (codegen-function-tail cg out-frame-base))))
 
 (define (copy-tail-call-args cg out-arg-count dest-base-reg dest-offset tmp-reg)
@@ -508,7 +501,7 @@
                                (reg-asm-operand (second general-registers)))
           (emit cg "move $sp, ~A" out-arg-base))
         (emit cg "addu $sp, $sp, ~A" out-arg-base))
-    (emit-call-or-jump cg attrs '("j" . "jr"))
+    (emit-call-or-jump cg attrs false)
     (codegen-function-tail cg out-frame-base)))
 
 ;;; Apply support
@@ -522,14 +515,14 @@
   (emit-scale-number cg before-arg-count value-scale before-arg-count)
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
   (emit-addu cg %sp before-arg-count %sp)
-  (emit-call-or-jump cg attrs '("j" . "jr"))
+  (emit-call-or-jump cg attrs false)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov-maybe cg func %closure)
   (emit cg "lw $ra, ~D($sp)" (stack-return-offset cg))
   (emit-addu cg %sp (stack-param-offset cg 0) %sp)
-  (emit-indirect-call-or-jump cg '(false . "jr")))
+  (emit-indirect-call-or-jump cg false))
 
 ;;; Numbers
 

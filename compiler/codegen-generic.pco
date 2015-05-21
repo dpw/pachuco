@@ -724,6 +724,13 @@
                                 before-arg-count after-arg-count bodyfunc)
   (simplify-call form bodyfunc (cdddr form) ()))
 
+(define-codegen (call attrs . args)
+  (with-saved-frame-base cg
+    (codegen-call-args cg attrs args)
+    (emit-call-or-jump cg attrs true))
+  (emit-restore-%closure cg)
+  %funcres)
+
 (define (codegen-call-args cg attrs args)
   (labels ((for-args (args)
              (unless (null? args)
@@ -736,14 +743,13 @@
           (trashy-codegen-into-reg (car args) cg false %closure))
         (for-args args))))
 
-(define (emit-call-or-jump cg attrs call-or-jump)
+(define (emit-call-or-jump cg attrs is-call)
   (let* ((nargs (attr-ref-defaulting attrs 'pass-nargs false)))
     (when nargs (emit-mov cg (fixnum-representation nargs) %nargs)))
   (let* ((l (attr-ref-defaulting attrs 'lambda false)))
     (if l
-        (emit-direct-call-or-jump cg call-or-jump
-                                  (lambda-direct-label cg l))
-        (emit-indirect-call-or-jump cg call-or-jump))))
+        (emit-direct-call-or-jump cg is-call (lambda-direct-label cg l))
+        (emit-indirect-call-or-jump cg is-call))))
 
 (define-operator (static-lambda) ()
   (format "~A+~D" (static-lambda-closure-label cg form) closure-tag))

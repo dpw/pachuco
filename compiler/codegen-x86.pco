@@ -375,19 +375,12 @@
 (define (emit-store-into-closure cg closure index val)
   (emit-mov cg val (closure-slot closure index)))
 
-(define (emit-direct-call-or-jump cg call-or-jump label)
-  (emit cg "~A ~A" call-or-jump label))
+(define (emit-direct-call-or-jump cg is-call label)
+  (emit cg "~A ~A" (if is-call "call" "jmp") label))
 
-(define (emit-indirect-call-or-jump cg call-or-jump)
-  (emit cg "~A *~A" call-or-jump
+(define (emit-indirect-call-or-jump cg is-call)
+  (emit cg "~A *~A" (if is-call "call" "jmp")
         (value-sized cg (tagged-operand closure-tag %closure 0))))
-
-(define-codegen (call attrs . args)
-  (with-saved-frame-base cg
-    (codegen-call-args cg attrs args)
-    (emit-call-or-jump cg attrs "call"))
-  (emit-restore-%closure cg)
-  %funcres)
 
 (define (emit-restore-%closure cg)
   (when (codegen-have-closure cg)

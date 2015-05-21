@@ -64,7 +64,7 @@
                                        (list (frame-slot 2) (frame-slot 1)))))
     (emit-lea cg (normalize-frame-slot cg assignments-base) %sp)
     (emit-pop cg %bp)
-    (emit-call-or-jump cg attrs "jmp")
+    (emit-call-or-jump cg attrs false)
     (codegen-function-tail cg out-frame-base)))
 
 (define-codegen-discarding (varargs-tail-call attrs arg-count . args)
@@ -92,7 +92,7 @@
     (emit-mov cg out-retaddr-reg %sp)
     (emit-mov cg saved-retaddr-reg (mem-operand %sp))
     (emit-mov cg saved-fp-reg %bp)
-    (emit-call-or-jump cg attrs "jmp")))
+    (emit-call-or-jump cg attrs false)))
 
 ;;; Apply support
 
@@ -107,13 +107,13 @@
   (emit-lea cg (reoffset-operand (return-address-slot cg) before-arg-count) %sp)
   (emit-mov cg (mem-operand %bp) %bp)
   (emit-mov cg retaddr (mem-operand %sp))
-  (emit-call-or-jump cg attrs "jmp")
+  (emit-call-or-jump cg attrs false)
   (codegen-function-tail cg out-frame-base))
 
 (define-operator (raw-apply-jump func (arg-count fixed-reg %nargs)) (tail-form)
   (emit-mov cg func %closure)
   (emit cg "leave")
-  (emit-indirect-call-or-jump cg "jmp")
+  (emit-indirect-call-or-jump cg false)
   (codegen-function-tail cg out-frame-base))
 
 ;;; C-callable program wrapper
