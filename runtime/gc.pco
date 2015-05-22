@@ -109,9 +109,13 @@
 (defmacro (define-gc-types . type-gcs)
   ;; a convenience macro which takes a body full of type-gc
   ;; declarations, and produces a construct-gc-type-table definition
-
-  ;; first, produce the code to generate tags-bits-funcs.  This is a
-  ;; list of triples, each one giving a type tag, it's tag-bits, and
+  ;;
+  ;; Why can't the type table be a quoted form?  It contains
+  ;; functions, and those functions capture variables.  So we need to
+  ;; construct it on each GC.
+  ;;
+  ;; First, produce the code to generate tags-bits-funcs.  This is a
+  ;; list of triples, each one giving a type tag, its tag-bits, and
   ;; the copier function.
   (define tbf-form
     (mapfor (type-gc type-gcs)
