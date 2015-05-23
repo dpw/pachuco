@@ -751,6 +751,10 @@
         (emit-direct-call-or-jump cg is-call (lambda-direct-label cg l))
         (emit-indirect-call-or-jump cg is-call))))
 
+(define (emit-restore-%closure cg)
+  (when (codegen-have-closure cg)
+    (emit-mov cg (closure-address-slot) %closure)))
+
 (define-operator (static-lambda) ()
   (format "~A+~D" (static-lambda-closure-label cg form) closure-tag))
 

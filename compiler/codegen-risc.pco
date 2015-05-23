@@ -56,14 +56,14 @@
 (define (stack-param-offset cg index)
   (* value-size (+ index (codegen-frame-base cg))))
 
-(define (stack-return-offset cg)
-  (stack-param-offset cg -1))
-
-(define (stack-closure-offset cg)
-  (stack-param-offset cg -2))
-
 (define (stack-local-offset cg index)
   (* value-size (- (codegen-frame-base cg) index)))
+
+(define (stack-return-offset cg)
+  (stack-local-offset cg 1))
+
+(define (closure-address-slot)
+  (frame-slot 2))
 
 (define (closure-slot-offset index)
   (- (* value-size (1+ index)) closure-tag))

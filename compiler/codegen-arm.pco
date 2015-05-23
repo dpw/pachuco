@@ -173,11 +173,6 @@
 (define (emit-offset-sp cg offset)
   (emiti cg "add sp, sp, #~D" (* value-size offset)))
 
-(define (emit-restore-%closure cg)
-  (when (codegen-have-closure cg)
-    (emiti cg "ldr ~A, [sp, #~D]" (reg-asm-operand %closure)
-          (stack-closure-offset cg))))
-
 ;;; Helper init-mem function
 ;;;
 ;;; Init-mem functions are used by make-vec to clear the allocated

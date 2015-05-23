@@ -382,10 +382,6 @@
   (emit cg "~A *~A" (if is-call "call" "jmp")
         (value-sized cg (tagged-operand closure-tag %closure 0))))
 
-(define (emit-restore-%closure cg)
-  (when (codegen-have-closure cg)
-    (emit-mov cg (closure-address-slot) %closure)))
-
 ;;; Variables
 
 (define (varrec-operand varrec cg)

@@ -217,11 +217,6 @@
 (define (emit-offset-sp cg offset)
   (emit cg "addiu $sp, $sp, ~D" (* value-size offset)))
 
-(define (emit-restore-%closure cg)
-  (when (codegen-have-closure cg)
-    (emit cg "lw ~A, ~D($sp)" (reg-asm-operand %closure)
-          (stack-closure-offset cg))))
-
 (define (emit-scale-number cg src scale dest)
   (set! src (reg-asm-operand src))
   (set! dest (reg-asm-operand dest))
