@@ -77,7 +77,7 @@ DUMP_PHASE=fill-closures
 
 .PHONY: all clean print-compiler-sources compare-stage3
 
-all: stage0-test-run stage0-gc-test-run stage0-arity-mismatch-test-run compare-stage3
+all: stage0-test-run stage0-gc-test-run stage0-arity-mismatch-test-run compare-stage3 stage2-static-arity-mismatch-test-run
 
 build/sysconstants: runtime/sysconstants.c
 	@mkdir -p build
@@ -120,6 +120,10 @@ $(2)-gc-test-run: build/$(2)-gc-test
 
 $(2)-arity-mismatch-test-run: build/$(2)-arity-mismatch-test
 	[ "$$$$( ( $$< 2>&1 ; [ $$$$? -ge 128 ] || echo 'wrong exit code' ) | sed 's|^Aborted$$$$||' )" = "expected 2 arguments, got 1" ]
+
+$(2)-static-arity-mismatch-test-run: $(1) $(RUNTIME_SOURCES) test/static-arity-mismatch-test.pco
+	@mkdir -p build
+	[ "$$$$( ( scripts/compile -C $(1) $(COMPILEOPTS) -o build/static-arity-mismatch-test test/static-arity-mismatch-test.pco 2>&1 && echo 'should have failed' ) | sed '/Aborted/d' )" = "wrong number of arguments in call to func (expected 1, got 2)" ]
 
 $(2)-expand: $(1) $(RUNTIME_SOURCES) $(SL_COMPILER_SOURCES)
 	$(1) expand $(RUNTIME) $(SL_COMPILER_SOURCES)

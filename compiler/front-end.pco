@@ -783,6 +783,30 @@
           (varrec-set-misc! source (acons varrec index fixups))
           (quoted-unspecified)))))
 
+(define (func-lambda func)
+  (when (eq? 'ref (first func))
+    (let* ((val (varrec-value (varrec-origin (second func)))))
+      (when val (set! func val))))
+  (and (member? (first func) '(lambda static-lambda))
+       func))
+
+(define-fill-closures ((call tail-call) attrs func . args)
+  (let* ((l (func-lambda func)))
+    (when l
+      (let* ((expected (length (form-attr l 'params)))
+             (nargs (length args))
+             (at-least ""))
+        (when (if (form-attr l 'vararg)
+                  (begin
+                    (set! at-least "at least ")
+                    (< nargs expected))
+                  (/= nargs expected))
+          (let* ((varrec (form-attr-defaulting l 'self false)))
+            (error "wrong number of arguments in call to ~A (expected ~A~D, got ~D)"
+                   (if varrec (varrec-name varrec) "anonymous function")
+                   at-least expected nargs))))))
+  (fill-closures-recurse form))
+
 ;;; Produce a debug form
 
 (define (debug-forms forms)
@@ -875,10 +899,15 @@
 (define-comment-form (if attrs test then else)
   (list 'if (comment-form test) 'etc.))
 
+(define (comment-form-var-name varrec-or-attrs)
+  (when (pair? varrec-or-attrs)
+    (set! varrec-or-attrs (attr-ref varrec-or-attrs 'varrec)))
+  (varrec-name varrec-or-attrs))
+
 (define-comment-form (ref attrs)
-  (list 'ref (varrec-name (attr-ref attrs 'varrec))))
+  (list 'ref (comment-form-var-name attrs)))
 (define-comment-form ((set! define) attrs val)
-  (list (car form) (varrec-name (attr-ref attrs 'varrec)) (comment-form val)))
+  (list (car form) (comment-form-var-name attrs) (comment-form val)))
 
 (define-comment-form (quote val)
   (list 'quote (if (string? val) (escape-string-literal val) val)))

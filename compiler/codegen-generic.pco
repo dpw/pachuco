@@ -640,26 +640,6 @@
 
 ;;; Function calls
 
-(define (func-lambda func)
-  (when (eq? 'ref (first func))
-    (let* ((val (varrec-value (varrec-origin (form-attr func 'varrec)))))
-      (when val (set! func val))))
-  (and (member? (first func) '(lambda static-lambda))
-       func))
-
-(define (check-call-nargs l nargs)
-  (let* ((expected (length (form-attr l 'params)))
-         (at-least ""))
-    (when (if (form-attr l 'vararg)
-              (begin
-                (set! at-least "at least ")
-                (< nargs expected))
-              (/= nargs expected))
-      (let* ((varrec (form-attr-defaulting l 'self false)))
-        (error "wrong number of arguments in call to ~A (expected ~A~D, got ~D)"
-               (if varrec (varrec-name varrec) "anonymous function")
-               at-least expected nargs)))))
-
 (define-operator (set-closure! closure val) (impure)
   (emit-store-into-closure cg closure (attr-ref attrs 'index) val)
   val)
@@ -677,17 +657,15 @@
 ;; - Attach the lambda to the call if it is needed to determine the
 ;; - label to branch to
 (define (simplify-call form func pre-func-cons args)
-  (codegen-simplify-recurse form)
   (let* ((attrs (second form))
          (nargs (length args))
          (pass-nargs nargs)
          (l (func-lambda func))
          (needs-closure true))
     (when l
-      (check-call-nargs l nargs)
       (unless (form-attr l 'vararg) (set! pass-nargs false))
       (when (cond ((and (eq? 'ref (first func))
-                        (eq? 'self (varrec-mode (form-attr func 'varrec))))
+                        (eq? 'self (varrec-mode (second func))))
                    ;; self calls don't need to evaluate func, they
                    ;; already have it in %closure
                    true)
@@ -712,7 +690,8 @@
       (set! attrs (acons 'needs-closure true attrs)))
     (rplaca (cdr form) (list* (cons 'pass-nargs pass-nargs)
                               (cons 'nargs nargs)
-                              attrs))))
+                              attrs))
+    (codegen-simplify-recurse form)))
 
 (define-codegen-simplify ((call tail-call) attrs func . args)
   (simplify-call form func (cdr form) args))

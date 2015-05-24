@@ -1,0 +1,7 @@
+(define (func x)
+  x)
+
+(define (foo)
+  (func 1 2))
+
+(define (main))
