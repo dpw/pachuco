@@ -209,10 +209,9 @@
 (define-interpreter-builtin-op (rem a b))
 (define-interpreter-builtin-op (truncate a b))
 (define-interpreter-builtin-op (ash a b))
-(define-interpreter-builtin-op (logand a b))
-(define-interpreter-builtin-op (logior a b))
 (define-interpreter-builtin-op (logxor a b))
 
+;; + is common enough that we avoid apply for simple cases
 (define-interpreter-builtin-form +
   (if (null? args)
       0
@@ -225,13 +224,15 @@
                      (eval-form-aux (car args1) env false))
                   (apply (function +) (eval-forms args env))))))))
 
-;; * and - are much less common that +, so it's not a win to have a
-;; streamlined implementation.
-(define-interpreter-builtin-form *
- (apply (function *) (eval-forms args env)))
+(defmacro (define-interpreter-builtin-varargs-op op)
+  (quasiquote
+    (define-interpreter-builtin-form (unquote op)
+      (apply (function (unquote op)) (eval-forms args env)))))
 
-(define-interpreter-builtin-form -
-  (apply (function -) (eval-forms args env)))
+(define-interpreter-builtin-varargs-op *)
+(define-interpreter-builtin-varargs-op -)
+(define-interpreter-builtin-varargs-op logand)
+(define-interpreter-builtin-varargs-op logior)
 
 (define-interpreter-builtin-boolean-op (character? a))
 (define-interpreter-builtin-op (character-code a))

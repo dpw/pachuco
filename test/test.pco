@@ -260,6 +260,16 @@
     (assert-result (-x 0 10) -10)
     (assert-result (-x 10 -4096) 4106))
 
+  (test-binary-operator logand logandx
+    (assert-result (logandx 10 3) 2)
+    (assert-result (logandx 10 -1) 10)
+    (assert-result (logandx -1 10) 10))
+
+  (test-binary-operator logior logiorx
+    (assert-result (logiorx 10 3) 11)
+    (assert-result (logiorx 10 0) 10)
+    (assert-result (logiorx 0 10) 10))
+
   (assert-result (1+ 1) 2)
   (assert-result (1- 1) 0)
 

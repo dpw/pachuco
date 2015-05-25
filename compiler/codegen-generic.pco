@@ -549,6 +549,14 @@
   (simplify-comm-binary-op form args (function +) 0
     (lambda (expr const) (make-bin-op-expr '+ expr (list 'quote const)))))
 
+(define-codegen-simplify (logand attrs . args)
+  (simplify-comm-binary-op form args (function logand) -1
+    (lambda (expr const) (make-bin-op-expr 'logand expr (list 'quote const)))))
+
+(define-codegen-simplify (logior attrs . args)
+  (simplify-comm-binary-op form args (function logior) 0
+    (lambda (expr const) (make-bin-op-expr 'logior expr (list 'quote const)))))
+
 ;; This only handles positive numbers with a single bit set
 (define (log2 n)
   (+ (if (= 0 (logand n #x00000000ffffffff)) 32 0)

@@ -121,15 +121,18 @@
 (reify (= a b))
 (reify (/= a b))
 
-(define (+ . args)
-  (if (null? args) 0
-      (if (null? (cdr args)) (car args)
-          (reduce (car args) (cdr args) (lambda (a b) (+ a b))))))
+(defmacro (reify-commutative-operator op identity)
+  (quasiquote
+    (define ((unquote op) . args)
+      (cond ((null? args) (unquote identity))
+            ((null? (cdr args)) (car args))
+            (#t
+             (reduce (car args) (cdr args) (lambda (a b) ((unquote op) a b))))))))
 
-(define (* . args)
-  (if (null? args) 1
-      (if (null? (cdr args)) (car args)
-          (reduce (car args) (cdr args) (lambda (a b) (* a b))))))
+(reify-commutative-operator + 0)
+(reify-commutative-operator * 1)
+(reify-commutative-operator logand -1)
+(reify-commutative-operator logior 0)
 
 (define (- a . args)
   (if (null? args) (- a)
@@ -138,8 +141,6 @@
 (reify (rem a b))
 (reify (truncate a b))
 (reify (ash a b))
-(reify (logand a b))
-(reify (logior a b))
 (reify (logxor a b))
 
 (reify (character? a))
