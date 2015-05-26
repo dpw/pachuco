@@ -53,8 +53,15 @@
 
 ;; Assembly utility functions
 
+(define (codegen-switch-section cg section)
+  (unless (eq? section (codegen-section cg))
+    (codegen-set-section! cg section)
+    (if (and (not (eq? 'rodata section)) (not (eq? 'bss section)))
+        (emit cg ".~A" (subject-language-symbol-name section))
+        (emit cg ".section .~A" (subject-language-symbol-name section)))))
+
 (define (emit-data cg label scale)
-  (emit cg ".section .rodata")
+  (codegen-switch-section cg 'rodata)
   (emit-align cg scale)
   (emit cg "~A:" label))
 
@@ -63,7 +70,7 @@
   (labels ((emit-label (label)
              (emit cg ".globl ~A" label)
              (emit cg "~A:" label)))
-    (emit cg ".section .bss")
+    (codegen-switch-section cg 'bss)
     (emit-align cg value-scale)
     (emit-label "top_level_start")
 
@@ -139,7 +146,7 @@
       (assign-varrec-indices closure)
       (assign-varrec-indices (attr-ref attrs 'params)))
 
-    (emit cg ".text")
+    (codegen-switch-section cg 'text)
     (when (attr-ref attrs 'vararg)
       (emit-function-closure-size cg form closure))
 
@@ -164,7 +171,7 @@
          (nparams (length (attr-ref attrs 'params)))
          (indirect-label (attr-ref attrs 'indirect-label))
          (direct-label (form-attr-defaulting form 'direct-label false)))
-    (emit cg ".text")
+    (codegen-switch-section cg 'text)
     (emit-function-closure-size cg form closure)
 
     (let* ((self-varrec (attr-ref attrs 'self)))
@@ -372,9 +379,7 @@
 
 (define-operator (quote) ()
   (let* ((val (codegen-quoted attrs cg)))
-    ;;; If the quoted form resulted in a label, that means it emitted
-    ;;; code, and we need to switch back to the code section
-    (unless (number? val) (emit cg ".text"))
+    (codegen-switch-section cg 'text)
     val))
 
 (defconstant positive-number-mask (1- (ash 1 (- value-bits number-tag-bits))))

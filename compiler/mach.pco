@@ -92,15 +92,16 @@
 ;;; General codegen bits
 
 (define-struct codegen ()
-  (frame-base false)
+  frame-base
   (have-closure true)
-  (deferred-jump false)
+  deferred-jump
   (here-labels ())
   (redirect-labels ())
   (out-of-line ())
   (todo ())
-  (arity-mismatch-varrec false)
-  (gc-varrec false))
+  section
+  arity-mismatch-varrec
+  gc-varrec)
 
 (define-trivial-walker codegen-simplify ())
 

@@ -124,7 +124,7 @@
   (let* ((cg (make-codegen)))
     (codegen-program-start cg program)
 
-    (emit cg ".text")
+    (codegen-switch-section cg 'text)
     (emit-function-label cg "lisp")
     (emit-push cg %bp)
     (emit-mov cg %sp %bp)

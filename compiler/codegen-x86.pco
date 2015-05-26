@@ -310,7 +310,7 @@
                  (emit-branch cg negated-cond l)
                  (funcall op cg reg)
                  (emit-raw-label cg l)))))
-    (emit cg ".text")
+    (codegen-switch-section cg 'text)
     (emit-function-label cg "heap_exhausted")
 
     ;; Push live registers onto the stack, guided by the bitset in
