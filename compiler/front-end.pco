@@ -360,115 +360,81 @@
 ;;; During classification, a simple state machine operates for each
 ;;; variable, with transitions triggered by forms that refer to that
 ;;; variable.
-;;;
-;;; When we finish traversing a binding form, an "acccess" attribute
-;;; is added to each varrec, indicating whether the access style is
-;;; read-only, written, or early-function.
 
 (define-trivial-walker classify-variables ())
 
-;; A macro to generate names for states and the state machine tables.
-(defmacro (define-varrec-states states . table)
-  (labels ((state-name (state)
-             (compound-symbol "varrec-" state "-state"))
-           (make-state-defs (states n)
-             (if (null? states)
-                 ()
-                 (cons (list 'defconstant (state-name (car states)) n)
-                       (make-state-defs (cdr states) (1+ n)))))
-           (make-table-defs (table)
-             (if (null? table)
-                 ()
-                 (let* ((table-name (compound-symbol "varrec-" (caar table)
-                                                     "-state-table")))
-                   (cons (quasiquote
-                           (define (unquote table-name)
-                             (make-vector-from-list (list (unquote-splicing
-                               (map (function state-name) (cdar table)))))))
-                         (make-table-defs (cdr table)))))))
-    (quasiquote (definitions
-      (unquote-splicing (make-state-defs states 0))
-      (unquote-splicing (make-table-defs table))))))
+(defconstant varrec-written-bit 1)
+(defconstant varrec-early-function-bit 2)
+(defconstant varrec-refs-bit 4)
+(defconstant varrec-early-uses-bit 8)
 
-;;; States, and the transitions that lead to them.
-;;;
-;;; i: initial state
-;;; err: error state
-;;; r (read only): { define, define-lambda } ref*
-;;; w (write only): { define, define-lambda } { ref, set! }*
-;;; er (early refs): ref*
-;;; e (early uses): ref* { define, set! } any*
-;;                 | ref* define-lambda ref* set! ref*
-;;; ef (early function): ref* define-lambda ref*
-
-(define-varrec-states
-                (r   w   e   ef  i   er  err)
-  (define        err w   e   err r   e   err)
-  (define-lambda err w   e   err r   ef  err)
-  (ref           r   w   e   ef  er  er  err)
-  (set!          w   w   e   e   e   e   err))
-
-(define varrec-access-table
-  (vector 'read-only 'written 'written 'early-function))
-
-(define (update-varrec-state varrec table)
-  (varrec-set-misc! varrec (vector-ref table (varrec-misc varrec))))
+(define (update-varrec-state varrec bit)
+  (varrec-set-access! varrec (logior bit (varrec-access varrec))))
 
 (define-classify-variables (ref varrec)
-  (update-varrec-state varrec varrec-ref-state-table))
+  (update-varrec-state varrec varrec-refs-bit))
 
 (define-classify-variables (set! varrec val)
   (classify-variables val)
-  (update-varrec-state varrec varrec-set!-state-table))
+  (update-varrec-state varrec varrec-written-bit))
 
 (define-classify-variables (define varrec val)
   (classify-variables val)
-  (let* ((lambda? (eq? 'lambda (car val)))
-         (state (update-varrec-state varrec (if lambda?
-                                                varrec-define-lambda-state-table
-                                                varrec-define-state-table))))
-    (when (= state varrec-e-state) (rplaca form 'set!))
-    ;; Record the value in the varrec.  We don't know if the varrec
-    ;; is read-only at this point, but if it turns out not to be, we
-    ;; clear this later on.
-    (varrec-set-value! varrec val)
-    (when lambda? (form-attr-set! val 'self varrec))))
+  ;; Record the value in the varrec.  We don't know if the varrec is
+  ;; read-only at this point, but if it turns out not to be, we clear
+  ;; this later on.
+  (varrec-set-value! varrec val)
+  (let* ((access (logior (varrec-access varrec))))
+    ;; work out early-uses/early-function status
+    (when (if (not (eq? 'lambda (car val)))
+              (/= 0 (logand access (logior varrec-written-bit varrec-refs-bit)))
+              (begin
+                (form-attr-set! val 'self varrec)
+                (cond ((/= 0 (logand access varrec-written-bit))
+                       true)
+                      ((/= 0 (logand access varrec-refs-bit))
+                       (set! access (logior access varrec-early-function-bit))
+                       false)
+                      (true
+                       false))))
+      ;; It's an early-uses.  So we turn the "define" into a "set!",
+      ;; annd we'll introduce a "(define blah undefined)" at the start
+      ;; of the block in classify-block-variables.
+      (set! access (logior access varrec-early-uses-bit varrec-written-bit))
+      (rplaca form 'set!))
+    (varrec-set-access! varrec access)))
 
 (define (classify-block-variables varrecs init mode form)
   (dolist (varrec varrecs)
-    (varrec-set-misc! varrec init)
+    (varrec-set-access! varrec init)
     (varrec-set-mode! varrec mode))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
-    (let* ((state (varrec-misc varrec)))
-      (varrec-set-misc! varrec false)
-      (cond ((>= state varrec-i-state)
-             (error "bad variable ~S" (varrec-name varrec)))
-            ((= state varrec-e-state)
-             (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
-                                      (cddr form)))))
-      (let* ((access (vector-ref varrec-access-table state)))
-        (varrec-set-access! varrec access)
-        (when (eq? access 'written)
-          ;; Remove lambda/self cross references
-          (let* ((val (varrec-value varrec)))
-            (when val
-              (varrec-set-value! varrec false)
-              (when (eq? 'lambda (car val))
-                (form-attr-set! val 'self false)))))))))
+    (let* ((access (varrec-access varrec)))
+      (when (/= 0 (logand access varrec-early-uses-bit))
+        (rplacd (cdr form) (cons (list 'define varrec (quoted-unspecified))
+                                 (cddr form))))
+      (when (/= 0 (logand access varrec-written-bit))
+        ;; Remove value/lambda-self cross references
+        (let* ((val (varrec-value varrec)))
+          (when val
+            (varrec-set-value! varrec false)
+            (when (eq? 'lambda (car val))
+              (form-attr-set! val 'self false))))))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs varrec-i-state 'local form))
+  (classify-block-variables varrecs 0 'local form))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) varrec-r-state 'param
+  (classify-block-variables (attr-ref attrs 'params) varrec-refs-bit 'param
                             form))
 
 (define (varrec-written? varrec)
-  (eq? 'written (varrec-access varrec)))
+  (/= 0 (logand varrec-written-bit (varrec-access varrec))))
+
 (define (varrec-early-function? varrec)
-  (eq? 'early-function (varrec-access varrec)))
+  (/= 0 (logand varrec-early-function-bit (varrec-access varrec))))
 
 ;;; Mark the top-level definitions as such, so we can omit them from closures
 ;;;
