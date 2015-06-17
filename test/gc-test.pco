@@ -103,10 +103,6 @@
 
     (assert-result (funcall (gc-test-copy (make-closure "hello"))) "hello")
 
-    (define (make-settable-closure)
-      (define x)
-      (lambda (y) (set! x y)))
-
     (define looped-closure
       (begin
         (define x)
