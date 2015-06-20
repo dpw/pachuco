@@ -14,8 +14,7 @@
 (define compiler-phases (expand-compiler-phases
                           (simplify program)
                           (resolve-variables program ())
-                          (classify-variables program)
-                          (mark-top-level-definitions program)
+                          (classify-variables-top-level program)
                           (collect-closures program)
                           (introduce-boxes program)
                           (fill-closures program)))
@@ -384,7 +383,7 @@
   ;; read-only at this point, but if it turns out not to be, we clear
   ;; this later on.
   (varrec-set-value! varrec val)
-  (let* ((access (logior (varrec-access varrec))))
+  (let* ((access (varrec-access varrec)))
     ;; work out early-uses/early-function status
     (when (if (not (eq? 'lambda (car val)))
               (/= 0 (logand access (logior varrec-written-bit varrec-refs-bit)))
@@ -425,6 +424,10 @@
 (define-classify-variables (begin varrecs . body)
   (classify-block-variables varrecs 0 'local form))
 
+;;; The program should always consist of a begin form at this point
+(define (classify-variables-top-level program)
+  (classify-block-variables (second program) 0 'top-level program))
+
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
   (classify-block-variables (attr-ref attrs 'params) varrec-refs-bit 'param
@@ -435,14 +438,6 @@
 
 (define (varrec-early-function? varrec)
   (/= 0 (logand varrec-early-function-bit (varrec-access varrec))))
-
-;;; Mark the top-level definitions as such, so we can omit them from closures
-;;;
-;;; The program should always consist of a begin form at this point
-
-(define (mark-top-level-definitions program)
-  (dolist (varrec (second program))
-    (varrec-set-mode! varrec 'top-level)))
 
 ;;; Make the closure list for each lambda (i.e. variables unbound
 ;;; within the lambda body).  After this, lambdas look like:
