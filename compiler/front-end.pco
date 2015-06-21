@@ -364,14 +364,23 @@
 
 (defconstant varrec-written-bit 1)
 (defconstant varrec-early-function-bit 2)
-(defconstant varrec-refs-bit 4)
-(defconstant varrec-early-uses-bit 8)
+(defconstant varrec-non-call-ref-bit 4)
+(defconstant varrec-call-ref-bit 8)
+(defconstant varrec-ref-bits
+  (logior varrec-non-call-ref-bit varrec-call-ref-bit))
+(defconstant varrec-early-uses-bit 16)
 
 (define (update-varrec-state varrec bit)
   (varrec-set-access! varrec (logior bit (varrec-access varrec))))
 
+(define-classify-variables (call attrs func . args)
+  (if (eq? 'ref (car func))
+      (update-varrec-state (second func) varrec-call-ref-bit)
+      (classify-variables func))
+  (classify-variables-forms args))
+
 (define-classify-variables (ref varrec)
-  (update-varrec-state varrec varrec-refs-bit))
+  (update-varrec-state varrec varrec-non-call-ref-bit))
 
 (define-classify-variables (set! varrec val)
   (classify-variables val)
@@ -386,12 +395,12 @@
   (let* ((access (varrec-access varrec)))
     ;; work out early-uses/early-function status
     (when (if (not (eq? 'lambda (car val)))
-              (/= 0 (logand access (logior varrec-written-bit varrec-refs-bit)))
+              (/= 0 (logand access (logior varrec-written-bit varrec-ref-bits)))
               (begin
                 (form-attr-set! val 'self varrec)
                 (cond ((/= 0 (logand access varrec-written-bit))
                        true)
-                      ((/= 0 (logand access varrec-refs-bit))
+                      ((/= 0 (logand access varrec-ref-bits))
                        (set! access (logior access varrec-early-function-bit))
                        false)
                       (true
@@ -403,9 +412,9 @@
       (rplaca form 'set!))
     (varrec-set-access! varrec access)))
 
-(define (classify-block-variables varrecs init mode form)
+(define (classify-block-variables varrecs mode form)
   (dolist (varrec varrecs)
-    (varrec-set-access! varrec init)
+    (varrec-set-access! varrec 0)
     (varrec-set-mode! varrec mode))
   (classify-variables-recurse form)
   (dolist (varrec varrecs)
@@ -422,16 +431,15 @@
               (form-attr-set! val 'self false))))))))
 
 (define-classify-variables (begin varrecs . body)
-  (classify-block-variables varrecs 0 'local form))
+  (classify-block-variables varrecs 'local form))
 
 ;;; The program should always consist of a begin form at this point
 (define (classify-variables-top-level program)
-  (classify-block-variables (second program) 0 'top-level program))
+  (classify-block-variables (second program) 'top-level program))
 
 (define-classify-variables (lambda attrs body)
   (form-attr-set! form 'self false)
-  (classify-block-variables (attr-ref attrs 'params) varrec-refs-bit 'param
-                            form))
+  (classify-block-variables (attr-ref attrs 'params) 'param form))
 
 (define (varrec-written? varrec)
   (/= 0 (logand varrec-written-bit (varrec-access varrec))))
