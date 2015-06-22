@@ -15,7 +15,7 @@
                           (simplify program)
                           (resolve-variables program ())
                           (classify-variables-top-level program)
-                          (collect-closures program)
+                          (collect-free-vars program)
                           (introduce-boxes program)
                           (fill-closures program)))
 
@@ -447,14 +447,8 @@
 (define (varrec-early-function? varrec)
   (/= 0 (logand varrec-early-function-bit (varrec-access varrec))))
 
-;;; Make the closure list for each lambda (i.e. variables unbound
-;;; within the lambda body).  After this, lambdas look like:
+;;; Collect the free variables  for each lambda
 ;;;
-;;; (lambda (...) ... (fv ...) ...)
-;;; => (lambda ((closure (fv (source fv ...) ...)) ...) ... (fv ...) ...)
-;;;
-;;; Also adds the boxed attribute to origin varrecs.
-
 ;;; When we reach this phase, all uses of a variable refer to the same
 ;;; varrec.  This phase determines which uses can access the variable
 ;;; directly, and which need to go via a closure.  The former get the
@@ -462,9 +456,9 @@
 ;;; latter get new varrecs, with their origin attribute pointing to
 ;;; the origin varrec.
 ;;;
-;;; This is implemented by adding a closure stack to each origin
-;;; varrec.  The closure stack is an alist from the binding form depth
-;;; to the appropriate varrec for uses within that binding form.
+;;; This is implemented by associating a stack of varrecs to each
+;;; origin varrec.  That stack is an alist from lambdas to the varrec
+;;; to use within that lambda.
 
 (define (make-local-varrec origin mode)
   (let* ((varrec (make-varrec (varrec-name origin))))
@@ -473,67 +467,67 @@
     (varrec-set-mode! varrec mode)
     varrec))
 
-(define (resolve-closure-var varrec mode depth closure-cell)
-  (let* ((closure-stack (varrec-misc varrec)))
-    (cond ((not closure-stack)
+(define (resolve-closure-var varrec mode l free-cell)
+  (let* ((varstack (varrec-misc varrec)))
+    (cond ((not varstack)
            varrec)
-          ((= depth (caar closure-stack))
-           (cdar closure-stack))
+          ((eq? l (caar varstack))
+           (cdar varstack))
           (true
            (let* ((local-varrec (make-local-varrec varrec mode)))
-             (varrec-set-misc! varrec (acons depth local-varrec closure-stack))
+             (varrec-set-misc! varrec (acons l local-varrec varstack))
              (varrec-set-boxed! varrec (varrec-written? varrec))
-             (rplaca closure-cell (cons local-varrec (car closure-cell)))
+             (rplaca free-cell (cons local-varrec (car free-cell)))
              local-varrec)))))
 
-(define-trivial-walker collect-closures-aux (depth closure-cell))
+(define-trivial-walker collect-free-vars-aux (l free-cell))
 
-(define-collect-closures-aux (ref varrec)
-  (rplaca (cdr form) (resolve-closure-var varrec 'closure depth closure-cell)))
+(define-collect-free-vars-aux (ref varrec)
+  (rplaca (cdr form) (resolve-closure-var varrec 'closure l free-cell)))
 
-(define-collect-closures-aux ((define set!) varrec val)
-  (rplaca (cdr form) (resolve-closure-var varrec 'closure depth closure-cell))
-  (collect-closures-aux val depth closure-cell))
+(define-collect-free-vars-aux ((define set!) varrec val)
+  (rplaca (cdr form) (resolve-closure-var varrec 'closure l free-cell))
+  (collect-free-vars-aux val l free-cell))
 
-(define (collect-closures-body form varrecs depth closure-cell)
+(define (collect-free-vars-body form varrecs l free-cell)
   (dolist (varrec varrecs)
     (varrec-set-misc! varrec (if (varrec-top-level? varrec)
                                  false
-                                 (acons depth varrec ()))))
-  (collect-closures-aux-recurse form depth closure-cell)
+                                 (acons l varrec ()))))
+  (collect-free-vars-aux-recurse form l free-cell)
   (dolist (varrec varrecs)
     (varrec-set-misc! varrec false)))
 
-(define-collect-closures-aux (begin varrecs . body)
-  (collect-closures-body form varrecs depth closure-cell))
+(define-collect-free-vars-aux (begin varrecs . body)
+  (collect-free-vars-body form varrecs l free-cell))
 
-(define-collect-closures-aux (lambda attrs body)
-  (let* ((local-closure-cell (cons () ()))
-         (self-closure-cell (cons () ())))
-    ;; if we have an unwritten self varrec, we don't want it to get
-    ;; captured in the closure.  And we need to distinguish it from
-    ;; the origin varrec, used to refer to the function outside of the
-    ;; function.  So we create a "self-closure" varrec, to refer to
-    ;; the function inside the function.
-    (let* ((self-varrec (attr-ref attrs 'self)))
-      (when self-varrec
-        (form-attr-set! form 'self
-          (resolve-closure-var self-varrec 'self (1+ depth)
-                               self-closure-cell))))
+(define-collect-free-vars-aux (lambda attrs body)
+  (let* ((local-free-cell (cons () ()))
+         (self-varrec (attr-ref attrs 'self)))
+    ;; A 'self' variable is dinstinguished from other free vars, so
+    ;; that it does not get captured in the closure.
+    (when self-varrec
+      (let* ((varstack (varrec-misc self-varrec)))
+        (if varstack
+            (let* ((local-self (make-local-varrec self-varrec 'self)))
+              (varrec-set-misc! self-varrec (acons form local-self varstack))
+              (form-attr-set! form 'self local-self))
+            (set! self-varrec false))))
 
-    (collect-closures-body form (attr-ref attrs 'params) (1+ depth)
-                           local-closure-cell)
-    (form-attr-set! form 'closure (car local-closure-cell))
-    (dolist (local-varrec (append (car self-closure-cell)
-                                  (car local-closure-cell)))
+    (collect-free-vars-body form (attr-ref attrs 'params) form
+                            local-free-cell)
+    (form-attr-set! form 'free (car local-free-cell))
+    (dolist (local-varrec (car local-free-cell))
       (let* ((origin-varrec (varrec-origin local-varrec)))
         (varrec-set-misc! origin-varrec (cdr (varrec-misc origin-varrec)))
         (varrec-set-source! local-varrec
                             (resolve-closure-var origin-varrec 'closure
-                                                 depth closure-cell))))))
+                                                 l free-cell))))
+    (when self-varrec
+      (varrec-set-misc! self-varrec (cdr (varrec-misc self-varrec))))))
 
-(define (collect-closures form)
-  (collect-closures-aux form 0 ()))
+(define (collect-free-vars form)
+  (collect-free-vars-aux form false ()))
 
 ;;; Introduce storage boxes
 ;;;
@@ -713,7 +707,7 @@
 
 (define-fill-closures (lambda attrs body)
   (let* ((len 0)
-         (vals (mapfor (cvarrec (form-attr form 'closure))
+         (vals (mapfor (cvarrec (form-attr form 'free))
                  (set! len (1+ len))
                  (list 'ref (varrec-source cvarrec)))))
     (decompose-lambda form len vals)))
@@ -721,7 +715,7 @@
 (define (fill-closures-define-lambda varrec form)
   (let* ((body (third form))
          (index 0)
-         (vals (mapfor (cvarrec (form-attr form 'closure))
+         (vals (mapfor (cvarrec (form-attr form 'free))
                  (let* ((source (varrec-source cvarrec))
                         (val (closure-slot-value varrec index source)))
                    (set! index (1+ index))
@@ -822,7 +816,7 @@
                          (val (cdr attr)))
                     (cond ((not val)
                            ())
-                          ((or (eq? key 'params) (eq? key 'closure))
+                          ((or (eq? key 'params) (eq? key 'free))
                            (list (cons key (debug-uniquify-varrecs val))))
                           ((eq? key 'self)
                            (list (cons key (debug-uniquify-varrec val))))

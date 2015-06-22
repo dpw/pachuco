@@ -135,7 +135,7 @@
 
 (define (codegen-function cg form)
   (let* ((attrs (second form))
-         (closure (attr-ref attrs 'closure))
+         (closure (attr-ref attrs 'free))
          (direct-label (attr-ref attrs 'direct-label)))
     (labels ((assign-varrec-indices (varrecs)
                ;; assign slot indices to varrecs
@@ -167,7 +167,7 @@
 
 (define (codegen-function-indirect cg form)
   (let* ((attrs (second form))
-         (closure (attr-ref attrs 'closure))
+         (closure (attr-ref attrs 'free))
          (nparams (length (attr-ref attrs 'params)))
          (indirect-label (attr-ref attrs 'indirect-label))
          (direct-label (form-attr-defaulting form 'direct-label false)))
