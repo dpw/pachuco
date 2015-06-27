@@ -191,4 +191,5 @@ yielding the same value.
 
 The Pachuco runtime includes a miscellaneous collection of generic
 facilities and functions.  These often correspond to their equivalents
-in Common Lisp.  See `runtime/runtime.pco` and `runtime/runtime2.pco`.
+in Common Lisp.  See `runtime/runtime.pco` and
+`runtime/runtime-common.pco`.
