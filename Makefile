@@ -64,7 +64,7 @@ CL_COMPILER_SOURCES= \
 export CL_COMPILER_SOURCES
 
 RUNTIME=runtime/runtime.pco runtime/cl-compat.pco runtime/runtime-common.pco \
-    runtime/io.pco runtime/io-common.pco runtime/sysconstants.pco \
+    runtime/io.pco runtime/io-common.pco no-interp!runtime/sysconstants.pco \
     no-interp!runtime/compiled-builtins.pco no-interp!runtime/gc.pco
 RUNTIME_SOURCES=$(patsubst no-interp!%,%,$(RUNTIME))
 SL_COMPILER_SOURCES=$(COMPILER_SOURCES) compiler/drivermain.pco

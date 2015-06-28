@@ -56,10 +56,12 @@ command line:
 To start the interpreter-based REPL, do `make repl`:
 
     $ make repl
-    build/repl runtime/runtime.pco runtime/runtime2.pco runtime/gc.pco
+    build/repl runtime/runtime.pco runtime/cl-compat.pco runtime/runtime-common.pco runtime/io.pco runtime/io-common.pco
     Reading runtime/runtime.pco
-    Reading runtime/runtime2.pco
-    Reading runtime/gc.pco
+    Reading runtime/cl-compat.pco
+    Reading runtime/runtime-common.pco
+    Reading runtime/io.pco
+    Reading runtime/io-common.pco
     >>>
 
 You can type Pachuco expressions and programs at the `>>>` prompt:
