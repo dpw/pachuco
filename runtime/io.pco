@@ -572,7 +572,7 @@
   (if digit
       (scan-integer (1+ pos) digit)
       (if strict
-          (error "expected number, but got \"C\"" first-ch)
+          (error "expected number, but got \"~C\"" first-ch)
           #f)))
 
 (define (read-token is first-ct)
