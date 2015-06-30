@@ -5,7 +5,7 @@
       (+ (fib (- n 1)) (fib (- n 2)))))
 
 (define (atoi str)
-  (read-integer (make-string-istream str) 10))
+  (read-integer (make-string-istream str) 10 #t))
 
 (define (main)
   (formout stdout "~D~%" (fib (atoi (second command-line-args)))))
