@@ -365,24 +365,25 @@
 
 ;;; Input streams
 
-(define-struct istream ((constructor make-istream pos end buf fd))
+(define-struct istream ((constructor make-istream pos end buf fd-eof fd))
   pos ; Current read position in the buffer
   end ; End index of valid data in the buffer
   buf ; The buffer
-  fd) ; The input FD, or false if no more data available
+  fd-eof ; Did the input FD indicate EOF?
+  fd) ; The input FD
 
 (define (make-fd-istream fd)
-  (make-istream 0 0 (make-string 10000 (code-character 0)) fd))
+  (make-istream 0 0 (make-string 10000 (code-character 0)) #f fd))
 
 (define stdin (make-fd-istream raw-stdin))
 
 (define (make-string-istream str)
-  (make-istream 0 (string-length str) str #f))
+  (make-istream 0 (string-length str) str #t #f))
 
 (define (istream-refill is ahead)
   ;; Refill the buffer of an istream.  Returns false if there is no
   ;; more data available from the underlying reader function.
-  (if (istream-fd is)
+  (if (not (istream-fd-eof is))
       (begin
         ;; move data down within the buffer
         (define pos (istream-pos is))
@@ -410,7 +411,7 @@
         (if (> readlen 0)
             #t
             (begin
-              (istream-set-fd! is #f)
+              (istream-set-fd-eof! is #t)
               #f)))
       #f))
 

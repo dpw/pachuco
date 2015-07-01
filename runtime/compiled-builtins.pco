@@ -148,11 +148,13 @@
                    10000))
 
 (define (close-istream is)
-  (syscall-close (istream-fd is)))
+  (when (istream-fd is)
+    (syscall-close (istream-fd is))))
 
 (define (close-ostream os)
-  (flush-ostream os)
-  (syscall-close (ostream-fd os)))
+  (when (ostream-fd os)
+    (flush-ostream os)
+    (syscall-close (ostream-fd os))))
 
 (define (delete-file path)
   (syscall-unlink path))
