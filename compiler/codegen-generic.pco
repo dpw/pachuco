@@ -101,7 +101,7 @@
   ;; This indicates to the linker that we support a non-executable stack
   (emit cg ".section .note.GNU-stack,\"\",%progbits"))
 
-(define (set-lambda-label cg l attr prefix)
+(define (set-lambda-label l attr prefix)
   (let* ((varrec (form-attr-defaulting l 'self false)))
     (form-attr-set! l attr
                     (make-label-for (and varrec
@@ -112,7 +112,7 @@
   (let* ((label (form-attr-defaulting l attr false)))
     (or label
         (begin
-         (set! label (set-lambda-label cg l attr prefix))
+         (set! label (set-lambda-label l attr prefix))
          (codegen-push-todo cg todo)
          label))))
 
@@ -195,7 +195,7 @@
             (emit-arity-mismatch-call))
           (let* ((bad-nargs-label (gen-label)))
             (set! direct-label
-                  (set-lambda-label cg form 'direct-label
+                  (set-lambda-label form 'direct-label
                                     direct-function-label-prefix))
             (emit-check-nargs cg nparams false bad-nargs-label)
             (codegen-push-out-of-line cg
