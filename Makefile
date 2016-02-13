@@ -75,12 +75,11 @@ BOOTSTRAP_COMPILER=scripts/sbcl-wrapper
 # The phase to stop at when dumping the intermediate program
 DUMP_PHASE=fill-closures
 
-.PHONY: all clean print-compiler-sources compare-stage3
+.PHONY: all clean print-compiler-sources compare-stage3 mk-build-dir
 
 all: stage0-test-run stage0-gc-test-run stage0-arity-mismatch-test-run compare-stage3 stage2-static-arity-mismatch-test-run
 
-build/sysconstants: runtime/sysconstants.c
-	@mkdir -p build
+build/sysconstants: runtime/sysconstants.c | mk-build-dir
 	$(CC) -Wall -Werror -o $@ $<
 
 runtime/sysconstants.pco: build/sysconstants
@@ -92,10 +91,12 @@ clean::
 print-compiler-sources:
 	@echo $(SL_COMPILER_SOURCES)
 
+mk-build-dir:
+	@mkdir -p build
+
 # compile,compiler,dest,sources
 define compile
-$(2) $(2).s: $(1) $(RUNTIME_SOURCES) $(3)
-	@mkdir -p build
+$(2) $(2).s: $(1) $(RUNTIME_SOURCES) $(3) | mk-build-dir
 	scripts/compile -C $(1) $(COMPILEOPTS) -o $(2) $(3)
 endef
 
