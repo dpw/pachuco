@@ -183,6 +183,10 @@
   (let ((newpos (read-sequence str fd :start pos :end (+ pos len))))
     (- newpos pos)))
 
+(shadow 'write-char)
+(defun write-char (fd ch)
+  (common-lisp:write-char ch fd))
+
 (defun open-file-for-reading (pathname)
   (open pathname))
 

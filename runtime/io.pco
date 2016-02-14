@@ -61,7 +61,7 @@
 (define (write-string os str)
   (write-substring os str 0 (string-length str)))
 
-(define (write-character os ch)
+(define (write-char os ch)
   (define buf-pos (ostream-pos os))
   (string-set! (ostream-buf os) buf-pos ch)
   (set! buf-pos (1+ buf-pos))
@@ -97,7 +97,7 @@
 
 (define (print-number ostr num radix)
   (if (= num 0)
-      (write-character ostr #\0)
+      (write-char ostr #\0)
       (begin
         (unless (and (> radix 2)
                      (<= radix (string-length print-number-digits)))
@@ -127,9 +127,9 @@
 (define (print-string ostr str readably)
   (if readably
       (begin
-        (write-character ostr #\")
+        (write-char ostr #\")
         (write-string ostr str)
-        (write-character ostr #\"))
+        (write-char ostr #\"))
       (write-string ostr str)))
 
 (define character-names '((#\Space . "Space")
@@ -142,7 +142,7 @@
 (define (print-character ostr ch readably)
   (if readably
       (begin
-        (write-character ostr #\\)
+        (write-char ostr #\\)
         (define name (assoc ch character-names))
         (write-string ostr (if name (cdr name) (character-string ch))))
       (write-string ostr (character-string ch))))
@@ -158,12 +158,12 @@
     (() . "()")))
 
 (define (print-list ostr l readably)
-  (write-character ostr #\()
+  (write-char ostr #\()
   (print ostr (car l) readably)
   (set! l (cdr l))
 
   (while (pair? l)
-    (write-character ostr #\Space)
+    (write-char ostr #\Space)
     (print ostr (car l) readably)
     (set! l (cdr l)))
 
@@ -171,7 +171,7 @@
     (write-string ostr " . ")
     (print ostr l readably))
 
-  (write-character ostr #\)))
+  (write-char ostr #\)))
 
 (define (print-vector ostr vec readably)
   (define l (vector-length vec))
@@ -180,14 +180,14 @@
   (unless (= l 0)
     (define (print-elements-from i)
       (when (< i l)
-        (write-character ostr #\Space)
+        (write-char ostr #\Space)
         (print ostr (vector-ref vec i) readably)
         (print-elements-from (1+ i))))
 
     (print ostr (vector-ref vec 0) readably)
     (print-elements-from 1))
 
-  (write-character ostr #\)))
+  (write-char ostr #\)))
 
 (define (print ostr obj readably)
   (cond ((string? obj)
@@ -210,7 +210,7 @@
 
 ;;; Formatted IO
 
-(define (generate-formout-parser control to-write-substring to-write-character
+(define (generate-formout-parser control to-write-substring to-write-char
                                  to-use-arg)
   (quasiquote (
     (define pos 0)
@@ -236,7 +236,7 @@
                          (set! write-from (1- write-from)))
 
                         ((eq? ch #\%)
-                         (unquote (to-write-character #\Newline)))
+                         (unquote (to-write-char #\Newline)))
 
                         ((or (eq? ch #\A) (eq? ch #\a))
                          (unquote (to-use-arg (lambda (os arg)
@@ -285,8 +285,8 @@
           (lambda (str pos len)
             (quasiquote
               (write-substring os (unquote str) (unquote pos) (unquote len))))
-          ;; to-write-character
-          (lambda (ch) (quasiquote (write-character os (unquote ch))))
+          ;; to-write-char
+          (lambda (ch) (quasiquote (write-char os (unquote ch))))
           ;; to-use-arg
           (lambda (template) (template 'os '(consume-arg))))))))
 (generate-formout-list)
@@ -320,16 +320,16 @@
                (lambda (str pos len)
                  (quasiquote
                    (push-stmt (if (= 1 (unquote len))
-                                  (list 'write-character os
+                                  (list 'write-char os
                                        (string-ref (unquote str) (unquote pos)))
                                   (list 'write-substring os
                                         (substring (unquote str) (unquote pos)
                                                    (unquote len))
                                         0 (unquote len))))))
-               ;; to-write-character
+               ;; to-write-char
                (lambda (ch)
                  (quasiquote
-                   (push-stmt (list 'write-character os (unquote ch)))))
+                   (push-stmt (list 'write-char os (unquote ch)))))
 
                ;; to-use-arg
                (lambda (template)
@@ -645,7 +645,7 @@
     (unless (eq? ch #\")
       (when (eq? ch #\\)
         (set! ch (read-character istr #f)))
-      (write-character buf ch)
+      (write-char buf ch)
       (scan-string)))
 
   (scan-string)
