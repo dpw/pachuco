@@ -4,18 +4,18 @@
 (define main-reg (first general-registers))
 
 ;; codegen emits the code to evaluate the form, with the result going into
-;; %funcres
+;; main-reg.
 (define-walker codegen (cg out-frame-base))
 (define (codegen-recurse form cg out-frame-base)
   (error "codegen on unknown form ~S" (car form)))
 
-;; codegen-discarding emits code to evaluate the form, in a context
+;; codegen-discarding emits code to evaluate the form in a context
 ;; where the resulting value is not used.
 (define-walker codegen-discarding (cg out-frame-base))
 (define (codegen-discarding-recurse form cg out-frame-base)
   (codegen form cg out-frame-base))
 
-;; codegen-discarding emits code to evaluate the form, in a
+;; codegen-context emits code to evaluate the form in a
 ;; conditional context.
 (define-walker codegen-conditional (cg out-frame-base tlabel flabel))
 (define (codegen-conditional-recurse form cg out-frame-base tlabel flabel)
@@ -40,21 +40,15 @@
                                 (unquote out-frame-base) (unquote reg))))
 
 (defmacro (define-trashy-codegen template options . body)
-  (options-bind ((tail-form false)) options
-    (when tail-form
-      (set! body (nconc body (list false))))
-
-    (quasiquote (define-codegen (unquote template) . (unquote body)))))
+  (quasiquote (define-codegen (unquote template) . (unquote body))))
 
 ;;; Begin
 
 (define (codegen-begin-non-final cg forms)
+  (emit-comment-form cg (car forms))
   (if (null? (cdr forms))
+      (car forms)
       (begin
-        (emit-comment-form cg (car forms))
-        (car forms))
-      (begin
-        (emit-comment-form cg (car forms))
         (codegen-discarding (car forms) cg false)
         (codegen-begin-non-final cg (cdr forms)))))
 

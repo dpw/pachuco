@@ -553,10 +553,6 @@
 (define (trashy-codegen-general cg form constraint)
   (trashy-codegen-subforms form cg general-registers constraint))
 
-(define-reg-use (call attrs . args)
-  (dolist (arg args) (reg-use arg))
-  general-register-count)
-
-(define-reg-use-discarding (varargs-tail-call attrs . args)
+(define-reg-use ((call varargs-tail-call) attrs . args)
   (dolist (arg args) (reg-use arg))
   general-register-count)

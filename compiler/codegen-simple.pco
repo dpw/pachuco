@@ -30,6 +30,7 @@
 
 (defmacro (define-trashy-codegen template options . body)
   (options-bind ((tail-form false)) options
+    ;; Indicate that there is no result
     (when tail-form
       (set! body (nconc body (list false))))
 
