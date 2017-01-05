@@ -1022,10 +1022,7 @@
                    (set! assignments-base (1- assignments-base))
                    (set! assignments-count (1- assignments-count))
                    (assign-fresh-slots)
-                   (unless (acceptable-store-source? a)
-                     (emit-mov cg a tmp-reg)
-                     (set! a tmp-reg))
-                   (emit-frame-push cg a)))))
+                   (emit-frame-spill cg a tmp-reg)))))
       (assign-fresh-slots))
 
     ;; 'assignments' gives the values for a range of frame slots.

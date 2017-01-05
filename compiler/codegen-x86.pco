@@ -128,7 +128,7 @@
          (not (eq? %closure (second operand))))))
 
 (define (acceptable-store-source? operand)
-  (not (mem? operand)))
+  (and (not (mem? operand)) (if (number? operand) (immediate32? operand) true)))
 
 ;;; Condition codes
 
