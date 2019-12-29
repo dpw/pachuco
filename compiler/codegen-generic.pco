@@ -56,7 +56,7 @@
 (define (codegen-switch-section cg section)
   (unless (eq? section (codegen-section cg))
     (codegen-set-section! cg section)
-    (if (and (not (eq? 'rodata section)) (not (eq? 'bss section)))
+    (if (not (eq? 'rodata section))
         (emit cg ".~A" (subject-language-symbol-name section))
         (emit cg ".section .~A" (subject-language-symbol-name section)))))
 
@@ -70,7 +70,7 @@
   (labels ((emit-label (label)
              (emit cg ".globl ~A" label)
              (emit cg "~A:" label)))
-    (codegen-switch-section cg 'bss)
+    (codegen-switch-section cg 'data)
     (emit-align cg value-scale)
     (emit-label "top_level_start")
 
