@@ -79,37 +79,42 @@ while [ $# -gt 0 ] ; do
     esac
 done
 
-cmd="$compiler compile $runtimedir/runtime.pco $runtimedir/cl-compat.pco $runtimedir/runtime-common.pco $runtimedir/io.pco $runtimedir/io-common.pco 'no-interp!$runtimedir/sysconstants.pco' 'no-interp!$runtimedir/compiled-builtins.pco' 'no-interp!$runtimedir/gc.pco' $files"
-
-[ -n "$verbose" ] && echo $cmd 1>&2
+compiler_args="compile $runtimedir/runtime.pco $runtimedir/cl-compat.pco $runtimedir/runtime-common.pco $runtimedir/io.pco $runtimedir/io-common.pco no-interp!$runtimedir/sysconstants.pco no-interp!$runtimedir/compiled-builtins.pco no-interp!$runtimedir/gc.pco $files"
 
 if [ -n "$time" ] ; then
-    eval perf stat $cmd >/dev/null
-else
-    if [ -z "$dest" ] ; then
-        echo "Destination file not specified" 1>&2
-        exit 1
-    fi
-
-    asmclean=''
-    if [ -z "$leaveasm" ] ; then
-        asmdest=$TMPDIR/$$
-        trap 'rm -rf $asmclean' EXIT
-    else
-        asmdest=${dest}
-    fi
-
-    asmout="${asmdest}.s"
-    asmclean="$asmout"
-    asmfiles="$asmout"
-    eval $cmd >"$asmout"
-
-    target=''
-    # bit of a hack: if we are on x86-86, but it looks like the compiler
-    # didn't produce x86-64 asm, assume a i386 target
-    if [ "$(uname -m)" = x86_64 ] && ! grep -m1 '^movq' $asmout >/dev/null ; then
-        target='-m32'
-    fi
-
-    gcc -Wall -g $target $asmfiles $runtimedir/main.c -o $dest
+    time $compiler $compiler_args >/dev/null
+    exit 0
 fi
+
+if [ -z "$dest" ] ; then
+    echo "Destination file not specified" 1>&2
+    exit 1
+fi
+
+asmclean=''
+if [ -z "$leaveasm" ] ; then
+    asmdest=$TMPDIR/$$
+    trap 'rm -rf $asmclean' EXIT
+else
+    asmdest=${dest}
+fi
+
+asmout="${asmdest}.s"
+asmclean="$asmout"
+asmfiles="$asmout"
+
+run () {
+    [ -n "$verbose" ] && echo "$@" 1>&2
+    "$@"
+}
+
+run $compiler $compiler_args >"$asmout"
+
+target=''
+# bit of a hack: if we are on x86-86, but it looks like the compiler
+# didn't produce x86-64 asm, assume a i386 target
+if [ "$(uname -m)" = x86_64 ] && ! grep -m1 '^movq' $asmout >/dev/null ; then
+    target='-m32'
+fi
+
+run gcc -Wall -g $target $asmfiles $runtimedir/main.c -o $dest
