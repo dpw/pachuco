@@ -12,6 +12,10 @@
 (define (emit-extend-sign-bit cg oper)
   (emit-sar cg 31 oper))
 
+;;; There are no non-32-bit immediates on i386
+(define (immediate32? x)
+  (not (and (not (number? x)) (not (string? x)))))
+
 ;;; C calls
 
 (define-trashy-codegen (c-call attrs . args) ()

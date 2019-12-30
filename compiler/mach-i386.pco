@@ -22,6 +22,3 @@
 ;;; No special handling required for absolute operands on i386
 (defmacro (absolute-asm-operand addr)
   addr)
-
-;;; There are no non-32-bit immediates on i386
-(defmacro (immediate32? x) (list 'number? x))

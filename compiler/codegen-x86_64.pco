@@ -24,6 +24,12 @@
     (error "absolute operand ~S, which is surprising" addr))
   (format "~A(%rip)" addr))
 
+;; Immediates for most x86-64 instructions are up to 32-bits
+;; sign-extended.  Labels are not used as immediates, because that
+;; produces R_X86_64_32S relocations, which obstructs PIE.
+(define (immediate32? x)
+  (and (number? x) (= 0 (logand (+ x (ash 1 31)) (ash -1 32)))))
+
 ;;; C calls
 
 (define c-call-arg-regs (list %di %si %d %c %r8 %r9))
@@ -43,7 +49,7 @@
     ;; C ABI requires us to align stack to 16 byte bundary
     (emit-mov cg %sp %b)
     (emit-and cg -16 %sp)
-    (emit cg "call ~A" c-func)
+    (emit cg "call ~A@PLT" c-func)
     (emit-mov cg %b %sp)
 
     (emit-set-ac-flag cg true)

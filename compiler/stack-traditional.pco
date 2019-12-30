@@ -11,7 +11,10 @@
 
 (define (emit-frame-spill cg operand reg)
   ;; Push can take any operand
-  (when (and (number? operand) (not (immediate32? operand)))
+  (when (and (not (register? operand))
+             (not (mem? operand))
+             (not (immediate32? operand)))
+    ;;(unless (or (register? operand) (immediate32? operand))
     (emit-mov cg operand reg)
     (set! operand reg))
 

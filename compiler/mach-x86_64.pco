@@ -19,8 +19,3 @@
 (define c-callee-saved-regs (list %b %bp %r12 %r13 %r14 %r15))
 
 (define insn-size-suffixes "bwlq")
-
-;; Immediates for most x86-64 instructions are up to 32-bits
-;; sign-extended.
-(define (immediate32? x)
-  (and (number? x) (= 0 (logand (+ x (ash 1 31)) (ash -1 32)))))
